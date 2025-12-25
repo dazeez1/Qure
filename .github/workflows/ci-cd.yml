@@ -83,18 +83,22 @@ jobs:
           fi
       
       - name: Run ESLint
+        working-directory: ./frontend
         run: npm run lint || true
       
       - name: Build frontend
+        working-directory: ./frontend
         run: npm run build
       
       - name: Check build output
+        working-directory: ./frontend
         run: |
           if [ ! -d "dist" ]; then
             echo "❌ Build failed - dist directory not found"
             exit 1
           else
             echo "✅ Build successful - dist directory created"
+            ls -lh dist/
           fi
       
       - name: Upload build artifacts
