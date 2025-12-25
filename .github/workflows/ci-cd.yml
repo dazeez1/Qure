@@ -14,6 +14,7 @@ jobs:
   frontend-checks:
     name: Frontend Lint & Build
     runs-on: ubuntu-latest
+    # This job name will appear in branch protection rules
     
     steps:
       - name: Checkout code
