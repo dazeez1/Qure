@@ -52,18 +52,11 @@ jobs:
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo ""
-          echo "Step 1: Cleaning everything completely..."
-          rm -rf node_modules package-lock.json .npm
-          npm cache clean --force
+          echo "Installing dependencies..."
+          npm ci || npm install
           echo ""
-          echo "Step 2: Installing dependencies..."
-          npm install
-          echo ""
-          echo "Step 3: Explicitly installing Rollup Linux binary..."
-          npm install @rollup/rollup-linux-x64-gnu --save-optional --force || echo "Attempted to install rollup binary"
-          echo ""
-          echo "Step 4: Final reinstall to ensure everything is correct..."
-          npm install --force
+          echo "Ensuring Rollup optional dependencies are installed..."
+          npm install @rollup/rollup-linux-x64-gnu --save-optional --no-save || true
           echo "✅ Dependencies installed successfully"
       
       - name: Run ESLint
