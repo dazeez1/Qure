@@ -23,6 +23,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Verify package-lock.json exists
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Checking for package-lock.json in frontend directory..."
+          if [ ! -f "frontend/package-lock.json" ]; then
+            echo "❌ package-lock.json not found in frontend directory"
+            echo "Files in frontend directory:"
+            ls -la frontend/ || echo "frontend directory not found"
+            exit 1
+          else
+            echo "✅ package-lock.json found"
+            ls -lh frontend/package-lock.json
+          fi
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
