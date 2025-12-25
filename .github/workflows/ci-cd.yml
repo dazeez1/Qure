@@ -50,12 +50,11 @@ jobs:
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo ""
-          echo "Installing dependencies with npm ci (fast, uses cache)..."
+          echo "Installing dependencies with npm ci..."
           npm ci --prefer-offline --no-audit
-          echo ""
-          echo "Ensuring Rollup optional dependencies are installed..."
-          npm install @rollup/rollup-linux-x64-gnu --save-optional --no-save --prefer-offline || true
           echo "✅ Dependencies installed successfully"
+          echo ""
+          echo "Note: Rollup optional dependencies are handled by postinstall script in package.json"
       
       - name: Run ESLint
         working-directory: ./frontend
