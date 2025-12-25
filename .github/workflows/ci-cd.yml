@@ -1,13 +1,13 @@
 name: CI/CD Pipeline
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - feature/**
       - develop
-  pull_request:
-    branches:
-      - main
 
 jobs:
   # Frontend Checks
@@ -42,34 +42,31 @@ jobs:
       - name: Check build output
         run: |
           if [ ! -d "dist" ]; then
-            echo "Build failed - dist directory not found"
+            echo "❌ Build failed - dist directory not found"
             exit 1
+          else
+            echo "✅ Build successful - dist directory created"
           fi
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: frontend-build
+          path: frontend/dist
+          retention-days: 1
 
-  # Auto-merge to main (if checks pass)
-  auto-merge:
-    name: Auto-merge to Main
-    needs: frontend-checks
+  # PR Status Check
+  pr-status:
+    name: PR Status Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
+    needs: frontend-checks
+    if: github.event_name == 'pull_request'
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Configure Git
+      - name: Check PR status
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-      
-      - name: Merge to main
-        run: |
-          git checkout main
-          git merge origin/${{ github.ref_name }} --no-ff -m "Merge ${{ github.ref_name }} to main [auto-merge]"
-          git push origin main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          echo "✅ All checks passed!"
+          echo "PR is ready for review and merge to main"
+          echo "Branch: ${{ github.head_ref }}"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
