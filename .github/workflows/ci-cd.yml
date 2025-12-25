@@ -15,10 +15,6 @@ jobs:
     name: Frontend Lint & Build
     runs-on: ubuntu-latest
     
-    defaults:
-      run:
-        working-directory: ./frontend
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,12 +25,15 @@ jobs:
           echo "Checking for package-lock.json in frontend directory..."
           if [ ! -f "frontend/package-lock.json" ]; then
             echo "❌ package-lock.json not found in frontend directory"
+            echo "Files in root:"
+            ls -la
             echo "Files in frontend directory:"
             ls -la frontend/ || echo "frontend directory not found"
             exit 1
           else
             echo "✅ package-lock.json found"
             ls -lh frontend/package-lock.json
+            echo "File size: $(stat -f%z frontend/package-lock.json 2>/dev/null || stat -c%s frontend/package-lock.json 2>/dev/null) bytes"
           fi
       
       - name: Setup Node.js
@@ -45,7 +44,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       
       - name: Install dependencies
-        run: npm ci
+        working-directory: ./frontend
+        run: |
+          echo "Installing in: $(pwd)"
+          echo "Checking for package-lock.json:"
+          ls -lh package-lock.json || echo "❌ package-lock.json not found in current directory"
+          npm ci
       
       - name: Run ESLint
         run: npm run lint || true
