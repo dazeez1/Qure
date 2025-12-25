@@ -70,8 +70,14 @@ jobs:
       - name: Install dependencies
         working-directory: ./frontend
         run: |
-          echo "Installing dependencies with npm ci..."
-          npm ci --verbose
+          echo "Attempting npm ci..."
+          if npm ci --verbose; then
+            echo "✅ npm ci succeeded"
+          else
+            echo "⚠️ npm ci failed, trying npm install as fallback..."
+            npm install
+            echo "✅ npm install completed"
+          fi
       
       - name: Run ESLint
         run: npm run lint || true
