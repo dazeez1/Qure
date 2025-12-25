@@ -41,10 +41,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # Disable cache to avoid Rollup optional dependencies issue
-      
-      - name: Update npm to latest
-        run: npm install -g npm@latest
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
       
       - name: Install dependencies
         working-directory: ./frontend
@@ -52,11 +50,11 @@ jobs:
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo ""
-          echo "Installing dependencies..."
-          npm ci || npm install
+          echo "Installing dependencies with npm ci (fast, uses cache)..."
+          npm ci --prefer-offline --no-audit
           echo ""
           echo "Ensuring Rollup optional dependencies are installed..."
-          npm install @rollup/rollup-linux-x64-gnu --save-optional --no-save || true
+          npm install @rollup/rollup-linux-x64-gnu --save-optional --no-save --prefer-offline || true
           echo "✅ Dependencies installed successfully"
       
       - name: Run ESLint
