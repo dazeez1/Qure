@@ -174,7 +174,6 @@ function clearError(fieldId) {
 
 // Clear all errors for a form type
 function clearAllErrors(formType) {
-  const prefix = formType === 'patient' ? 'patient-' : 'staff-';
   const form = formType === 'patient' ? patientForm : staffForm;
   const fields = form.querySelectorAll('input, select');
   
@@ -188,7 +187,7 @@ function clearAllErrors(formType) {
 }
 
 // Validate individual field
-function validateField(fieldId, value, additionalValue = null) {
+function validateField(fieldId, value) {
   // Extract base field name (remove prefix)
   const baseFieldId = fieldId.replace(/^(patient-|staff-)/, '').replace(/-/g, '');
   let validatorKey = baseFieldId;
@@ -340,12 +339,15 @@ function setupFormValidation(form, formType) {
       //   body: JSON.stringify(data),
       // });
       
-      // For now, just log the data
-      console.log('Form data (will be sent to backend):', {
+      // For now, just prepare the data (will be sent to backend)
+      // Data structure ready for API integration
+      const formDataForBackend = {
         ...data,
         password: '[HIDDEN]',
         confirmPassword: '[HIDDEN]',
-      });
+      };
+      // TODO: Replace with actual API call when backend is ready
+      // await fetch('/api/auth/register', { ... });
 
       // Simulate API call delay
       await new Promise((resolve) => setTimeout(resolve, 1000));

@@ -44,44 +44,17 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       
-      - name: Update npm to latest
-        run: npm install -g npm@latest
-      
-      - name: Verify npm version and package-lock.json
+      - name: Install dependencies
         working-directory: ./frontend
         run: |
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
-          echo "Current directory: $(pwd)"
           echo ""
-          echo "Checking package-lock.json:"
-          if [ ! -f "package-lock.json" ]; then
-            echo "❌ package-lock.json not found"
-            exit 1
-          fi
-          echo "✅ package-lock.json exists"
-          ls -lh package-lock.json
+          echo "Installing dependencies with npm ci..."
+          npm ci --prefer-offline --no-audit
+          echo "✅ Dependencies installed successfully"
           echo ""
-          echo "Checking lockfileVersion:"
-          lockfile_version=$(node -p "require('./package-lock.json').lockfileVersion")
-          echo "Lockfile version: $lockfile_version"
-          if [ -z "$lockfile_version" ] || [ "$lockfile_version" = "null" ]; then
-            echo "❌ Invalid lockfileVersion"
-            exit 1
-          fi
-          echo "✅ Lockfile version is valid"
-      
-      - name: Install dependencies
-        working-directory: ./frontend
-        run: |
-          echo "Attempting npm ci..."
-          if npm ci --verbose; then
-            echo "✅ npm ci succeeded"
-          else
-            echo "⚠️ npm ci failed, trying npm install as fallback..."
-            npm install
-            echo "✅ npm install completed"
-          fi
+          echo "Note: Rollup optional dependencies are handled by postinstall script in package.json"
       
       - name: Run ESLint
         working-directory: ./frontend

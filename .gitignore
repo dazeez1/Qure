@@ -9,6 +9,7 @@ lerna-debug.log*
 #Documentation
 Implementation.md
 Rule.md
+BRANCH_PROTECTION_SETUP.md
 .DS_Store
 **/.DS_Store
 
