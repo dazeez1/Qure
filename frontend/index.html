@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="/src/styles/main.css" />
+    <title>Qure - Healthcare Queue Management</title>
+  </head>
+  <body>
+    <div class="container">
+      <header class="page-header">
+        <div class="header-container">
+          <div class="logo-section">
+            <img
+              src="/images/Vector (3).png"
+              alt="Qure Logo"
+              class="logo-icon"
+            />
+            <span class="logo-text">Qure</span>
+          </div>
+
+          <nav class="navigation-menu">
+            <a href="#" class="nav-link">Home</a>
+            <a href="#how-it-works" class="nav-link">How Qure Works</a>
+            <a href="#contact" class="nav-link">Contact Us</a>
+          </nav>
+
+          <div class="user-profile">
+            <a href="#login" class="login-text">Sign in</a>
+            <a href="/register.html" class="join-queue-btn">Get Started</a>
+          </div>
+
+          <!-- Mobile Menu Button -->
+          <button class="mobile-menu-button" id="mobile-menu-toggle">
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+          </button>
+        </div>
+      </header>
+
+      <div class="main-section">
+        <div class="first-part">
+          <h1>
+            Skip the wait! <br />Get in line from <br />
+            anywhere
+          </h1>
+          <p>
+            Manage hospital visits with ease - book appointments, track
+            <br />queues in real time, receive updates, and reduce wait times
+            for a <br />smoother healthcare experience.
+          </p>
+          <div class="hero-buttons">
+            <a href="./public/404.html" class="join-queue-button">Join Queue</a>
+          </div>
+        </div>
+        <div class="second-part">
+          <img src="/images/hero.png" alt="hero-pic" />
+        </div>
+      </div>
+
+      <div class="sub-section">
+        <h2>Who Is This For?</h2>
+        <div class="role">
+          <div class="role-card">
+            <img
+              src="/images/patients.png"
+              alt="patients"
+            />
+            <div class="patient-role">
+              <h3>Patients</h3>
+              <p>
+                Book appointments, track your place in line, receive real-time
+                updates, and avoid long waits times - all from the comfort of
+                your device.
+              </p>
+            </div>
+          </div>
+          <div class="role-card">
+            <img
+              src="/images/staff.png"
+              alt="staff"
+            />
+            <div class="staff-role">
+              <h3>Hospital Staff</h3>
+              <p>
+                Seamlessly manage queues, monitor patient flow in
+                real-time,prioritize cases, and improve the overall care
+                experience
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="feature">
+        <h2>Key Features</h2>
+        <div class="features-card">
+          <div class="features-img">
+            <img src="/images/keyFeatures.png" alt="feature-img" />
+          </div>
+          <div class="features-info">
+            <div class="info-text">
+              <div class="info-text-icon">
+                <span class="material-symbols-outlined"> timer </span>
+                <p>Real - Time Queue Tracking</p>
+              </div>
+              <p>
+                Monitor patient queues and keep everyone informed with accurate
+                wait time updates.
+              </p>
+            </div>
+            <div class="info-text">
+              <div class="info-text-icon">
+                <span class="material-symbols-outlined"> event_available </span>
+                <p>Digital Booking & SMS Alerts</p>
+              </div>
+              <p>
+                Book appointments from anywhere and receive automatic reminders
+                right on your phone.
+              </p>
+            </div>
+            <div class="info-text">
+              <div class="info-text-icon">
+                <span class="material-symbols-outlined"> groups </span>
+                <p>Role - Based Dashboards</p>
+              </div>
+              <p>
+                Customized access for patients, staff, and doctors to manage
+                tasks efficiently.
+              </p>
+            </div>
+            <div class="info-text">
+              <div class="info-text-icon">
+                <span class="material-symbols-outlined"> chair </span>
+                <p>Smart Waiting Area Management</p>
+              </div>
+              <p>
+                Reduce congestion by guiding patients to the right place at the
+                right time.
+              </p>
+            </div>
+            <div class="info-text" >
+              <div class="info-text-icon">
+                <span class="material-symbols-outlined"> star </span>
+                <p>Feedback Collection System</p>
+              </div>
+              <p>
+                Gather patient feedback to improve hospital service and overall
+                experience.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div id="how-it-works"></div>
+      </div>
+
+      
+
+
+      <div class="work-section">
+        <h2>How it Works?</h2>
+        <div class="work-step">
+          <div class="work">
+            <h3>1</h3>
+            <div class="work-card">
+              <span class="material-symbols-outlined work-card-icon">
+                account_circle
+              </span>
+              <h4>Sign Up</h4>
+              <p>Create an account as a patient or hospital staff.</p>
+            </div>
+          </div>
+          <div class="work">
+            <h3>2</h3>
+            <div class="work-card">
+              <span class="material-symbols-outlined work-card-icon">
+                date_range
+              </span>
+              <h4>Book or Manage</h4>
+              <p>
+                Patients book appointments, staff manage queues effortlessly.
+              </p>
+            </div>
+          </div>
+          <div class="work">
+            <h3>3</h3>
+            <div class="work-card">
+              <span class="material-symbols-outlined work-card-icon">
+                notifications
+              </span>
+              <h4>Stay Updated</h4>
+              <p>
+                Get real-time alerts, wait times, and important notifications.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="how">
+        <div class="our-info">
+          <h2>Why Choose Qure?</h2>
+          <p>
+            Designed to save time, reduce stress, and improve care for everyone.
+          </p>
+        </div>
+        <div class="carousel-wrap">
+          <div class="carousel-card">
+            <div class="card">
+              <img src="/images/Clock.png" alt="clock" />
+              <h3>Less Waiting Time</h3>
+              <p>Quick appointment.</p>
+            </div>
+            <div class="card">
+              <img src="/images/Age range.png" alt="age-range" />
+              <h3>No Overcrowding</h3>
+              <p>
+                Smart queue control to keep waiting areas calm and organized.
+              </p>
+            </div>
+            <div class="card">
+              <img src="/images/Analytics.png" alt="Analytics" />
+              <h3>Data - Driven Care</h3>
+              <p>Insights that help hospitals improve efficiency and care.</p>
+            </div>
+            <div class="card">
+              <img src="/images/Smartphone.png" alt="Smartphone" />
+              <h3>Access Anywhere</h3>
+              <p>Book appointments or manage queues on any device, anytime.</p>
+            </div>
+            <div class="card">
+              <img src="/images/Happy.png" alt="Happy" />
+              <h3>Better Experience</h3>
+              <p>
+                Making every hospital visit easier, friendlier, and stress -
+                free.
+              </p>
+            </div>
+            <div class="card">
+              <img src="/images/Honesty.png" alt="Honesty" />
+              <h3>Trusted by All</h3>
+              <p>A system that works for everyone, every time.</p>
+            </div>
+            <div class="card">
+              <img src="/images/Clock.png" alt="clock" />
+              <h3>Less Waiting Time</h3>
+              <p>Quick appointment.</p>
+            </div>
+            <div class="card">
+              <img src="/images/Age range.png" alt="age-range" />
+              <h3>No Overcrowding</h3>
+              <p>
+                Smart queue control to keep waiting areas calm and organized.
+              </p>
+            </div>
+            <div class="card">
+              <img src="/images/Analytics.png" alt="Analytics" />
+              <h3>Data - Driven Care</h3>
+              <p>Insights that help hospitals improve efficiency and care.</p>
+            </div>
+            <div class="card">
+              <img src="/images/Smartphone.png" alt="Smartphone" />
+              <h3>Access Anywhere</h3>
+              <p>Book appointments or manage queues on any device, anytime.</p>
+            </div>
+            <div class="card">
+              <img src="/images/Happy.png" alt="Happy" />
+              <h3>Better Experience</h3>
+              <p>
+                Making every hospital visit easier, friendlier, and stress -
+                free.
+              </p>
+            </div>
+            <div class="card">
+              <img src="/images/Honesty.png" alt="Honesty" />
+              <h3>Trusted by All</h3>
+              <p>A system that works for everyone, every time.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="question">
+        <div class="freq-text">
+          <h2>Frequently asked <span>questions</span></h2>
+          <div class="freq-img">
+            <img
+              src="/images/FAQ.png"
+              alt="Frequent-picture"
+            />
+          </div>
+        </div>
+        <div class="most-asked">
+          <div class="most-asked-1">
+            <h3>Q1: How do i join a hospital queue?</h3>
+            <p>
+              You can join a queue by creating an account, logging in, and
+              selecting the hospital and department you wish to visit. Your
+              position in the queue will be displayed in real time.
+            </p>
+          </div>
+          <div class="most-asked-1">
+            <h3>Q2: Can i track my queue status remotely?</h3>
+            <p>
+              Yes! After joining a queue, you can check your status through the
+              app or website anytime, and receive updates when it's your turn.
+            </p>
+          </div>
+          <div class="most-asked-1">
+            <h3>Q3: What if i miss my turn?</h3>
+            <p>
+              If you miss your turn, you can notify the hospital staff via the
+              Contact Us page or by calling them. They will advise you on the
+              next available slot or reassign you in the queue.
+            </p>
+          </div>
+          <div class="most-asked-1">
+            <h3>Q4: Can I book appointments in advance?</h3>
+            <p>
+              Absolutely. You can book appointments for available slots in
+              different departments, reducing your wait time.
+            </p>
+          </div>
+          <div class="most-asked-1">
+            <h3>Q5: How do I update my contact information?</h3>
+            <p>
+              Go to your profile in the app or website, and update your phone
+              number or email. Make sure it's correct to receive real - time
+              notifications
+            </p>
+          </div>
+          <div class="most-asked-1">
+            <h3>Q6: What should i do if the system isn't working?</h3>
+            <p>
+              Contact Customer Care via live chat, call, or email. You can also
+              submit a support ticket through the app, and a staff member will
+              assist you promptly.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="semi-footer">
+        <div class="semi-footer-header">
+          <h2>Ready To Improve Your Hospital Experience?</h2>
+          <p>
+            Join the smart way to manage hospital queues - save time and improve
+            patient satisfaction.
+          </p>
+        </div>
+        <div class="semi-footer-img-btn">
+          <img src="/images/joinQueue.png" alt="Join-Queue" />
+          <div class="semi-footer-btn">
+            <a href="./public/404.html">Join the Queue</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="contact" class="footer">
+        <div class="footer-top">
+          <div class="footer-brand">
+            <div class="footer-logo">
+              <img src="/images/Vector (3).png" alt="logo" />
+              <h3>Qure</h3>
+            </div>
+            <p>
+              Subscribe to our newsletter for the latest updates and exclusive
+              offers.
+            </p>
+            <form class="newsletter">
+              <input type="email" placeholder="Your Email Here" required />
+              <button type="submit">Join</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="footer-links">
+          <div>
+            <h4>Quick Links</h4>
+            <ul>
+              <li><a href="#about">About</a></li>
+              <li><a href="#privacy-policy">Privacy Policy</a></li>
+              <li><a href="#terms">Terms</a></li>
+              <li><a href="#contact">Contact Us</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4>Resources</h4>
+            <ul>
+              <li><a href="#how-it-works">How It Works?</a></li>
+              <li><a href="#faqs">FAQs</a></li>
+              <li><a href="#help-center">Help Center</a></li>
+              <li><a href="#follow-us">Follow Us</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4>Stay Connected</h4>
+            <ul class="social">
+              <li>
+                <a href="#facebook"><i class="fab fa-facebook"></i> Facebook</a>
+              </li>
+              <li>
+                <a href="#instagram"><i class="fab fa-instagram"></i> Instagram</a>
+              </li>
+              <li>
+                <a href="#twitter"><i class="fab fa-x-twitter"></i> Twitter/X</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <p>© 2025 Qure Nigeria. All rights reserved.</p>
+          <div class="footer-bottom-links">
+            <a href="#privacy-policy">Privacy Policy</a>
+            <a href="#terms-of-service">Terms of Service</a>
+            <a href="#cookie-settings">Cookie Settings</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Navigation Menu -->
+      <div class="mobile-navigation" id="mobile-navigation">
+        <div class="mobile-nav-header">
+          <div class="mobile-logo-section">
+            <img
+              src="/images/Vector (2).png"
+              alt="Qure Logo"
+              class="mobile-logo-icon"
+            />
+            <span class="mobile-logo-text">Qure</span>
+          </div>
+          <button class="mobile-close-button" id="mobile-close-button">
+            <span class="close-icon">×</span>
+          </button>
+        </div>
+
+          <nav class="mobile-nav-menu">
+            <a href="#home" class="mobile-nav-link">Home</a>
+            <a href="#login" class="mobile-nav-link">Sign in</a>
+            <a href="#register" class="mobile-nav-link">Get Started</a>
+            <a href="#how-it-works" class="mobile-nav-link">How Qure Works</a>
+            <a href="#contact" class="mobile-nav-link">Contact Us</a>
+          </nav>
+      </div>
+    </div>
+    <script type="module" src="/src/utils/mobile-menu.js"></script>
+  </body>
+</html>
+

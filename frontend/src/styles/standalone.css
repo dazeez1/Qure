@@ -1,0 +1,207 @@
+/* Standalone pages (404 & Coming Soon) */
+
+.standalone-page {
+  min-height: 100vh;
+  background: var(--color-background-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8rem 2rem 6rem;
+}
+
+.standalone-content {
+  max-width: 72rem;
+  width: 100%;
+  margin: 0 auto;
+  background: var(--color-background-white);
+  border: 1px solid var(--color-border-light);
+  border-radius: 1.6rem;
+  padding: 4rem 3.2rem;
+  box-shadow: 0 1.2rem 3.2rem rgba(15, 23, 42, 0.08);
+  text-align: center;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.8rem 1.6rem;
+  border-radius: 999px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  gap: 0.6rem;
+  margin-bottom: 1.6rem;
+}
+
+.status-pill-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.status-pill-info {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-primary-blue);
+}
+
+.standalone-title {
+  font-size: 3.2rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin-bottom: 1.2rem;
+}
+
+.standalone-subtitle {
+  font-size: 1.6rem;
+  color: var(--color-text-gray);
+  line-height: 1.6;
+  margin-bottom: 2.4rem;
+}
+
+.standalone-actions {
+  display: flex;
+  gap: 1.2rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 2.8rem;
+}
+
+.primary-link,
+.secondary-link {
+  text-decoration: none;
+  border-radius: 1rem;
+  padding: 1.2rem 2.4rem;
+  font-weight: 600;
+  font-size: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.primary-link {
+  background: linear-gradient(135deg, var(--color-primary-blue) 0%, var(--color-primary-blue-light) 100%);
+  color: var(--color-button-text);
+  box-shadow: 0 0.6rem 1.6rem rgba(14, 57, 149, 0.25);
+}
+
+.primary-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.8rem 2rem rgba(14, 57, 149, 0.3);
+}
+
+.secondary-link {
+  background: var(--color-background-white);
+  color: var(--color-primary-blue);
+  border: 2px solid var(--color-primary-blue);
+}
+
+.secondary-link:hover {
+  background: var(--color-background-gray);
+  border-color: var(--color-primary-blue-light);
+}
+
+.illustration-box {
+  width: 100%;
+  max-width: 42rem;
+  height: 20rem;
+  margin: 0 auto;
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 1.2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ghost-mark {
+  position: absolute;
+  width: 12rem;
+  height: 12rem;
+  background: #fff;
+  border: 2px solid var(--color-border-gray);
+  border-radius: 12px;
+  inset: 2rem auto auto 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.06);
+}
+
+.pulse {
+  position: absolute;
+  width: 8rem;
+  height: 8rem;
+  background: rgba(14, 57, 149, 0.08);
+  border-radius: 50%;
+  inset: auto 50% 1rem auto;
+  transform: translateX(50%);
+  animation: pulse 2.4s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: translateX(50%) scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(50%) scale(1.6);
+    opacity: 0;
+  }
+}
+
+.roadmap-card {
+  border: 1px solid var(--color-border-light);
+  border-radius: 1rem;
+  padding: 2rem;
+  background: var(--color-background-white);
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.05);
+}
+
+.roadmap-item {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.dot {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+}
+
+.dot.in-progress {
+  background: var(--color-primary-blue);
+  box-shadow: 0 0 0 0.4rem rgba(14, 57, 149, 0.12);
+}
+
+.dot.upcoming {
+  background: var(--color-border-gray);
+}
+
+.roadmap-label {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.roadmap-desc {
+  font-size: 1.4rem;
+  color: var(--color-text-gray);
+  margin: 0;
+}
+
+@media screen and (max-width: 600px) {
+  .standalone-content {
+    padding: 3.2rem 2.4rem;
+  }
+
+  .standalone-title {
+    font-size: 2.8rem;
+  }
+
+  .standalone-actions {
+    flex-direction: column;
+  }
+}
+
