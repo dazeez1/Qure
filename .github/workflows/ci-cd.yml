@@ -74,14 +74,11 @@ jobs:
       - name: Install dependencies
         working-directory: ./frontend
         run: |
-          echo "Attempting npm ci..."
-          if npm ci --verbose; then
-            echo "✅ npm ci succeeded"
-          else
-            echo "⚠️ npm ci failed, trying npm install as fallback..."
-            npm install
-            echo "✅ npm install completed"
-          fi
+          echo "Cleaning node_modules and package-lock.json to fix Rollup optional dependencies issue..."
+          rm -rf node_modules package-lock.json
+          echo "Installing dependencies with npm install..."
+          npm install
+          echo "✅ Dependencies installed successfully"
       
       - name: Run ESLint
         working-directory: ./frontend
