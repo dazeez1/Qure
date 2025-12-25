@@ -43,13 +43,35 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       
+      - name: Verify npm version and package-lock.json
+        working-directory: ./frontend
+        run: |
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo "Current directory: $(pwd)"
+          echo ""
+          echo "Checking package-lock.json:"
+          if [ ! -f "package-lock.json" ]; then
+            echo "❌ package-lock.json not found"
+            exit 1
+          fi
+          echo "✅ package-lock.json exists"
+          ls -lh package-lock.json
+          echo ""
+          echo "Checking lockfileVersion:"
+          lockfile_version=$(node -p "require('./package-lock.json').lockfileVersion")
+          echo "Lockfile version: $lockfile_version"
+          if [ -z "$lockfile_version" ] || [ "$lockfile_version" = "null" ]; then
+            echo "❌ Invalid lockfileVersion"
+            exit 1
+          fi
+          echo "✅ Lockfile version is valid"
+      
       - name: Install dependencies
         working-directory: ./frontend
         run: |
-          echo "Installing in: $(pwd)"
-          echo "Checking for package-lock.json:"
-          ls -lh package-lock.json || echo "❌ package-lock.json not found in current directory"
-          npm ci
+          echo "Installing dependencies with npm ci..."
+          npm ci --verbose
       
       - name: Run ESLint
         run: npm run lint || true
