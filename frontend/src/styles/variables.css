@@ -1,0 +1,54 @@
+/* ============================================
+   QURE COLOR SYSTEM - CSS ROOT VARIABLES
+   ============================================ */
+
+:root {
+  /* Primary Colors - Blue Palette */
+  --color-primary-blue: #0e3995;
+  --color-primary-blue-dark: #0a2a7a;
+  --color-primary-blue-darker: #07306d;
+  --color-primary-blue-light: #1e3a8a;
+  --color-primary-blue-lighter: #3b82f6;
+
+  /* Background Colors */
+  --color-background-white: #ffffff;
+  --color-background-light: #f8fafc;
+  --color-background-gray: #eff3f6;
+  --color-background-gray-light: #eef2f7;
+  --color-background-gray-lighter: #f1f5f9;
+
+  /* Text Colors */
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #282828;
+  --color-text-tertiary: #64748b;
+  --color-text-gray: #757575;
+  --color-text-dark: #000000;
+  --color-text-light: #333333;
+
+  /* Border Colors */
+  --color-border-light: #e2e8f0;
+  --color-border-gray: #d1d5db;
+  --color-border-medium: #aaaaaa;
+  --color-border-dark: #dddddd;
+
+  /* Shadow Colors */
+  --color-shadow-light: rgba(166, 193, 238, 0.251);
+  --color-shadow-medium: rgba(14, 57, 149, 0.2);
+  --color-shadow-dark: rgba(30, 58, 138, 0.3);
+  --color-shadow-black: rgba(0, 0, 0, 0.2);
+  --color-shadow-black-light: rgba(0, 0, 0, 0.021);
+
+  /* Button Colors */
+  --color-button-primary: var(--color-primary-blue);
+  --color-button-primary-hover: var(--color-primary-blue-lighter);
+  --color-button-text: #ffffff;
+
+  /* Link Colors */
+  --color-link-primary: var(--color-primary-blue);
+  --color-link-hover: var(--color-primary-blue-lighter);
+
+  /* Icon Colors */
+  --color-icon-primary: var(--color-primary-blue);
+  --color-icon-secondary: var(--color-text-tertiary);
+}
+

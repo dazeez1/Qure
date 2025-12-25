@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/styles/variables.css" />
+    <link rel="stylesheet" href="./src/styles/auth.css" />
+    <title>Qure - Create Account</title>
+  </head>
+  <body>
+    <div class="form-wrapper">
+      <div class="form-fill">
+        <h2 class="acc-text">Create your account</h2>
+        <p>Join to manage visits easily — as a patient or hospital staff.</p>
+
+        <div class="select-role">
+          <label>
+            <input type="radio" value="patient" name="role" checked />
+            Continue as Patient
+          </label>
+          <label>
+            <input type="radio" value="staff" name="role" />
+            Continue as Staff
+          </label>
+        </div>
+
+        <!-- Patient Registration Form -->
+        <form id="form-patient" class="patient-signup">
+          <div class="row">
+            <div class="input-group">
+              <label for="patient-firstname">First Name</label>
+              <input
+                type="text"
+                name="patient-firstname"
+                id="patient-firstname"
+                placeholder="Enter first name"
+                required
+              />
+              <span class="status" id="patient-firstname-error"></span>
+            </div>
+
+            <div class="input-group">
+              <label for="patient-lastname">Last Name</label>
+              <input
+                type="text"
+                name="patient-lastname"
+                id="patient-lastname"
+                placeholder="Enter last name"
+                required
+              />
+              <span class="status" id="patient-lastname-error"></span>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="patient-email">E-mail address</label>
+            <input
+              type="email"
+              name="patient-email"
+              id="patient-email"
+              placeholder="Enter your email"
+              required
+            />
+            <span class="status" id="patient-email-error"></span>
+          </div>
+
+          <div class="row">
+            <div class="input-group">
+              <label for="patient-number">Phone Number</label>
+              <input
+                type="tel"
+                name="patient-number"
+                id="patient-number"
+                placeholder="Enter your phone number"
+                required
+              />
+              <span class="status" id="patient-number-error"></span>
+            </div>
+
+            <div class="input-group">
+              <label for="patient-gender">Gender</label>
+              <select id="patient-gender" name="patient-gender" required>
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+                <option value="prefer-not-to-say">Prefer not to say</option>
+              </select>
+              <span class="status" id="patient-gender-error"></span>
+            </div>
+          </div>
+
+          <div class="input-group password-group">
+            <label for="patient-password">Create Password</label>
+            <div class="password-wrapper">
+              <input
+                type="password"
+                id="patient-password"
+                name="patient-password"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                id="toggle-patient-password"
+                aria-label="Toggle password visibility"
+              >
+                <span class="material-symbols-outlined">visibility_off</span>
+              </button>
+            </div>
+            <span class="status" id="patient-password-error"></span>
+          </div>
+
+          <div class="input-group password-group">
+            <label for="patient-confirm_password">Confirm Password</label>
+            <div class="password-wrapper">
+              <input
+                type="password"
+                id="patient-confirm_password"
+                name="patient-confirm_password"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                id="toggle-patient-confirm-password"
+                aria-label="Toggle password visibility"
+              >
+                <span class="material-symbols-outlined">visibility_off</span>
+              </button>
+            </div>
+            <span class="status" id="patient-confirm_password-error"></span>
+          </div>
+
+          <div class="input-group">
+            <div class="term-label">
+              <input type="checkbox" id="terms-patient" required />
+              <label for="terms-patient">
+                I agree with the <a href="#terms">Terms & Conditions</a>
+              </label>
+            </div>
+            <span class="status" id="terms-patient-error"></span>
+          </div>
+
+          <button type="submit" id="patient-submit">Sign up as patient →</button>
+        </form>
+
+        <!-- Hospital Staff Registration Form -->
+        <form id="form-staff" class="staff-signup hidden">
+          <div class="row">
+            <div class="input-group">
+              <label for="staff-firstname">First Name</label>
+              <input
+                type="text"
+                name="staff-firstname"
+                id="staff-firstname"
+                placeholder="Enter first name"
+                required
+              />
+              <span class="status" id="staff-firstname-error"></span>
+            </div>
+
+            <div class="input-group">
+              <label for="staff-lastname">Last Name</label>
+              <input
+                type="text"
+                name="staff-lastname"
+                id="staff-lastname"
+                placeholder="Enter last name"
+                required
+              />
+              <span class="status" id="staff-lastname-error"></span>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="staff-email">Work E-mail</label>
+            <input
+              type="email"
+              name="staff-email"
+              id="staff-email"
+              placeholder="Enter your work email"
+              required
+            />
+            <span class="status" id="staff-email-error"></span>
+          </div>
+
+          <div class="input-group">
+            <label for="staff-number">Phone Number</label>
+            <input
+              type="tel"
+              name="staff-number"
+              id="staff-number"
+              placeholder="Enter your phone number"
+              required
+            />
+            <span class="status" id="staff-number-error"></span>
+          </div>
+
+          <div class="input-group">
+            <label for="hospital-name">Hospital/Clinic Name</label>
+            <input
+              type="text"
+              name="hospital"
+              id="hospital-name"
+              placeholder="Enter your hospital/clinic name"
+              required
+            />
+            <span class="status" id="hospital-name-error"></span>
+          </div>
+
+          <div class="input-group password-group">
+            <label for="staff-password">Create Password</label>
+            <div class="password-wrapper">
+              <input
+                type="password"
+                id="staff-password"
+                name="staff-password"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                id="toggle-staff-password"
+                aria-label="Toggle password visibility"
+              >
+                <span class="material-symbols-outlined">visibility_off</span>
+              </button>
+            </div>
+            <span class="status" id="staff-password-error"></span>
+          </div>
+
+          <div class="input-group password-group">
+            <label for="staff-confirm_password">Confirm Password</label>
+            <div class="password-wrapper">
+              <input
+                type="password"
+                id="staff-confirm_password"
+                name="staff-confirm_password"
+                placeholder="Enter your password"
+                required
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                id="toggle-staff-confirm-password"
+                aria-label="Toggle password visibility"
+              >
+                <span class="material-symbols-outlined">visibility_off</span>
+              </button>
+            </div>
+            <span class="status" id="staff-confirm_password-error"></span>
+          </div>
+
+          <div class="input-group">
+            <div class="term-label">
+              <input type="checkbox" id="terms-staff" required />
+              <label for="terms-staff">
+                I agree with the <a href="#terms">Terms & Conditions</a>
+              </label>
+            </div>
+            <span class="status" id="terms-staff-error"></span>
+          </div>
+
+          <button type="submit" id="staff-submit">Sign up as hospital staff →</button>
+        </form>
+
+        <div class="acct">
+          <p>Already have an account? <a href="./public/404.html">Log in here</a></p>
+        </div>
+      </div>
+
+      <div class="illustration-part">
+        <div class="transparent-glass">
+          <div class="logo">
+            <img src="./public/images/Vector (2).png" alt="logo" />
+            <p>Qure</p>
+          </div>
+          <h2>Let's get started!</h2>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/pages/auth/register.js"></script>
+  </body>
+</html>
