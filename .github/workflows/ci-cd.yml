@@ -41,43 +41,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          # Disable cache to avoid Rollup optional dependencies issue
       
       - name: Update npm to latest
         run: npm install -g npm@latest
       
-      - name: Verify npm version and package-lock.json
+      - name: Install dependencies
         working-directory: ./frontend
         run: |
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
-          echo "Current directory: $(pwd)"
           echo ""
-          echo "Checking package-lock.json:"
-          if [ ! -f "package-lock.json" ]; then
-            echo "❌ package-lock.json not found"
-            exit 1
-          fi
-          echo "✅ package-lock.json exists"
-          ls -lh package-lock.json
-          echo ""
-          echo "Checking lockfileVersion:"
-          lockfile_version=$(node -p "require('./package-lock.json').lockfileVersion")
-          echo "Lockfile version: $lockfile_version"
-          if [ -z "$lockfile_version" ] || [ "$lockfile_version" = "null" ]; then
-            echo "❌ Invalid lockfileVersion"
-            exit 1
-          fi
-          echo "✅ Lockfile version is valid"
-      
-      - name: Install dependencies
-        working-directory: ./frontend
-        run: |
-          echo "Cleaning node_modules and package-lock.json to fix Rollup optional dependencies issue..."
+          echo "Cleaning any existing node_modules and package-lock.json..."
           rm -rf node_modules package-lock.json
-          echo "Installing dependencies with npm install..."
-          npm install
+          echo ""
+          echo "Installing dependencies with npm install (fresh install)..."
+          npm install --no-optional=false
           echo "✅ Dependencies installed successfully"
       
       - name: Run ESLint

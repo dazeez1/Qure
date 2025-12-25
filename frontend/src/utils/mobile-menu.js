@@ -54,7 +54,7 @@ if (mobileCloseButton) {
 // Close menu when clicking on navigation links
 if (mobileNavigation) {
   mobileNavigation.querySelectorAll('a').forEach((link) => {
-    link.addEventListener('click', (e) => {
+    link.addEventListener('click', () => {
       // For hash links, close menu but allow navigation
       if (link.getAttribute('href')?.startsWith('#')) {
         closeMenu();
