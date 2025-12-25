@@ -52,24 +52,17 @@ jobs:
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo ""
-          echo "Step 1: Cleaning any existing node_modules and package-lock.json..."
+          echo "Step 1: Cleaning everything completely..."
           rm -rf node_modules package-lock.json .npm
-          echo ""
-          echo "Step 2: Clearing npm cache..."
           npm cache clean --force
           echo ""
-          echo "Step 3: Installing dependencies with npm install..."
+          echo "Step 2: Installing dependencies..."
           npm install
           echo ""
-          echo "Step 4: Verifying Rollup installation..."
-          if [ -d "node_modules/@rollup" ]; then
-            echo "✅ Rollup found"
-            ls -la node_modules/@rollup/ | head -10
-          else
-            echo "❌ Rollup not found"
-          fi
+          echo "Step 3: Explicitly installing Rollup Linux binary..."
+          npm install @rollup/rollup-linux-x64-gnu --save-optional --force || echo "Attempted to install rollup binary"
           echo ""
-          echo "Step 5: Reinstalling to ensure optional dependencies..."
+          echo "Step 4: Final reinstall to ensure everything is correct..."
           npm install --force
           echo "✅ Dependencies installed successfully"
       
