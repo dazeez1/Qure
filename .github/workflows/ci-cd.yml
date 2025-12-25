@@ -52,11 +52,25 @@ jobs:
           echo "Node version: $(node --version)"
           echo "NPM version: $(npm --version)"
           echo ""
-          echo "Cleaning any existing node_modules and package-lock.json..."
-          rm -rf node_modules package-lock.json
+          echo "Step 1: Cleaning any existing node_modules and package-lock.json..."
+          rm -rf node_modules package-lock.json .npm
           echo ""
-          echo "Installing dependencies with npm install (fresh install)..."
-          npm install --no-optional=false
+          echo "Step 2: Clearing npm cache..."
+          npm cache clean --force
+          echo ""
+          echo "Step 3: Installing dependencies with npm install..."
+          npm install
+          echo ""
+          echo "Step 4: Verifying Rollup installation..."
+          if [ -d "node_modules/@rollup" ]; then
+            echo "✅ Rollup found"
+            ls -la node_modules/@rollup/ | head -10
+          else
+            echo "❌ Rollup not found"
+          fi
+          echo ""
+          echo "Step 5: Reinstalling to ensure optional dependencies..."
+          npm install --force
           echo "✅ Dependencies installed successfully"
       
       - name: Run ESLint
