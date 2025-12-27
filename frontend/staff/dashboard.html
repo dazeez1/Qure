@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../src/styles/variables.css" />
+    <link rel="stylesheet" href="../src/styles/toast.css" />
+    <title>Qure - Staff Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+        background-color: #f5f5f5;
+        display: flex;
+        overflow: hidden;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        width: 260px;
+        background-color: var(--color-primary-blue);
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 1000;
+      }
+
+      .logo {
+        padding: 2.4rem 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .logo img {
+        width: 3.2rem;
+        height: 3.2rem;
+      }
+
+      .logo-text {
+        font-size: 2.4rem;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .nav-menu {
+        flex: 1;
+        padding: 2rem 0;
+        overflow-y: auto;
+      }
+
+      .nav-item {
+        padding: 1.2rem 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 1.4rem;
+      }
+
+      .nav-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      .nav-item.active {
+        background-color: rgba(255, 255, 255, 0.15);
+        color: #fff;
+      }
+
+      .nav-item .material-symbols-outlined {
+        font-size: 2rem;
+      }
+
+      .logout-item {
+        padding: 1.2rem 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 1.4rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        margin-top: auto;
+      }
+
+      .logout-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      .logout-item .material-symbols-outlined {
+        font-size: 2rem;
+      }
+
+      /* Main Content */
+      .main-content {
+        flex: 1;
+        margin-left: 260px;
+        padding: 4rem 2rem;
+        min-height: 100vh;
+        background-color: #f5f5f5;
+        overflow-y: auto;
+      }
+
+      .dashboard-header {
+        margin-bottom: 3rem;
+      }
+
+      .dashboard-header h1 {
+        font-size: 3.2rem;
+        font-weight: 700;
+        color: var(--color-text-primary);
+        margin-bottom: 0.8rem;
+      }
+
+      .dashboard-header p {
+        font-size: 1.6rem;
+        color: #757575;
+      }
+
+      .dashboard-card {
+        background: #fff;
+        border-radius: 1.6rem;
+        padding: 3rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+      }
+
+      .dashboard-card h2 {
+        font-size: 2.4rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin-bottom: 1.6rem;
+      }
+
+      .dashboard-card p {
+        font-size: 1.6rem;
+        color: #757575;
+        line-height: 1.6;
+      }
+
+      .status-message {
+        padding: 1.2rem 1.6rem;
+        border-radius: 0.8rem;
+        font-size: 1.4rem;
+        margin-top: 1.6rem;
+        font-weight: 500;
+      }
+
+      .status-message.success {
+        background-color: #d1fae5;
+        color: #065f46;
+      }
+
+      .status-message.error {
+        background-color: #fee2e2;
+        color: #991b1b;
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        .sidebar {
+          width: 100%;
+          position: relative;
+          min-height: auto;
+        }
+
+        .main-content {
+          margin-left: 0;
+          padding: 2rem 1.5rem;
+        }
+
+        .dashboard-header h1 {
+          font-size: 2.4rem;
+        }
+
+        .dashboard-card {
+          padding: 2rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <img src="../public/images/Vector (2).png" alt="Qure Logo" />
+        <span class="logo-text">Qure</span>
+      </div>
+
+      <nav class="nav-menu">
+        <div class="nav-item active">
+          <span class="material-symbols-outlined">dashboard</span>
+          <span>Dashboard</span>
+        </div>
+        <div class="nav-item">
+          <span class="material-symbols-outlined">queue</span>
+          <span>Queues</span>
+        </div>
+        <div class="nav-item">
+          <span class="material-symbols-outlined">groups</span>
+          <span>Waiting Area</span>
+        </div>
+        <div class="nav-item">
+          <span class="material-symbols-outlined">event</span>
+          <span>Appointments</span>
+        </div>
+        <div class="nav-item">
+          <span class="material-symbols-outlined">map</span>
+          <span>Floor Map</span>
+        </div>
+        <div class="nav-item">
+          <span class="material-symbols-outlined">settings</span>
+          <span>Settings</span>
+        </div>
+      </nav>
+
+      <div class="logout-item" id="logout-btn">
+        <span class="material-symbols-outlined">logout</span>
+        <span>Logout</span>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="dashboard-header">
+        <h1>Staff Dashboard</h1>
+        <p>Welcome back, <span id="user-name"></span></p>
+      </div>
+
+      <div class="dashboard-card">
+        <h2>Overview</h2>
+        <p>This is your staff dashboard. Queue management features will be available here.</p>
+        <div id="dashboard-status" class="status-message">Loading...</div>
+      </div>
+    </main>
+
+    <script type="module" src="../src/pages/staff/dashboard.js"></script>
+  </body>
+</html>

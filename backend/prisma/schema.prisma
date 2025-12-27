@@ -10,5 +10,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Models will be added here as we build features
+enum Role {
+  PATIENT
+  STAFF
+  ADMIN
+}
 
+model Hospital {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  accessCode  String   @unique
+  createdAt   DateTime @default(now())
+
+  users       User[]
+
+  @@map("hospitals")
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  firstName    String
+  lastName     String
+  email        String   @unique
+  phone        String?
+  gender       String?
+  hospitalName String?
+  password     String
+  role         Role     @default(PATIENT)
+  isPrimary    Boolean  @default(false)
+  isVerified   Boolean  @default(false)
+
+  hospitalId   String?  @db.ObjectId
+  hospital     Hospital? @relation(fields: [hospitalId], references: [id])
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
