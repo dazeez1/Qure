@@ -1,5 +1,10 @@
 import express from 'express';
-import { register, login } from '../controllers/authController.js';
+import {
+  register,
+  login,
+  forgotPassword,
+  resetPassword,
+} from '../controllers/authController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -17,6 +22,20 @@ router.post('/register', register);
  * Public route - no authentication required
  */
 router.post('/login', login);
+
+/**
+ * POST /api/auth/forgot-password
+ * Generate reset token and send password reset email
+ * Public route - no authentication required
+ */
+router.post('/forgot-password', forgotPassword);
+
+/**
+ * POST /api/auth/reset-password
+ * Verify reset token and update password
+ * Public route - no authentication required
+ */
+router.post('/reset-password', resetPassword);
 
 /**
  * GET /api/auth/me
