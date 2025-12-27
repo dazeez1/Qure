@@ -8,7 +8,8 @@ import {
   normalizeEmail,
 } from '../utils/validation.js';
 import { generateAccessCode } from '../utils/accessCode.js';
-import { sendAccessCodeEmail } from '../utils/email.js';
+import { sendAccessCodeEmail, sendPasswordResetEmail } from '../utils/email.js';
+import { generateResetToken } from '../utils/resetToken.js';
 
 /**
  * Register a new user (Patient or Staff)
@@ -412,6 +413,195 @@ export const verifyAccessCode = async (req, res, next) => {
     });
   } catch (error) {
     // Pass to error handler middleware
+    next(error);
+  }
+};
+
+/**
+ * Forgot password - Generate reset token and send email
+ * POST /api/auth/forgot-password
+ */
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    // Validate email
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required',
+      });
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format',
+      });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+      },
+    });
+
+    console.log('🔍 Forgot Password Request:', {
+      email: normalizedEmail,
+      userFound: !!user,
+      userId: user?.id,
+    });
+
+    // Always return success message (security best practice - don't reveal if email exists)
+    // But only send email if user exists
+    if (user) {
+      console.log('✅ User found, generating reset token...');
+
+      // Invalidate any existing reset tokens for this user
+      await prisma.passwordResetToken.updateMany({
+        where: {
+          userId: user.id,
+          used: false,
+        },
+        data: {
+          used: true,
+        },
+      });
+
+      // Generate reset token
+      const resetToken = generateResetToken();
+      console.log('🔑 Reset token generated:', resetToken.substring(0, 10) + '...');
+
+      // Calculate expiration (1 hour from now)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1);
+
+      // Save reset token to database
+      await prisma.passwordResetToken.create({
+        data: {
+          token: resetToken,
+          userId: user.id,
+          expiresAt,
+        },
+      });
+
+      console.log('💾 Reset token saved to database');
+
+      // Send reset email
+      try {
+        console.log('📧 Attempting to send password reset email...');
+        await sendPasswordResetEmail(user.email, resetToken, user.firstName);
+        console.log('✅ Password reset email sent successfully!');
+      } catch (emailError) {
+        console.error('❌ Error sending password reset email:', emailError);
+        // Don't fail the request if email fails - token is still created
+      }
+    } else {
+      console.log('ℹ️  User not found (email does not exist in database)');
+      console.log('   (This is normal - we return success for security)');
+    }
+
+    // Always return success (security best practice)
+    res.status(200).json({
+      success: true,
+      message: 'If an account exists with that email, a password reset link has been sent.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Reset password - Verify token and update password
+ * POST /api/auth/reset-password
+ */
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+
+    // Validate required fields
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token and password are required',
+      });
+    }
+
+    // Validate password
+    if (!isValidPassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+      });
+    }
+
+    // Find reset token in database
+    const resetTokenRecord = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!resetTokenRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token',
+      });
+    }
+
+    // Check if token has been used
+    if (resetTokenRecord.used) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset token has already been used',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > resetTokenRecord.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset token has expired',
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await hashPassword(password);
+
+    // Update user password
+    await prisma.user.update({
+      where: { id: resetTokenRecord.userId },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    // Mark token as used
+    await prisma.passwordResetToken.update({
+      where: { id: resetTokenRecord.id },
+      data: {
+        used: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. Please log in with your new password.',
+    });
+  } catch (error) {
     next(error);
   }
 };
