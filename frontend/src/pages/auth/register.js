@@ -7,6 +7,9 @@
 
 'use strict';
 
+import { toast } from '../../utils/toast.js';
+import { API_ENDPOINTS } from '../../config/api.js';
+
 const roleRadios = document.querySelectorAll('input[name="role"]');
 const patientForm = document.getElementById('form-patient');
 const staffForm = document.getElementById('form-staff');
@@ -329,43 +332,71 @@ function setupFormValidation(form, formType) {
     const originalText = submitBtn.textContent;
     submitBtn.textContent = 'Creating account...';
 
-    // TODO: Send to backend API
-    // This will be implemented when backend is ready
+    // Prepare data for backend API
+    const apiData = {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: formType === 'patient' ? data.email : data.workEmail,
+      phone: data.phone || undefined,
+      password: data.password,
+      role: formType === 'patient' ? 'PATIENT' : 'STAFF',
+    };
+
+    // Add role-specific fields
+    if (formType === 'patient') {
+      apiData.gender = data.gender || undefined;
+    } else {
+      apiData.hospitalName = data.hospitalName;
+    }
+
+    // Send to backend API
     try {
-      // Placeholder for API call
-      // const response = await fetch('/api/auth/register', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(data),
-      // });
-      
-      // For now, just prepare the data (will be sent to backend)
-      // Data structure ready for API integration
-      const formDataForBackend = {
-        ...data,
-        password: '[HIDDEN]',
-        confirmPassword: '[HIDDEN]',
-      };
-      // TODO: Replace with actual API call when backend is ready
-      // await fetch('/api/auth/register', { ... });
+      const response = await fetch(API_ENDPOINTS.auth.register, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiData),
+      });
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const result = await response.json();
 
-      // TODO: Handle response and redirect
-      // if (response.ok) {
-      //   window.location.href = '/login.html';
-      // } else {
-      //   const error = await response.json();
-      //   const emailField = formType === 'patient' ? 'patient-email' : 'staff-email';
-      //   showError(emailField, error.message || 'Registration failed');
-      // }
-      
-      alert('Registration form is ready! Backend integration pending.');
+      if (response.ok && result.success) {
+        // Success - show toast and redirect
+        toast.success(result.message || 'Registration successful!');
+        
+        // Reset form
+        form.reset();
+        clearAllErrors(formType);
+        
+        // Redirect to login page after 1.5 seconds
+        setTimeout(() => {
+          window.location.href = '/login.html';
+        }, 1500);
+      } else {
+        // Error from backend - show toast and form error
+        const errorMessage = result.message || 'Registration failed. Please try again.';
+        toast.error(errorMessage);
+        
+        // Show error on email field (most common error location)
+        const emailField = formType === 'patient' ? 'patient-email' : 'staff-email';
+        showError(emailField, errorMessage);
+        
+        // Scroll to error
+        const errorElement = document.getElementById(emailField);
+        if (errorElement) {
+          errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          errorElement.focus();
+        }
+      }
     } catch (error) {
+      // Network or unexpected error
       console.error('Registration error:', error);
+      const errorMessage = 'Network error. Please check your connection and try again.';
+      toast.error(errorMessage);
+      
       const emailField = formType === 'patient' ? 'patient-email' : 'staff-email';
-      showError(emailField, 'An error occurred. Please try again.');
+      showError(emailField, errorMessage);
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
