@@ -1,0 +1,451 @@
+<div class="settings-organization">
+  <div class="settings-card">
+    <h2 class="settings-card-title">Hospital Information</h2>
+
+    <form id="organization-form" class="settings-form">
+      <!-- Hospital Name & Time Zone Row -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="hospital-name" class="form-label">Hospital Name</label>
+          <input
+            type="text"
+            id="hospital-name"
+            name="hospitalName"
+            class="form-input"
+            placeholder="Hospital Name"
+            readonly
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="timezone" class="form-label">Time zone</label>
+          <select id="timezone" name="timezone" class="form-select">
+            <option value="" disabled selected>Select time zone</option>
+            <option value="GMT+1">(GMT+1:00) West Africa Time</option>
+            <option value="GMT+0">(GMT+0:00) Greenwich Mean Time</option>
+            <option value="GMT+2">(GMT+2:00) Central Africa Time</option>
+            <option value="GMT+3">(GMT+3:00) East Africa Time</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Address (same width as Hospital Name) -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="hospital-address" class="form-label">Address</label>
+          <input
+            type="text"
+            id="hospital-address"
+            name="address"
+            class="form-input"
+            placeholder="Enter address"
+          />
+        </div>
+        <div class="form-group"></div>
+      </div>
+
+      <!-- Logo Upload (same width as Hospital Name) -->
+      <div class="form-row logo-upload-row">
+        <div class="form-group logo-upload-group">
+          <div class="logo-upload-area" id="logo-upload-area">
+            <input
+              type="file"
+              id="logo-upload"
+              name="logo"
+              accept="image/*"
+              class="logo-upload-input"
+            />
+            <div class="logo-upload-content">
+              <span class="material-symbols-outlined logo-upload-icon">cloud_upload</span>
+              <p class="logo-upload-text">Upload Logo</p>
+              <p class="logo-upload-hint">Click to upload or drag and drop</p>
+            </div>
+            <div class="logo-preview" id="logo-preview" style="display: none;">
+              <img id="logo-preview-img" src="" alt="Logo preview" />
+              <button type="button" class="logo-remove" id="logo-remove">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group"></div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Action Buttons (Outside Card) -->
+  <div class="form-actions">
+    <button type="button" class="btn btn-secondary" id="cancel-btn">
+      Cancel
+    </button>
+    <button type="submit" class="btn btn-primary" id="save-btn" form="organization-form">
+      Save
+    </button>
+  </div>
+</div>
+
+<style>
+  .settings-organization {
+    width: 100%;
+  }
+
+  .settings-card {
+    background: #fff;
+    border-radius: 1.6rem;
+    padding: 2.4rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .settings-card-title {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 2rem;
+  }
+
+  .settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    width: 100%;
+    align-items: start;
+  }
+
+  /* Logo upload row - stretch to match button height */
+  .logo-upload-row {
+    align-items: stretch;
+  }
+
+  .logo-upload-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .form-label {
+    font-size: 1.3rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+
+  .form-input,
+  .form-select {
+    padding: 1rem 1.4rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.8rem;
+    font-size: 1.4rem;
+    color: var(--color-text-primary);
+    background-color: #fff;
+    transition: border-color 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+
+  .form-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1.6rem center;
+    background-size: 1.2rem;
+    padding-right: 4rem;
+    cursor: pointer;
+  }
+
+  .form-select:invalid {
+    color: #9ca3af;
+  }
+
+  .form-select option {
+    color: var(--color-text-primary);
+  }
+
+  .form-select option:disabled {
+    color: #9ca3af;
+  }
+
+  .form-input:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1);
+  }
+
+  .form-input::placeholder {
+    color: #9ca3af;
+  }
+
+  .form-input:read-only {
+    background-color: #f9fafb;
+    cursor: not-allowed;
+    color: #6b7280;
+  }
+
+  .form-input:read-only::placeholder {
+    color: #9ca3af;
+  }
+
+  .logo-upload-area {
+    position: relative;
+    border: 2px dashed #d1d5db;
+    border-radius: 0.8rem;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: #f9fafb;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Make logo upload area extend to match button row */
+  .logo-upload-row {
+    margin-bottom: 0;
+    align-items: stretch;
+  }
+
+  .logo-upload-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo-upload-group .logo-upload-area {
+    flex: 1;
+    min-height: 220px;
+  }
+
+  /* Ensure logo upload aligns with button row visually */
+  .form-actions {
+    align-items: flex-start;
+    padding-top: 0.5rem;
+  }
+
+  .logo-upload-area:hover {
+    border-color: var(--color-primary-blue);
+    background-color: rgba(15, 82, 186, 0.05);
+  }
+
+  .logo-upload-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .logo-upload-content {
+    pointer-events: none;
+  }
+
+  .logo-upload-icon {
+    font-size: 3rem;
+    color: #9ca3af;
+    margin-bottom: 0.8rem;
+  }
+
+  .logo-upload-text {
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 0.3rem;
+  }
+
+  .logo-upload-hint {
+    font-size: 1.1rem;
+    color: #6b7280;
+  }
+
+  .logo-preview {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-preview img {
+    max-width: 100%;
+    max-height: 120px;
+    object-fit: contain;
+    border-radius: 0.8rem;
+  }
+
+  .logo-remove {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 3.2rem;
+    height: 3.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .logo-remove:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+  }
+
+  .logo-remove .material-symbols-outlined {
+    font-size: 2rem;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 0;
+    width: 100%;
+    max-width: 100%;
+    align-items: center;
+  }
+
+  .btn {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 0.8rem;
+    font-size: 1.4rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .btn-primary {
+    background-color: var(--color-primary-blue);
+    color: #fff;
+  }
+
+  .btn-primary:hover {
+    background-color: #092d6e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 82, 186, 0.3);
+  }
+
+  .btn-secondary {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+
+  .btn-secondary:hover {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+  }
+
+  /* Responsive - Tablet */
+  @media (max-width: 1024px) and (min-width: 769px) {
+    .settings-card {
+      padding: 2.4rem;
+    }
+
+    .form-row {
+      gap: 2rem;
+    }
+
+    /* Ensure all interactive elements are clickable */
+    button, input, select, .logo-upload-area {
+      pointer-events: auto !important;
+      -webkit-tap-highlight-color: rgba(15, 82, 186, 0.2);
+      touch-action: manipulation;
+    }
+  }
+
+  /* Responsive - Mobile */
+  @media (max-width: 968px) {
+    .form-row {
+      grid-template-columns: 1fr;
+      gap: 2.4rem;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .settings-card {
+      padding: 2rem;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .settings-card-title {
+      font-size: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .form-actions {
+      flex-direction: column-reverse;
+      width: 100%;
+      margin-top: 2rem;
+      gap: 1rem;
+    }
+
+    .btn {
+      width: 100%;
+      max-width: 100%;
+      pointer-events: auto !important;
+      -webkit-tap-highlight-color: rgba(15, 82, 186, 0.2);
+      touch-action: manipulation;
+      min-height: 48px; /* Better touch target */
+    }
+
+    .logo-upload-area {
+      padding: 2rem 1.5rem;
+      min-height: 180px;
+      pointer-events: auto !important;
+      touch-action: manipulation;
+    }
+
+    .form-row {
+      gap: 2rem;
+    }
+
+    .form-input,
+    .form-select {
+      width: 100%;
+      max-width: 100%;
+      pointer-events: auto !important;
+      -webkit-tap-highlight-color: rgba(15, 82, 186, 0.2);
+      touch-action: manipulation;
+      min-height: 44px; /* Better touch target */
+    }
+
+    .form-label {
+      pointer-events: auto;
+    }
+  }
+</style>
+

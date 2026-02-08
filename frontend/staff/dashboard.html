@@ -29,6 +29,50 @@
         background-color: #f5f5f5;
         display: flex;
         overflow: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Global touch improvements for mobile/tablet */
+      @media (max-width: 1024px) {
+        * {
+          -webkit-tap-highlight-color: rgba(15, 82, 186, 0.2);
+        }
+
+        button, a, input, select, textarea, .nav-item, .settings-tab {
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: rgba(15, 82, 186, 0.2);
+        }
+      }
+
+      /* Hamburger Menu Button */
+      .hamburger-menu {
+        display: none;
+        position: fixed;
+        top: 2rem;
+        left: 2rem;
+        z-index: 1001;
+        background-color: var(--color-primary-blue);
+        color: #fff;
+        border: none;
+        padding: 0.8rem;
+        border-radius: 0.8rem;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        transition: all 0.3s ease;
+      }
+
+      .hamburger-menu:hover {
+        background-color: #092d6e;
+        transform: scale(1.05);
+      }
+
+      .hamburger-menu .material-symbols-outlined {
+        font-size: 2rem;
+      }
+
+      /* Hide hamburger when sidebar is open */
+      body.menu-open .hamburger-menu {
+        display: none !important;
       }
 
       /* Sidebar */
@@ -43,6 +87,49 @@
         left: 0;
         top: 0;
         z-index: 1000;
+        transition: transform 0.3s ease;
+      }
+
+      /* Sidebar Close Button (Mobile Only) */
+      .sidebar-close {
+        display: none;
+        background: none;
+        border: none;
+        color: #fff;
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 0.4rem;
+        transition: background-color 0.3s ease;
+        flex-shrink: 0; /* Don't shrink */
+        margin-left: auto; /* Push to end */
+      }
+
+      .sidebar-close:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .sidebar-close .material-symbols-outlined {
+        font-size: 2.4rem;
+      }
+
+      /* Overlay for mobile menu */
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+      }
+
+      .sidebar-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
       }
 
       .logo {
@@ -51,6 +138,8 @@
         align-items: center;
         gap: 1rem;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: relative;
+        justify-content: space-between; /* Push close button to end */
       }
 
       .logo img {
@@ -125,6 +214,18 @@
         min-height: 100vh;
         background-color: #f5f5f5;
         overflow-y: auto;
+        overflow-x: hidden;
+        position: relative;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* View Container */
+      #app-content {
+        width: 100%;
+        min-height: calc(100vh - 8rem);
+        position: relative;
+        z-index: 1;
+        pointer-events: auto;
       }
 
       .dashboard-header {
@@ -182,17 +283,163 @@
         color: #991b1b;
       }
 
-      /* Responsive */
-      @media (max-width: 768px) {
-        .sidebar {
-          width: 100%;
-          position: relative;
-          min-height: auto;
+      /* Loading and Error States */
+      .loading-state,
+      .error-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40vh;
+        text-align: center;
+        padding: 4rem 2rem;
+      }
+
+      .loading-state {
+        font-size: 1.6rem;
+        color: #757575;
+      }
+
+      .error-state {
+        color: #991b1b;
+      }
+
+      .error-state h2 {
+        font-size: 2.4rem;
+        margin-bottom: 1rem;
+      }
+
+      .error-state p {
+        font-size: 1.6rem;
+        color: #757575;
+      }
+
+      /* Tablet styles */
+      @media (max-width: 1024px) and (min-width: 769px) {
+        .main-content {
+          padding: 3rem 2rem;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
         }
 
+        #app-content {
+          pointer-events: auto;
+          z-index: 2;
+        }
+
+        /* Ensure all interactive elements are clickable */
+        button, input, select, a, .nav-item, .settings-tab {
+          pointer-events: auto !important;
+          -webkit-tap-highlight-color: rgba(15, 82, 186, 0.2);
+          touch-action: manipulation;
+          cursor: pointer;
+        }
+
+        /* Ensure content scrolls properly */
+        .main-content {
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          -webkit-overflow-scrolling: touch;
+          height: 100vh;
+          max-height: 100vh;
+        }
+
+        #app-content {
+          overflow: visible;
+          height: auto;
+          min-height: auto;
+        }
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        /* Show hamburger menu */
+        .hamburger-menu {
+          display: block;
+        }
+
+        /* Show close button in sidebar */
+        .sidebar-close {
+          display: block;
+        }
+
+        /* Sidebar as drawer */
+        .sidebar {
+          width: 280px;
+          max-width: 85vw;
+          transform: translateX(-100%);
+          box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .sidebar.open {
+          transform: translateX(0);
+        }
+
+        /* Show overlay when sidebar is open */
+        .sidebar-overlay {
+          display: block;
+        }
+
+        .sidebar-overlay.active {
+          display: block;
+        }
+
+        /* Main content full width on mobile */
         .main-content {
           margin-left: 0;
           padding: 2rem 1.5rem;
+          padding-top: 8rem; /* Space for hamburger menu */
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          position: relative;
+          z-index: 1;
+          height: 100vh;
+          max-height: 100vh;
+        }
+
+        /* Ensure content is clickable */
+        #app-content {
+          position: relative;
+          z-index: 2;
+          pointer-events: auto;
+          width: 100%;
+          min-height: auto;
+        }
+
+        /* Ensure all interactive elements are clickable */
+        #app-content * {
+          pointer-events: auto;
+        }
+
+        /* Ensure buttons and inputs are clickable */
+        button, input, select, textarea, a, .nav-item, .settings-tab, .btn, .logo-upload-area {
+          pointer-events: auto !important;
+          -webkit-tap-highlight-color: rgba(15, 82, 186, 0.2);
+          touch-action: manipulation;
+          cursor: pointer;
+        }
+
+        button, .btn {
+          min-height: 44px; /* Better touch target */
+          min-width: 44px;
+        }
+
+        input, select, textarea {
+          min-height: 44px; /* Better touch target */
+        }
+
+        /* Ensure content scrolls properly */
+        .main-content {
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          -webkit-overflow-scrolling: touch;
+          height: 100vh;
+          max-height: 100vh;
+        }
+
+        #app-content {
+          overflow: visible;
+          height: auto;
         }
 
         .dashboard-header h1 {
@@ -202,39 +449,58 @@
         .dashboard-card {
           padding: 2rem;
         }
+
+        /* Prevent body scroll when menu is open */
+        body.menu-open {
+          overflow: hidden;
+        }
       }
     </style>
   </head>
   <body>
+    <!-- Hamburger Menu Button (Mobile Only) -->
+    <button class="hamburger-menu" id="hamburger-menu" aria-label="Open menu">
+      <span class="material-symbols-outlined">menu</span>
+    </button>
+
+    <!-- Overlay for mobile menu -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="logo">
-        <img src="../public/images/Vector (2).png" alt="Qure Logo" />
-        <span class="logo-text">Qure</span>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <img src="../public/images/Vector (2).png" alt="Qure Logo" />
+          <span class="logo-text">Qure</span>
+        </div>
+        <!-- Close Button (Mobile Only) - Positioned at end -->
+        <button class="sidebar-close" id="sidebar-close" aria-label="Close menu">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
 
       <nav class="nav-menu">
-        <div class="nav-item active">
+        <div class="nav-item" data-route="dashboard">
           <span class="material-symbols-outlined">dashboard</span>
           <span>Dashboard</span>
         </div>
-        <div class="nav-item">
+        <div class="nav-item" data-route="queues">
           <span class="material-symbols-outlined">queue</span>
           <span>Queues</span>
         </div>
-        <div class="nav-item">
+        <div class="nav-item" data-route="waiting-area">
           <span class="material-symbols-outlined">groups</span>
           <span>Waiting Area</span>
         </div>
-        <div class="nav-item">
+        <div class="nav-item" data-route="appointments">
           <span class="material-symbols-outlined">event</span>
           <span>Appointments</span>
         </div>
-        <div class="nav-item">
+        <div class="nav-item" data-route="floor-map">
           <span class="material-symbols-outlined">map</span>
           <span>Floor Map</span>
         </div>
-        <div class="nav-item">
+        <div class="nav-item" data-route="settings">
           <span class="material-symbols-outlined">settings</span>
           <span>Settings</span>
         </div>
@@ -248,18 +514,40 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <div class="dashboard-header">
-        <h1>Staff Dashboard</h1>
-        <p>Welcome back, <span id="user-name"></span></p>
-      </div>
-
-      <div class="dashboard-card">
-        <h2>Overview</h2>
-        <p>This is your staff dashboard. Queue management features will be available here.</p>
-        <div id="dashboard-status" class="status-message">Loading...</div>
+      <!-- Dynamic View Container -->
+      <div id="app-content">
+        <!-- Views will be loaded here dynamically -->
       </div>
     </main>
 
+    <!-- Set initial active state immediately to prevent flash -->
+    <script>
+      (function() {
+        const hash = window.location.hash.replace('#', '');
+        const routes = ['dashboard', 'queues', 'waiting-area', 'appointments', 'floor-map', 'settings'];
+        const route = hash && routes.includes(hash) ? hash : 'dashboard';
+        
+        // Set active state as soon as DOM is available
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', setInitialActive);
+        } else {
+          setInitialActive();
+        }
+        
+        function setInitialActive() {
+          const navItems = document.querySelectorAll('.nav-item');
+          navItems.forEach(item => {
+            if (item.dataset.route === route) {
+              item.classList.add('active');
+            } else {
+              item.classList.remove('active');
+            }
+          });
+        }
+      })();
+    </script>
+    <script type="module" src="../src/utils/mobile-sidebar.js"></script>
+    <script type="module" src="../src/js/navigation.js"></script>
     <script type="module" src="../src/pages/staff/dashboard.js"></script>
   </body>
 </html>
