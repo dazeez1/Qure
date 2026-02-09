@@ -213,7 +213,7 @@ The following system architecture and design diagrams are available in the `Docs
 4. **Update API Configuration**
    - Ensure `frontend/src/config/api.js` points to production backend
 
-### Recommended Deployment Architecture
+### Deployment Architecture
 
 ```
 ┌─────────────────┐
@@ -238,18 +238,16 @@ The following system architecture and design diagrams are available in the `Docs
 
 ##  Video Demo
 
-**Video Demo:** *[Link to video demo will be added here]*
+**Video Demo:** [Watch the demo video](https://drive.google.com/drive/folders/1SpUOKctHdocRaEIQT2HmYX0LnV1txvPV?usp=sharing)
 
 
 **Demo Content:**
 - Project overview and setup
 - User registration (Patient and Staff)
 - Login functionality
-- Password reset flow
 - Patient dashboard features
 - Staff dashboard and access code verification
 - Settings page navigation
-- API endpoints demonstration
 - System architecture overview
 
 ---
