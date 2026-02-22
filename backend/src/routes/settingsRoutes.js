@@ -7,6 +7,13 @@ import {
   getOrganization,
   updateOrganization,
 } from '../controllers/settingsController.js';
+import {
+  getDepartments,
+  createDepartment,
+  updateDepartment,
+  toggleDepartmentStatus,
+  deleteDepartment,
+} from '../controllers/departmentsController.js';
 
 const router = express.Router();
 
@@ -28,5 +35,40 @@ router.get('/organization', getOrganization);
  * Only Primary Staff or Admin can update
  */
 router.put('/organization', requirePrimaryOrAdmin, updateOrganization);
+
+/**
+ * GET /api/settings/departments
+ * Get all departments for logged-in user's hospital
+ * All verified staff can view
+ */
+router.get('/departments', getDepartments);
+
+/**
+ * POST /api/settings/departments
+ * Create a new department
+ * Only Primary Staff or Admin can create
+ */
+router.post('/departments', requirePrimaryOrAdmin, createDepartment);
+
+/**
+ * PUT /api/settings/departments/:id
+ * Update a department
+ * Only Primary Staff or Admin can update
+ */
+router.put('/departments/:id', requirePrimaryOrAdmin, updateDepartment);
+
+/**
+ * PATCH /api/settings/departments/:id/status
+ * Toggle department status (ACTIVE/INACTIVE)
+ * Only Primary Staff or Admin can change status
+ */
+router.patch('/departments/:id/status', requirePrimaryOrAdmin, toggleDepartmentStatus);
+
+/**
+ * DELETE /api/settings/departments/:id
+ * Delete a department
+ * Only Primary Staff or Admin can delete
+ */
+router.delete('/departments/:id', requirePrimaryOrAdmin, deleteDepartment);
 
 export default router;
