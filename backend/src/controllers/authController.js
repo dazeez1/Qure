@@ -101,6 +101,11 @@ export const register = async (req, res, next) => {
         where: {
           name: trimmedHospitalName,
         },
+        select: {
+          id: true,
+          name: true,
+          accessCode: true,
+        },
       });
 
       if (!hospital) {
@@ -220,6 +225,7 @@ export const login = async (req, res, next) => {
           hospitalName: true,
           isPrimary: true,
           isVerified: true,
+          hospitalId: true,
         },
       });
     } else {
@@ -236,6 +242,7 @@ export const login = async (req, res, next) => {
           hospitalName: true,
           isPrimary: true,
           isVerified: true,
+          hospitalId: true,
         },
       });
     }
@@ -301,6 +308,7 @@ export const login = async (req, res, next) => {
           hospitalName: user.hospitalName,
           isPrimary: user.isPrimary,
           isVerified: user.isVerified,
+          hospitalId: user.hospitalId,
         },
       },
     });

@@ -13,7 +13,6 @@
             name="hospitalName"
             class="form-input"
             placeholder="Hospital Name"
-            readonly
           />
         </div>
 
@@ -92,7 +91,7 @@
   .settings-card {
     background: #fff;
     border-radius: 1.6rem;
-    padding: 2.4rem;
+    padding: 2rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     width: 100%;
     max-width: 100%;
@@ -103,13 +102,13 @@
     font-size: 2rem;
     font-weight: 600;
     color: var(--color-text-primary);
-    margin-bottom: 2rem;
+    margin-bottom: 1.6rem;
   }
 
   .settings-form {
     display: flex;
     flex-direction: column;
-    gap: 1.6rem;
+    gap: 1.2rem;
     width: 100%;
     max-width: 100%;
   }
@@ -117,7 +116,7 @@
   .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    gap: 1.6rem;
     width: 100%;
     align-items: start;
   }
@@ -208,12 +207,12 @@
     position: relative;
     border: 2px dashed #d1d5db;
     border-radius: 0.8rem;
-    padding: 2rem 1.5rem;
+    padding: 1.5rem 1.2rem;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
     background-color: #f9fafb;
-    min-height: 200px;
+    min-height: 160px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -234,7 +233,7 @@
 
   .logo-upload-group .logo-upload-area {
     flex: 1;
-    min-height: 220px;
+    min-height: 160px;
   }
 
   /* Ensure logo upload aligns with button row visually */
@@ -243,9 +242,28 @@
     padding-top: 0.5rem;
   }
 
-  .logo-upload-area:hover {
+  .logo-upload-area:hover:not(.disabled) {
     border-color: var(--color-primary-blue);
     background-color: rgba(15, 82, 186, 0.05);
+  }
+
+  .logo-upload-area.disabled {
+    opacity: 0.6;
+    background-color: #f3f4f6;
+    border-color: #e5e7eb;
+    cursor: not-allowed;
+  }
+
+  .logo-upload-area.disabled .logo-upload-icon {
+    color: #d1d5db;
+  }
+
+  .logo-upload-area.disabled .logo-upload-text {
+    color: #9ca3af;
+  }
+
+  .logo-upload-area.disabled .logo-upload-hint {
+    color: #d1d5db;
   }
 
   .logo-upload-input {
@@ -263,9 +281,9 @@
   }
 
   .logo-upload-icon {
-    font-size: 3rem;
+    font-size: 2.4rem;
     color: #9ca3af;
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.6rem;
   }
 
   .logo-upload-text {
@@ -325,7 +343,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 1rem;
-    margin-top: 2rem;
+    margin-top: 1.6rem;
     padding-top: 0;
     width: 100%;
     max-width: 100%;
@@ -350,10 +368,17 @@
     color: #fff;
   }
 
-  .btn-primary:hover {
+  .btn-primary:hover:not(:disabled) {
     background-color: #092d6e;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(15, 82, 186, 0.3);
+  }
+
+  .btn-primary:disabled {
+    background-color: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
   .btn-secondary {
@@ -362,9 +387,17 @@
     border: 1px solid #e5e7eb;
   }
 
-  .btn-secondary:hover {
+  .btn-secondary:hover:not(:disabled) {
     background-color: #e5e7eb;
     border-color: #d1d5db;
+  }
+
+  .btn-secondary:disabled {
+    background-color: #f3f4f6;
+    color: #9ca3af;
+    border-color: #e5e7eb;
+    cursor: not-allowed;
+    opacity: 0.6;
   }
 
   /* Responsive - Tablet */
@@ -389,7 +422,7 @@
   @media (max-width: 968px) {
     .form-row {
       grid-template-columns: 1fr;
-      gap: 2.4rem;
+      gap: 1.6rem;
     }
   }
 
@@ -409,7 +442,7 @@
     .form-actions {
       flex-direction: column-reverse;
       width: 100%;
-      margin-top: 2rem;
+      margin-top: 1.6rem;
       gap: 1rem;
     }
 
@@ -423,14 +456,14 @@
     }
 
     .logo-upload-area {
-      padding: 2rem 1.5rem;
-      min-height: 180px;
+      padding: 1.5rem 1.2rem;
+      min-height: 140px;
       pointer-events: auto !important;
       touch-action: manipulation;
     }
 
     .form-row {
-      gap: 2rem;
+      gap: 1.6rem;
     }
 
     .form-input,
