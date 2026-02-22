@@ -19,8 +19,12 @@ enum Role {
 model Hospital {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
+  address     String?
+  timeZone    String?
+  logoUrl     String?
   accessCode  String   @unique
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   users       User[]
 

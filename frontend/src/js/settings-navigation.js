@@ -91,7 +91,7 @@ function updateActiveTab(tabName) {
 /**
  * Initialize Organization tab functionality
  */
-function initializeOrganizationTab() {
+async function initializeOrganizationTab() {
   const form = document.getElementById('organization-form');
   const cancelBtn = document.getElementById('cancel-btn');
   const saveBtn = document.getElementById('save-btn');
@@ -103,86 +103,90 @@ function initializeOrganizationTab() {
 
   if (!form) return;
 
-  // Import toast dynamically
-  import('../utils/toast.js').then(({ toast }) => {
-    // Save button handler (works with form attribute)
-    if (saveBtn) {
-      saveBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        // Mock save - UI only
-        toast.success('Organization settings saved (mock)');
-      });
-    }
+  // Import organization settings handler and toast
+  const [{ loadOrganizationData, updateOrganizationData, resetOrganizationForm }, { toast }] = await Promise.all([
+    import('../pages/settings/organization.js'),
+    import('../utils/toast.js'),
+  ]);
 
-    // Form submit handler (backup)
-    form.addEventListener('submit', (e) => {
+  // Load organization data on tab initialization
+  await loadOrganizationData();
+
+  // Save button handler (works with form attribute)
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-      // Mock save - UI only
-      toast.success('Organization settings saved (mock)');
+      // Prevent action if button is disabled
+      if (saveBtn.disabled) {
+        return;
+      }
+      const formData = new FormData(form);
+      await updateOrganizationData(formData);
+    });
+  }
+
+  // Form submit handler (backup)
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    // Prevent action if save button is disabled
+    if (saveBtn && saveBtn.disabled) {
+      return;
+    }
+    const formData = new FormData(form);
+    await updateOrganizationData(formData);
+  });
+
+  // Cancel button handler
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      resetOrganizationForm();
+      toast.info('Changes cancelled');
+    });
+  }
+
+  // Logo upload handler (preview only - no actual upload service yet)
+  if (logoUpload && logoPreview && logoPreviewImg) {
+    logoUpload.addEventListener('change', (e) => {
+      // Check if logo upload is disabled
+      if (logoUpload.disabled || logoUploadArea.classList.contains('disabled')) {
+        e.preventDefault();
+        return;
+      }
+
+      const file = e.target.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          logoPreviewImg.src = event.target.result;
+          logoPreview.style.display = 'flex';
+          logoUploadArea.querySelector('.logo-upload-content').style.display = 'none';
+          toast.info('Logo preview loaded. Note: Logo upload service not yet implemented.');
+        };
+        reader.readAsDataURL(file);
+      } else {
+        toast.error('Please select a valid image file');
+      }
     });
 
-    // Cancel button handler
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => {
-        // Reset form fields to original values
-        const hospitalName = document.getElementById('hospital-name');
-        const hospitalAddress = document.getElementById('hospital-address');
-        const timezone = document.getElementById('timezone');
-        
-        if (hospitalName) hospitalName.value = '';
-        if (hospitalAddress) hospitalAddress.value = '';
-        if (timezone) {
-          timezone.selectedIndex = 0; // Reset to placeholder "Select time zone"
-          timezone.value = ''; // Ensure placeholder shows
-        }
-        
-        // Hide logo preview if shown
-        if (logoPreview) {
-          logoPreview.style.display = 'none';
-        }
-        if (logoUploadArea) {
-          const uploadContent = logoUploadArea.querySelector('.logo-upload-content');
-          if (uploadContent) uploadContent.style.display = 'block';
-        }
-        if (logoUpload) {
-          logoUpload.value = '';
-        }
-        
-        toast.info('Changes cancelled');
-      });
-    }
-
-    // Logo upload handler (preview only - no actual upload)
-    if (logoUpload && logoPreview && logoPreviewImg) {
-      logoUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file && file.type.startsWith('image/')) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            logoPreviewImg.src = event.target.result;
-            logoPreview.style.display = 'flex';
-            logoUploadArea.querySelector('.logo-upload-content').style.display = 'none';
-            toast.success('Logo preview loaded (mock)');
-          };
-          reader.readAsDataURL(file);
-        } else {
-          toast.error('Please select a valid image file');
-        }
-      });
-
-      // Logo remove handler
-      if (logoRemove) {
-        logoRemove.addEventListener('click', (e) => {
+    // Logo remove handler
+    if (logoRemove) {
+      logoRemove.addEventListener('click', (e) => {
+        // Check if logo remove is disabled
+        if (logoRemove.disabled || logoUploadArea.classList.contains('disabled')) {
           e.preventDefault();
           e.stopPropagation();
-          logoPreview.style.display = 'none';
-          logoUploadArea.querySelector('.logo-upload-content').style.display = 'block';
-          logoUpload.value = '';
-          toast.info('Logo removed');
-        });
-      }
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        logoPreview.style.display = 'none';
+        logoUploadArea.querySelector('.logo-upload-content').style.display = 'block';
+        logoUpload.value = '';
+        toast.info('Logo removed');
+      });
     }
-  });
+  }
 }
 
 /**

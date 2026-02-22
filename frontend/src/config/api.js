@@ -12,6 +12,10 @@ export const API_ENDPOINTS = {
     forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
     resetPassword: `${API_BASE_URL}/auth/reset-password`,
   },
+  settings: {
+    getOrganization: `${API_BASE_URL}/settings/organization`,
+    updateOrganization: `${API_BASE_URL}/settings/organization`,
+  },
 };
 
 export default API_BASE_URL;
