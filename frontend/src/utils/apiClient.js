@@ -86,6 +86,21 @@ export const apiPut = (endpoint, body, options = {}) => {
 };
 
 /**
+ * PATCH request helper
+ * @param {string} endpoint - API endpoint
+ * @param {Object} body - Request body
+ * @param {Object} options - Additional fetch options
+ * @returns {Promise<Response>}
+ */
+export const apiPatch = (endpoint, body, options = {}) => {
+  return apiRequest(endpoint, {
+    ...options,
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+};
+
+/**
  * DELETE request helper
  * @param {string} endpoint - API endpoint
  * @param {Object} options - Additional fetch options

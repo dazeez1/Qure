@@ -7,7 +7,7 @@
 
 const SETTINGS_TABS = {
   'organization': '/partials/settings-organization.html',
-  'departments': '/partials/settings-coming-soon.html',
+  'departments': '/partials/settings-departments.html',
   'staff-roles': '/partials/settings-coming-soon.html',
   'notifications': '/partials/settings-coming-soon.html',
   'security': '/partials/settings-coming-soon.html'
@@ -60,6 +60,8 @@ async function loadSettingsTab(tabName) {
     // Initialize tab-specific functionality
     if (tabName === 'organization') {
       initializeOrganizationTab();
+    } else if (tabName === 'departments') {
+      initializeDepartmentsTab();
     }
 
   } catch (error) {
@@ -219,11 +221,14 @@ function setupTabHandlers() {
  * Initialize settings navigation
  */
 function initSettingsNavigation() {
+  // Reset settingsContentEl reference to ensure we get the fresh element
+  settingsContentEl = document.getElementById('settings-content');
+  
   // Set up tab handlers
   setupTabHandlers();
   
-  // Load default tab if content is empty
-  if (!settingsContentEl || settingsContentEl.innerHTML.trim() === '') {
+  // Always load default tab when settings view is loaded (ensures content shows on navigation)
+  if (settingsContentEl) {
     loadSettingsTab(DEFAULT_TAB);
   }
 }
@@ -231,6 +236,11 @@ function initSettingsNavigation() {
 // Initialize when settings view is loaded
 window.addEventListener('view-loaded', (event) => {
   if (event.detail.route === 'settings') {
+    // Reset current tab to default when view is reloaded
+    currentTab = DEFAULT_TAB;
+    // Reset settingsContentEl to null so it gets fresh reference
+    settingsContentEl = null;
+    
     setTimeout(() => {
       initSettingsNavigation();
     }, 100);
@@ -256,6 +266,15 @@ if (document.readyState === 'loading') {
       initSettingsNavigation();
     }, 100);
   }
+}
+
+/**
+ * Initialize Departments tab functionality
+ */
+async function initializeDepartmentsTab() {
+  // Import and initialize departments handler
+  const { initDepartmentsUI } = await import('../pages/settings/departments.js');
+  initDepartmentsUI();
 }
 
 // Export for use in other modules

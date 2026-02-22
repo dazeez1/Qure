@@ -27,6 +27,7 @@ model Hospital {
   updatedAt   DateTime @updatedAt
 
   users       User[]
+  departments Department[]
 
   @@map("hospitals")
 }
@@ -65,4 +66,20 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
 
   @@map("password_reset_tokens")
+}
+
+model Department {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  shortCode  String
+  status     String   @default("ACTIVE")
+  hospitalId String   @db.ObjectId
+
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([hospitalId, shortCode])
+  @@map("departments")
 }
