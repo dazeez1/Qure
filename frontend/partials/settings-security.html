@@ -1,0 +1,471 @@
+<div class="settings-security">
+  <div class="security-card">
+    <h2 class="section-title">Access Control</h2>
+
+    <!-- Access Code Required Toggle -->
+    <div class="form-group">
+      <label class="toggle-label">
+        <div class="toggle-container">
+          <input type="checkbox" id="access-code-required" class="toggle-input" />
+          <span class="toggle-slider"></span>
+        </div>
+        <div class="toggle-text">
+          <span class="toggle-title">Require shared access code before entering the staff dashboard</span>
+          <span class="toggle-helper" id="access-code-helper">
+            When enabled, staff must enter the hospital access code before accessing the staff dashboard.
+          </span>
+        </div>
+      </label>
+    </div>
+
+    <!-- Access Code Display Section -->
+    <div class="access-code-section" id="access-code-section">
+      <div class="access-code-display">
+        <div class="access-code-label-group">
+          <label class="access-code-label">Access Code:</label>
+          <div class="access-code-value-container">
+            <span class="access-code-value" id="access-code-value">••••••••</span>
+            <button type="button" class="btn btn-reveal" id="reveal-btn">
+              <span class="material-symbols-outlined" style="font-size: 1.2rem; margin-right: 0.4rem;">visibility</span>
+              <span id="reveal-btn-text">Reveal</span>
+            </button>
+          </div>
+        </div>
+        <p class="access-code-warning">Do not share this code publicly.</p>
+        <p class="access-code-timestamp" id="access-code-timestamp">Last updated: Just now</p>
+      </div>
+
+      <div class="regenerate-container">
+        <button type="button" class="btn btn-secondary" id="regenerate-btn">
+          <span class="material-symbols-outlined" style="font-size: 1.2rem; margin-right: 0.4rem;">refresh</span>
+          Regenerate Code
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="security-actions">
+    <button type="button" class="btn btn-secondary" id="cancel-security-btn">
+      Cancel
+    </button>
+    <button type="button" class="btn btn-primary" id="save-security-btn" disabled>
+      Save Changes
+    </button>
+  </div>
+</div>
+
+<!-- Regenerate Confirmation Modal -->
+<div class="modal-overlay" id="regenerate-modal-overlay" style="display: none;">
+  <div class="modal-container modal-container-small">
+    <div class="modal-header">
+      <h3 class="modal-title">Regenerate Access Code</h3>
+      <button type="button" class="modal-close-btn" id="regenerate-modal-close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-message">
+        Are you sure you want to regenerate the hospital access code?
+      </p>
+      <p class="modal-warning">
+        All new staff will need to use the new code.<br>
+        Previously shared codes will become invalid.
+      </p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" id="regenerate-modal-cancel">
+        Cancel
+      </button>
+      <button type="button" class="btn btn-primary" id="regenerate-modal-confirm">
+        <span class="material-symbols-outlined" style="font-size: 1.2rem; margin-right: 0.4rem;">refresh</span>
+        Confirm Regenerate
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .settings-security {
+    width: 100%;
+    max-width: 80rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+
+  .security-card {
+    background: #fff;
+    border-radius: 1.6rem;
+    padding: 1.6rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .section-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 2rem;
+  }
+
+  .form-group {
+    margin-bottom: 2rem;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.2rem;
+    cursor: pointer;
+  }
+
+  .toggle-container {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .toggle-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 4.8rem;
+    height: 2.4rem;
+    background-color: #d1d5db;
+    border-radius: 2.4rem;
+    transition: background-color 0.3s ease;
+    cursor: pointer;
+  }
+
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 2rem;
+    width: 2rem;
+    left: 0.2rem;
+    bottom: 0.2rem;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .toggle-input:checked + .toggle-slider {
+    background-color: var(--color-primary-blue);
+  }
+
+  .toggle-input:checked + .toggle-slider::before {
+    transform: translateX(2.4rem);
+  }
+
+  .toggle-input:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .toggle-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .toggle-title {
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .toggle-helper {
+    font-size: 1.1rem;
+    color: #6b7280;
+    line-height: 1.5;
+  }
+
+  .access-code-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e5e7eb;
+    transition: opacity 0.3s ease;
+  }
+
+  .access-code-section.faded {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .access-code-display {
+    margin-bottom: 1.6rem;
+  }
+
+  .access-code-label-group {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    margin-bottom: 0.8rem;
+    flex-wrap: wrap;
+  }
+
+  .access-code-label {
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .access-code-value-container {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .access-code-value {
+    font-size: 1.6rem;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    color: var(--color-text-primary);
+    letter-spacing: 0.2rem;
+    min-width: 12rem;
+  }
+
+  .btn-reveal {
+    background-color: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: var(--color-primary-blue);
+    font-size: 1.2rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0.6rem 1.2rem;
+    border-radius: 0.6rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-reveal:hover:not(:disabled) {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .btn-reveal:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f3f4f6;
+  }
+
+  .access-code-warning {
+    font-size: 1.1rem;
+    color: #dc2626;
+    margin-top: 0.8rem;
+    margin-bottom: 0.4rem;
+    max-width: 100%;
+    word-wrap: break-word;
+  }
+
+  .access-code-timestamp {
+    font-size: 1.2rem;
+    color: #6b7280;
+    margin-top: 0.4rem;
+  }
+
+  .regenerate-container {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+  }
+
+
+  .security-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.2rem;
+    padding-top: 1.6rem;
+    margin-top: 1.6rem;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .btn {
+    padding: 0.8rem 1.6rem;
+    font-size: 1.4rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-primary {
+    background-color: var(--color-primary-blue);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #092d6e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 82, 186, 0.3);
+  }
+
+  .btn-primary:disabled {
+    background-color: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn-secondary {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+  }
+
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1.6rem;
+  }
+
+  .modal-container {
+    background: #fff;
+    border-radius: 1.6rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 50rem;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-container-small {
+    max-width: 42rem;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.6rem 2rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .modal-title {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .modal-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    border-radius: 0.4rem;
+    transition: background-color 0.2s ease;
+  }
+
+  .modal-close-btn:hover {
+    background-color: #f3f4f6;
+  }
+
+  .modal-close-btn .material-symbols-outlined {
+    font-size: 2.4rem;
+  }
+
+  .modal-body {
+    padding: 2rem;
+  }
+
+  .modal-message {
+    font-size: 1.4rem;
+    color: var(--color-text-primary);
+    margin-bottom: 1.2rem;
+    line-height: 1.6;
+  }
+
+  .modal-warning {
+    font-size: 1.2rem;
+    color: #dc2626;
+    line-height: 1.6;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.2rem;
+    padding: 1.6rem 2rem;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  @media (max-width: 768px) {
+    .settings-security {
+      max-width: 100%;
+    }
+
+    .security-card {
+      padding: 1.2rem;
+    }
+
+    .toggle-label {
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .access-code-label-group {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.8rem;
+    }
+
+    .access-code-value-container {
+      width: 100%;
+    }
+
+    .regenerate-container {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .security-actions {
+      flex-direction: column-reverse;
+    }
+
+    .security-actions .btn {
+      width: 100%;
+    }
+  }
+</style>
