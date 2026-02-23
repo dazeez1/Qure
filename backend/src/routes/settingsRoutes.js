@@ -14,6 +14,7 @@ import {
 } from '../controllers/departmentsController.js';
 import { getStaff, inviteStaff, updateStaff } from '../controllers/staffController.js';
 import { getNotificationSettings, updateNotificationSettings, sendTestNotificationEmail } from '../controllers/notificationsController.js';
+import { getSecuritySettings, updateSecuritySettings, regenerateAccessCode } from '../controllers/securityController.js';
 
 const router = express.Router();
 
@@ -113,5 +114,27 @@ router.put('/notifications', requirePrimaryOrAdmin, updateNotificationSettings);
  * Only Primary Staff or Admin can test
  */
 router.post('/notifications/test-email', requirePrimaryOrAdmin, sendTestNotificationEmail);
+
+/**
+ * GET /api/settings/security
+ * Get security settings for logged-in user's hospital
+ * All verified staff can view
+ * Only Primary staff can see the actual access code
+ */
+router.get('/security', getSecuritySettings);
+
+/**
+ * PUT /api/settings/security
+ * Update security settings (accessCodeRequired toggle) for logged-in user's hospital
+ * Only Primary staff can update
+ */
+router.put('/security', updateSecuritySettings);
+
+/**
+ * POST /api/settings/security/regenerate
+ * Regenerate access code for logged-in user's hospital
+ * Only Primary staff can regenerate
+ */
+router.post('/security/regenerate', regenerateAccessCode);
 
 export default router;

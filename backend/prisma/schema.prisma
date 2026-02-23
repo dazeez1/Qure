@@ -28,6 +28,7 @@ model Hospital {
   timeZone            String?
   logoUrl             String?
   accessCode          String              @unique
+  accessCodeRequired  Boolean             @default(true)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 

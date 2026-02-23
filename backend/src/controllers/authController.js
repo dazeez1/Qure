@@ -380,13 +380,14 @@ export const verifyAccessCode = async (req, res, next) => {
       });
     }
 
-    // Fetch hospital with access code
+    // Fetch hospital with access code and accessCodeRequired setting
     const hospital = await prisma.hospital.findUnique({
       where: { id: user.hospitalId },
       select: {
         id: true,
         name: true,
         accessCode: true,
+        accessCodeRequired: true,
       },
     });
 
@@ -395,6 +396,24 @@ export const verifyAccessCode = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Hospital record not found. Please contact support.',
+      });
+    }
+
+    // If accessCodeRequired is false, bypass verification
+    if (!hospital.accessCodeRequired) {
+      console.log('✅ Access code requirement disabled - auto-verifying user');
+      // Auto-verify the user without requiring access code
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          isVerified: true,
+          isActive: true,
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Access verified successfully',
       });
     }
 

@@ -10,7 +10,7 @@ const SETTINGS_TABS = {
   'departments': '/partials/settings-departments.html',
   'staff-roles': '/partials/settings-staff-roles.html',
   'notifications': '/partials/settings-notifications.html',
-  'security': '/partials/settings-coming-soon.html'
+  'security': '/partials/settings-security.html'
 };
 
 const DEFAULT_TAB = 'organization';
@@ -66,6 +66,8 @@ async function loadSettingsTab(tabName) {
       initializeStaffRolesTab();
     } else if (tabName === 'notifications') {
       initializeNotificationsTab();
+    } else if (tabName === 'security') {
+      initializeSecurityTab();
     }
 
   } catch (error) {
@@ -297,6 +299,15 @@ async function initializeNotificationsTab() {
   // Import and initialize notifications handler
   const { initNotificationsUI } = await import('../pages/settings/notifications.js');
   initNotificationsUI();
+}
+
+/**
+ * Initialize Security tab
+ */
+async function initializeSecurityTab() {
+  // Import and initialize security handler
+  const { initSecurityUI } = await import('../pages/settings/security.js');
+  initSecurityUI();
 }
 
 // Export for use in other modules
