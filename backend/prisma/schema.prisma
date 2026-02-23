@@ -22,17 +22,18 @@ enum StaffRole {
 }
 
 model Hospital {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  address     String?
-  timeZone    String?
-  logoUrl     String?
-  accessCode  String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                  String              @id @default(auto()) @map("_id") @db.ObjectId
+  name                String
+  address             String?
+  timeZone            String?
+  logoUrl             String?
+  accessCode          String              @unique
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
-  users       User[]
-  departments Department[]
+  users               User[]
+  departments         Department[]
+  notificationSetting NotificationSetting?
 
   @@map("hospitals")
 }
@@ -93,4 +94,22 @@ model Department {
 
   @@unique([hospitalId, shortCode])
   @@map("departments")
+}
+
+model NotificationSetting {
+  id                        String   @id @default(auto()) @map("_id") @db.ObjectId
+  hospitalId                String   @unique @db.ObjectId
+
+  patientEmailEnabled       Boolean  @default(true)
+  patientEmailTemplate      String?
+
+  staffAnnouncementsEnabled Boolean  @default(true)
+  staffOvercapacityEnabled  Boolean  @default(true)
+
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  hospital                  Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@map("notification_settings")
 }

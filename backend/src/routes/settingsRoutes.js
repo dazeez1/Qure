@@ -13,6 +13,7 @@ import {
   deleteDepartment,
 } from '../controllers/departmentsController.js';
 import { getStaff, inviteStaff, updateStaff } from '../controllers/staffController.js';
+import { getNotificationSettings, updateNotificationSettings, sendTestNotificationEmail } from '../controllers/notificationsController.js';
 
 const router = express.Router();
 
@@ -90,5 +91,27 @@ router.post('/staff/invite', requirePrimaryOrAdmin, inviteStaff);
  * Only Primary Staff or Admin can update
  */
 router.put('/staff/:id', requirePrimaryOrAdmin, updateStaff);
+
+/**
+ * GET /api/settings/notifications
+ * Get notification settings for logged-in user's hospital
+ * Auto-creates default settings if none exist
+ * All verified staff can view
+ */
+router.get('/notifications', getNotificationSettings);
+
+/**
+ * PUT /api/settings/notifications
+ * Update notification settings for logged-in user's hospital
+ * Only Primary Staff or Admin can update
+ */
+router.put('/notifications', requirePrimaryOrAdmin, updateNotificationSettings);
+
+/**
+ * POST /api/settings/notifications/test-email
+ * Send test notification email (renders template with mock values)
+ * Only Primary Staff or Admin can test
+ */
+router.post('/notifications/test-email', requirePrimaryOrAdmin, sendTestNotificationEmail);
 
 export default router;

@@ -1,0 +1,282 @@
+<div class="settings-notifications">
+  <!-- Combined Notifications Card -->
+  <div class="notifications-card">
+    <!-- Patient Channels Section -->
+    <div class="notifications-section">
+      <h2 class="section-title">Patient Channels</h2>
+      
+      <div class="form-group email-group">
+        <div class="email-header">
+          <label class="checkbox-label">
+            <input type="checkbox" id="patient-email-enabled" class="checkbox-input" checked />
+            <span class="checkbox-text">Email</span>
+          </label>
+        </div>
+        
+        <div class="email-template-container">
+          <textarea
+            id="patient-email-template"
+            class="email-template-input"
+            placeholder="Enter email template..."
+            rows="3"
+          >Hello [PatientName], this is a reminder of your appointment on [AppointmentDate] at [AppointmentTime] in [Location/Department]. Please arrive 10 minutes early.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staff Channels Section -->
+    <div class="notifications-section">
+      <h2 class="section-title">Staff Channels</h2>
+      
+      <div class="staff-channels-content">
+        <div class="staff-checkboxes">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="staff-announcements-enabled" class="checkbox-input" checked />
+              <span class="checkbox-text">Announcements - e.g., system updates, urgent notices</span>
+            </label>
+          </div>
+          
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="staff-overcapacity-enabled" class="checkbox-input" checked />
+              <span class="checkbox-text">Overcapacity Alerts - warns when queue exceeds limits</span>
+            </label>
+          </div>
+        </div>
+        
+        <div class="send-test-container">
+          <button type="button" class="btn btn-primary" id="send-test-btn">
+            <span class="material-symbols-outlined" style="font-size: 1.2rem; margin-right: 0.4rem;">mail</span>
+            Send Test
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="notifications-actions">
+    <button type="button" class="btn btn-secondary" id="cancel-notifications-btn">
+      Cancel
+    </button>
+    <button type="button" class="btn btn-primary" id="save-notifications-btn">
+      Save Changes
+    </button>
+  </div>
+</div>
+
+<style>
+  .settings-notifications {
+    width: 100%;
+    max-width: 80rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+
+  .notifications-card {
+    background: #fff;
+    border-radius: 1.6rem;
+    padding: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 2.4rem;
+  }
+
+  .notifications-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  .notifications-section:not(:last-child) {
+    padding-bottom: 2.4rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .section-title {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0;
+  }
+
+  .form-group {
+    margin-bottom: 0;
+  }
+
+  .email-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .email-header {
+    margin-bottom: 0;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    cursor: pointer;
+    margin-bottom: 0;
+  }
+
+  .checkbox-input {
+    width: 1.8rem;
+    height: 1.8rem;
+    cursor: pointer;
+    accent-color: var(--color-primary-blue);
+    flex-shrink: 0;
+  }
+
+  .checkbox-text {
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+    line-height: 1.5;
+    user-select: none;
+  }
+
+  .email-template-container {
+    margin-top: 0;
+    margin-left: 0;
+  }
+
+  .email-template-input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.8rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--color-text-primary);
+    background-color: #fff;
+    resize: vertical;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    line-height: 1.5;
+    min-height: 8rem;
+  }
+
+  .email-template-input:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1);
+  }
+
+  .email-template-input:disabled {
+    background-color: #f3f4f6;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .staff-channels-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+
+  .staff-checkboxes {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  .send-test-container {
+    display: flex;
+    align-items: flex-start;
+    padding-top: 0;
+    margin-top: 0;
+    border-top: none;
+  }
+
+  .notifications-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.2rem;
+    padding-top: 0;
+    border-top: none;
+    margin-top: 0;
+  }
+
+  .btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 0.8rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-primary {
+    background-color: var(--color-primary-blue);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #092d6e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 82, 186, 0.3);
+  }
+
+  .btn-primary:disabled {
+    background-color: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn-secondary {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+  }
+
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .notifications-card {
+      padding: 1.6rem;
+    }
+
+    .staff-channels-content {
+      flex-direction: column;
+      gap: 1.6rem;
+    }
+
+    .send-test-container {
+      width: 100%;
+    }
+
+    .send-test-container .btn {
+      width: 100%;
+    }
+
+    .notifications-actions {
+      flex-direction: column-reverse;
+    }
+
+    .notifications-actions .btn {
+      width: 100%;
+    }
+  }
+</style>
