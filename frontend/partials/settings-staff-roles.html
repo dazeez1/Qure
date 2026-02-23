@@ -1,0 +1,623 @@
+<div class="settings-staff-roles">
+  <!-- Header with Invite Button -->
+  <div class="staff-header">
+    <button type="button" class="btn btn-primary" id="invite-staff-btn">
+      <span class="material-symbols-outlined" style="font-size: 1.2rem; margin-right: 0.4rem;">person_add</span>
+      Invite Staff
+    </button>
+  </div>
+
+  <!-- Staff Table -->
+  <div class="staff-table-container">
+    <table class="staff-table" id="staff-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="staff-table-body">
+        <!-- Table rows will be rendered here dynamically -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Invite Staff Modal -->
+<div class="modal-overlay" id="invite-staff-modal" style="display: none;">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">Invite Staff</h3>
+      <button type="button" class="modal-close-btn" id="close-invite-modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <form id="invite-staff-form" class="modal-form">
+      <div class="form-group">
+        <label for="invite-first-name" class="form-label">First Name <span class="required">*</span></label>
+        <input
+          type="text"
+          id="invite-first-name"
+          name="firstName"
+          class="form-input"
+          placeholder="Enter first name"
+          required
+        />
+        <span class="error-message" id="invite-first-name-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="invite-last-name" class="form-label">Last Name <span class="required">*</span></label>
+        <input
+          type="text"
+          id="invite-last-name"
+          name="lastName"
+          class="form-input"
+          placeholder="Enter last name"
+          required
+        />
+        <span class="error-message" id="invite-last-name-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="invite-email" class="form-label">Email <span class="required">*</span></label>
+        <input
+          type="email"
+          id="invite-email"
+          name="email"
+          class="form-input"
+          placeholder="Enter email address"
+          required
+        />
+        <span class="error-message" id="invite-email-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="invite-role" class="form-label">Staff Role <span class="required">*</span></label>
+        <select id="invite-role" name="role" class="form-select" required>
+          <option value="">Select role</option>
+          <option value="DOCTOR">Doctor</option>
+          <option value="NURSE">Nurse</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+        <span class="error-message" id="invite-role-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="invite-department" class="form-label">Department</label>
+        <select id="invite-department" name="department" class="form-select">
+          <option value="">Select department (optional)</option>
+          <!-- Departments will be populated dynamically -->
+        </select>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="cancel-invite-staff-btn">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" id="save-invite-staff-btn">
+          Invite
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Staff Modal -->
+<div class="modal-overlay" id="edit-staff-modal" style="display: none;">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Staff</h3>
+      <button type="button" class="modal-close-btn" id="close-edit-staff-modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <form id="edit-staff-form" class="modal-form">
+      <input type="hidden" id="edit-staff-id" name="staffId" />
+      
+      <div class="form-group">
+        <label for="edit-staff-name" class="form-label">Name</label>
+        <input
+          type="text"
+          id="edit-staff-name"
+          name="name"
+          class="form-input"
+          disabled
+          style="background-color: #f3f4f6; cursor: not-allowed;"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="edit-staff-email" class="form-label">Email</label>
+        <input
+          type="email"
+          id="edit-staff-email"
+          name="email"
+          class="form-input"
+          disabled
+          style="background-color: #f3f4f6; cursor: not-allowed;"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="edit-staff-role" class="form-label">Staff Role <span class="required">*</span></label>
+        <select id="edit-staff-role" name="role" class="form-select" required>
+          <option value="">Select role</option>
+          <option value="DOCTOR">Doctor</option>
+          <option value="NURSE">Nurse</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+        <span class="error-message" id="edit-staff-role-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-staff-department" class="form-label">Department</label>
+        <select id="edit-staff-department" name="department" class="form-select">
+          <option value="">Select department (optional)</option>
+          <!-- Departments will be populated dynamically -->
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="edit-staff-active" name="isActive" style="width: auto; cursor: pointer;" />
+            <span style="font-size: 1.2rem;">Active</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="cancel-edit-staff-btn">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" id="save-edit-staff-btn">
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Deactivate Staff Confirmation Modal -->
+<div class="modal-overlay" id="delete-staff-modal" style="display: none;">
+  <div class="modal-container modal-container-small">
+    <div class="modal-header">
+      <h3 class="modal-title">Deactivate Staff</h3>
+      <button type="button" class="modal-close-btn" id="close-delete-staff-modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="delete-confirmation-text">
+        Are you sure you want to deactivate this staff member?
+      </p>
+      <p class="delete-staff-name" id="delete-staff-name"></p>
+      <p class="delete-staff-email" id="delete-staff-email"></p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" id="cancel-delete-staff-btn">
+        Cancel
+      </button>
+      <button type="button" class="btn btn-danger" id="confirm-delete-staff-btn">
+        Deactivate
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .settings-staff-roles {
+    width: 100%;
+  }
+
+  .staff-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 1.2rem;
+  }
+
+  .staff-table-container {
+    background: #fff;
+    border-radius: 1.6rem;
+    padding: 1.2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+  }
+
+  .staff-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .staff-table thead {
+    background-color: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
+  .staff-table th {
+    padding: 0.8rem 1.2rem;
+    text-align: left;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .staff-table td {
+    padding: 0.8rem 1.2rem;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+  }
+
+  .staff-table tbody tr:hover {
+    background-color: #f9fafb;
+  }
+
+  .staff-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .staff-table tbody tr.inactive {
+    opacity: 0.6;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 2rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    user-select: none;
+  }
+
+  .status-badge.active {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .status-badge.inactive {
+    background-color: #f3f4f6;
+    color: #6b7280;
+  }
+
+  .status-badge:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+
+  .status-badge.disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .status-badge.disabled:hover {
+    transform: none;
+  }
+
+  .role-badge {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 0.4rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .role-badge.doctor {
+    background-color: #dbeafe;
+    color: #1e40af;
+  }
+
+  .role-badge.nurse {
+    background-color: #fce7f3;
+    color: #9f1239;
+  }
+
+  .role-badge.admin {
+    background-color: #fef3c7;
+    color: #92400e;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+  }
+
+  .action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.4rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+  }
+
+  .action-btn:hover:not(:disabled) {
+    background-color: #f3f4f6;
+    color: var(--color-primary-blue);
+  }
+
+  .action-btn.edit-btn:hover:not(:disabled) {
+    color: #059669;
+  }
+
+  .action-btn.delete-btn:hover:not(:disabled) {
+    color: #dc2626;
+  }
+
+  .action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .action-btn .material-symbols-outlined {
+    font-size: 1.8rem;
+  }
+
+  /* Modal Styles - Reuse from departments */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1.6rem;
+  }
+
+  .modal-container {
+    background: #fff;
+    border-radius: 1.2rem;
+    width: 100%;
+    max-width: 32rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+
+  .modal-container-small {
+    max-width: 32rem;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1.2rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .modal-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .modal-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.4rem;
+    color: #6b7280;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-close-btn:hover {
+    background-color: #f3f4f6;
+    color: var(--color-text-primary);
+  }
+
+  .modal-close-btn .material-symbols-outlined {
+    font-size: 2rem;
+  }
+
+  .modal-form {
+    padding: 1rem 1.2rem;
+  }
+
+  .modal-body {
+    padding: 1.2rem 1.4rem;
+  }
+
+  .delete-confirmation-text {
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+    margin-bottom: 1rem;
+  }
+
+  .delete-staff-name {
+    font-size: 1.2rem;
+    color: #6b7280;
+    font-weight: 500;
+    padding: 0.8rem;
+    background-color: #f9fafb;
+    border-radius: 0.6rem;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .delete-staff-email {
+    font-size: 1.2rem;
+    color: #6b7280;
+    padding: 0.8rem;
+    background-color: #f9fafb;
+    border-radius: 0.6rem;
+    margin: 0;
+  }
+
+  .form-group {
+    margin-bottom: 0.8rem;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 0.4rem;
+  }
+
+  .required {
+    color: #dc2626;
+  }
+
+  .form-input,
+  .form-select {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+    background-color: #fff;
+    transition: border-color 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .form-input:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1);
+  }
+
+  .form-input.error,
+  .form-select.error {
+    border-color: #dc2626;
+  }
+
+  .error-message {
+    display: block;
+    font-size: 1.2rem;
+    color: #dc2626;
+    margin-top: 0.4rem;
+    min-height: 1.6rem;
+  }
+
+  .form-hint {
+    display: block;
+    font-size: 1.2rem;
+    color: #6b7280;
+    margin-top: 0.4rem;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.8rem;
+    padding: 0.8rem 1.2rem;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 0.8rem;
+  }
+
+  .btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 0.8rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-primary {
+    background-color: var(--color-primary-blue);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #092d6e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 82, 186, 0.3);
+  }
+
+  .btn-primary:disabled {
+    background-color: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn-secondary {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+
+  .btn-secondary:hover {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+  }
+
+  .btn-danger {
+    background-color: #dc2626;
+    color: #fff;
+  }
+
+  .btn-danger:hover {
+    background-color: #b91c1c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .staff-header {
+      justify-content: flex-start;
+    }
+
+    .staff-header .btn {
+      width: 100%;
+    }
+
+    .staff-table-container {
+      padding: 1.6rem;
+      overflow-x: auto;
+    }
+
+    .staff-table {
+      min-width: 600px;
+    }
+
+    .modal-container {
+      margin: 1rem;
+      max-width: calc(100% - 2rem);
+    }
+
+    .modal-actions {
+      flex-direction: column-reverse;
+    }
+
+    .modal-actions .btn {
+      width: 100%;
+    }
+  }
+</style>

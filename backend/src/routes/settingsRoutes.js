@@ -1,7 +1,5 @@
 import express from 'express';
-import { authenticate } from '../middleware/authMiddleware.js';
-import { requireRole } from '../middleware/authMiddleware.js';
-import { requireStaffVerified } from '../middleware/authMiddleware.js';
+import { authenticate, requireStaffOrAdmin, requireStaffVerified } from '../middleware/authMiddleware.js';
 import { requirePrimaryOrAdmin } from '../middleware/permissionMiddleware.js';
 import {
   getOrganization,
@@ -14,12 +12,13 @@ import {
   toggleDepartmentStatus,
   deleteDepartment,
 } from '../controllers/departmentsController.js';
+import { getStaff, inviteStaff, updateStaff } from '../controllers/staffController.js';
 
 const router = express.Router();
 
-// All settings routes require authentication, STAFF role, and verification
+// All settings routes require authentication, STAFF or ADMIN role, and verification (for STAFF only)
 router.use(authenticate);
-router.use(requireRole('STAFF'));
+router.use(requireStaffOrAdmin);
 router.use(requireStaffVerified);
 
 /**
@@ -70,5 +69,26 @@ router.patch('/departments/:id/status', requirePrimaryOrAdmin, toggleDepartmentS
  * Only Primary Staff or Admin can delete
  */
 router.delete('/departments/:id', requirePrimaryOrAdmin, deleteDepartment);
+
+/**
+ * GET /api/settings/staff
+ * Get all staff members for logged-in user's hospital
+ * All verified staff can view
+ */
+router.get('/staff', getStaff);
+
+/**
+ * POST /api/settings/staff/invite
+ * Invite a new staff member
+ * Only Primary Staff or Admin can invite
+ */
+router.post('/staff/invite', requirePrimaryOrAdmin, inviteStaff);
+
+/**
+ * PUT /api/settings/staff/:id
+ * Update a staff member
+ * Only Primary Staff or Admin can update
+ */
+router.put('/staff/:id', requirePrimaryOrAdmin, updateStaff);
 
 export default router;

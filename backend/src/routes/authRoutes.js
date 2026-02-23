@@ -4,6 +4,7 @@ import {
   login,
   forgotPassword,
   resetPassword,
+  acceptInvite,
 } from '../controllers/authController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 
@@ -36,6 +37,13 @@ router.post('/forgot-password', forgotPassword);
  * Public route - no authentication required
  */
 router.post('/reset-password', resetPassword);
+
+/**
+ * POST /api/auth/accept-invite
+ * Verify invite token, set password, and activate user
+ * Public route - no authentication required
+ */
+router.post('/accept-invite', acceptInvite);
 
 /**
  * GET /api/auth/me

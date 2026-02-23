@@ -225,6 +225,7 @@ export const login = async (req, res, next) => {
           hospitalName: true,
           isPrimary: true,
           isVerified: true,
+          isActive: true,
           hospitalId: true,
         },
       });
@@ -242,6 +243,7 @@ export const login = async (req, res, next) => {
           hospitalName: true,
           isPrimary: true,
           isVerified: true,
+          isActive: true,
           hospitalId: true,
         },
       });
@@ -271,6 +273,14 @@ export const login = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or phone number or password',
+      });
+    }
+
+    // Check if user account is active
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is inactive. Contact administrator.',
       });
     }
 
@@ -411,6 +421,7 @@ export const verifyAccessCode = async (req, res, next) => {
       where: { id: user.id },
       data: {
         isVerified: true,
+          isActive: true,
       },
     });
 
@@ -614,3 +625,104 @@ export const resetPassword = async (req, res, next) => {
   }
 };
 
+/**
+ * Accept invite - Verify token, set password, and activate user
+ * POST /api/auth/accept-invite
+ */
+export const acceptInvite = async (req, res, next) => {
+  try {
+    const { token, password } = req.body;
+
+    // Validate required fields
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token and password are required',
+      });
+    }
+
+    // Validate password
+    if (!isValidPassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+      });
+    }
+
+    // Find invite token in database
+    const inviteTokenRecord = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            isActive: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!inviteTokenRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired invite token',
+      });
+    }
+
+    // Check if token has been used
+    if (inviteTokenRecord.used) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invite token has already been used',
+      });
+    }
+
+    // Check if token has expired
+    if (new Date() > inviteTokenRecord.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invite token has expired',
+      });
+    }
+
+    // Check if user is already active (shouldn't happen, but safety check)
+    if (inviteTokenRecord.user.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'This invite has already been accepted',
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await hashPassword(password);
+
+    // Update user: set password and activate
+    await prisma.user.update({
+      where: { id: inviteTokenRecord.userId },
+      data: {
+        password: hashedPassword,
+        isActive: true,
+      },
+    });
+
+    // Mark token as used
+    await prisma.passwordResetToken.update({
+      where: { id: inviteTokenRecord.id },
+      data: {
+        used: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Invite accepted successfully. Please log in with your new password.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
