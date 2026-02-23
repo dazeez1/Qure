@@ -16,6 +16,11 @@ enum Role {
   ADMIN
 }
 
+enum StaffRole {
+  DOCTOR
+  NURSE
+}
+
 model Hospital {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
@@ -42,11 +47,16 @@ model User {
   hospitalName String?
   password     String
   role         Role     @default(PATIENT)
+  staffRole    StaffRole?
   isPrimary    Boolean  @default(false)
   isVerified   Boolean  @default(false)
+  isActive     Boolean  @default(true)
 
   hospitalId   String?  @db.ObjectId
   hospital     Hospital? @relation(fields: [hospitalId], references: [id])
+
+  departmentId String?  @db.ObjectId
+  department   Department? @relation(fields: [departmentId], references: [id])
 
   passwordResetTokens PasswordResetToken[]
 
@@ -76,6 +86,7 @@ model Department {
   hospitalId String   @db.ObjectId
 
   hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  staff      User[]
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

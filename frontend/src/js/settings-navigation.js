@@ -8,7 +8,7 @@
 const SETTINGS_TABS = {
   'organization': '/partials/settings-organization.html',
   'departments': '/partials/settings-departments.html',
-  'staff-roles': '/partials/settings-coming-soon.html',
+  'staff-roles': '/partials/settings-staff-roles.html',
   'notifications': '/partials/settings-coming-soon.html',
   'security': '/partials/settings-coming-soon.html'
 };
@@ -62,6 +62,8 @@ async function loadSettingsTab(tabName) {
       initializeOrganizationTab();
     } else if (tabName === 'departments') {
       initializeDepartmentsTab();
+    } else if (tabName === 'staff-roles') {
+      initializeStaffRolesTab();
     }
 
   } catch (error) {
@@ -275,6 +277,15 @@ async function initializeDepartmentsTab() {
   // Import and initialize departments handler
   const { initDepartmentsUI } = await import('../pages/settings/departments.js');
   initDepartmentsUI();
+}
+
+/**
+ * Initialize Staff & Roles tab functionality
+ */
+async function initializeStaffRolesTab() {
+  // Import and initialize staff roles handler
+  const { initStaffRolesUI } = await import('../pages/settings/staff-roles.js');
+  initStaffRolesUI();
 }
 
 // Export for use in other modules

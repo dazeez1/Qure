@@ -120,6 +120,33 @@ export const requireRole = (requiredRole) => {
 };
 
 /**
+ * Require STAFF or ADMIN role
+ * Allows both STAFF and ADMIN roles to access
+ * Must be used AFTER authenticate middleware
+ * @returns {Function} - Express middleware function
+ */
+export const requireStaffOrAdmin = (req, res, next) => {
+  // Ensure user is authenticated (from authenticate middleware)
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required. Please log in.',
+    });
+  }
+
+  // Check if user's role is STAFF or ADMIN
+  if (req.user.role !== 'STAFF' && req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. You do not have permission to access this resource.',
+    });
+  }
+
+  // Role is STAFF or ADMIN - continue
+  next();
+};
+
+/**
  * Staff verification middleware
  * Ensures STAFF users have verified their hospital access code
  * Must be used AFTER authenticate middleware
