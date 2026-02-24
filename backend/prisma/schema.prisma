@@ -11,7 +11,6 @@ datasource db {
 }
 
 enum Role {
-  PATIENT
   STAFF
   ADMIN
 }
@@ -48,7 +47,7 @@ model User {
   gender       String?
   hospitalName String?
   password     String
-  role         Role     @default(PATIENT)
+  role         Role
   staffRole    StaffRole?
   isPrimary    Boolean  @default(false)
   isVerified   Boolean  @default(false)
@@ -113,4 +112,18 @@ model NotificationSetting {
   hospital                  Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
 
   @@map("notification_settings")
+}
+
+model Patient {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  fullName    String
+  email       String   @unique
+  password    String
+  phone       String?
+  gender      String?
+  dateOfBirth DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("patients")
 }

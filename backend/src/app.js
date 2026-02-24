@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
+import patientAuthRoutes from './routes/patientAuthRoutes.js';
 import patientRoutes from './routes/patientRoutes.js';
 import staffRoutes from './routes/staffRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
@@ -25,6 +26,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/patient/auth', patientAuthRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/settings', settingsRoutes);

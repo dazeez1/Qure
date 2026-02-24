@@ -1,12 +1,10 @@
 import express from 'express';
-import { authenticate } from '../middleware/authMiddleware.js';
-import { requireRole } from '../middleware/authMiddleware.js';
+import { authenticatePatient } from '../middleware/patientAuthMiddleware.js';
 
 const router = express.Router();
 
-// All patient routes require authentication and PATIENT role
-router.use(authenticate);
-router.use(requireRole('PATIENT'));
+// All patient routes require patient authentication
+router.use(authenticatePatient);
 
 /**
  * GET /api/patient/dashboard
@@ -17,7 +15,7 @@ router.get('/dashboard', (req, res) => {
     success: true,
     message: 'Access granted to patient dashboard',
     data: {
-      user: req.user,
+      patient: req.patient,
       // Dashboard data will be added later
     },
   });

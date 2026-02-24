@@ -18,10 +18,17 @@ if (!isAuthenticated()) {
 // Get user data
 const user = getAuthUser();
 
-// Display user name
+// Display user name (handle both old format and new patient format)
 const userNameElement = document.getElementById('user-name');
 if (userNameElement && user) {
-  userNameElement.textContent = `${user.firstName} ${user.lastName}`;
+  // Patient has fullName, staff has firstName + lastName
+  if (user.fullName) {
+    userNameElement.textContent = user.fullName;
+  } else if (user.firstName && user.lastName) {
+    userNameElement.textContent = `${user.firstName} ${user.lastName}`;
+  } else {
+    userNameElement.textContent = user.email || 'User';
+  }
 }
 
 // Logout functionality

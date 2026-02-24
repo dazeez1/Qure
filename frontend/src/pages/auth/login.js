@@ -159,12 +159,21 @@ async function handleLogin(role) {
   const loginData = {
     email: emailInput.value.trim(),
     password: passwordInput.value,
-    role: role,
     rememberMe: rememberMeCheckbox.checked,
   };
 
+  // Use different endpoints for patient vs staff
+  const endpoint = role === 'PATIENT' 
+    ? API_ENDPOINTS.patientAuth.login 
+    : API_ENDPOINTS.auth.login;
+
+  // Add role field for staff login (not needed for patient)
+  if (role !== 'PATIENT') {
+    loginData.role = role;
+  }
+
   try {
-    const response = await fetch(API_ENDPOINTS.auth.login, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -175,12 +184,32 @@ async function handleLogin(role) {
     const result = await response.json();
 
     if (response.ok && result.success) {
-      // Store token and user data
+      // Store token
       if (result.data.token) {
         setAuthToken(result.data.token);
       }
-      if (result.data.user) {
-        setAuthUser(result.data.user);
+
+      // Handle different response structures
+      if (role === 'PATIENT') {
+        // Patient login returns patient object
+        if (result.data.patient) {
+          // Convert patient to user format for auth storage
+          setAuthUser({
+            id: result.data.patient.id,
+            fullName: result.data.patient.fullName,
+            email: result.data.patient.email,
+            phone: result.data.patient.phone,
+            gender: result.data.patient.gender,
+            dateOfBirth: result.data.patient.dateOfBirth,
+            role: 'PATIENT',
+            type: 'PATIENT',
+          });
+        }
+      } else {
+        // Staff login returns user object
+        if (result.data.user) {
+          setAuthUser(result.data.user);
+        }
       }
 
       // Success - show toast
@@ -193,11 +222,10 @@ async function handleLogin(role) {
       
       // Redirect to dashboard based on role
       setTimeout(() => {
-        const userRole = result.data.user?.role || role;
-        if (userRole === 'STAFF') {
-          window.location.href = '/staff/dashboard.html';
-        } else {
+        if (role === 'PATIENT') {
           window.location.href = '/patient/dashboard.html';
+        } else {
+          window.location.href = '/staff/dashboard.html';
         }
       }, 1500);
     } else {
