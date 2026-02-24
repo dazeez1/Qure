@@ -12,7 +12,6 @@ const ROUTE_TO_VIEW = {
   'queues': 'coming-soon',
   'waiting-area': 'coming-soon',
   'appointments': 'coming-soon',
-  'floor-map': 'coming-soon',
   'settings': 'settings'
 };
 
