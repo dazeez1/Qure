@@ -333,25 +333,36 @@ function setupFormValidation(form, formType) {
     submitBtn.textContent = 'Creating account...';
 
     // Prepare data for backend API
-    const apiData = {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: formType === 'patient' ? data.email : data.workEmail,
-      phone: data.phone || undefined,
-      password: data.password,
-      role: formType === 'patient' ? 'PATIENT' : 'STAFF',
-    };
+    let apiData;
+    let endpoint;
 
-    // Add role-specific fields
     if (formType === 'patient') {
-      apiData.gender = data.gender || undefined;
+      // Patient registration - use new patient auth endpoint
+      apiData = {
+        fullName: `${data.firstName} ${data.lastName}`.trim(),
+        email: data.email,
+        password: data.password,
+        phone: data.phone || undefined,
+        gender: data.gender || undefined,
+      };
+      endpoint = API_ENDPOINTS.patientAuth.register;
     } else {
-      apiData.hospitalName = data.hospitalName;
+      // Staff registration - use existing auth endpoint
+      apiData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.workEmail,
+        phone: data.phone || undefined,
+        password: data.password,
+        role: 'STAFF',
+        hospitalName: data.hospitalName,
+      };
+      endpoint = API_ENDPOINTS.auth.register;
     }
 
     // Send to backend API
     try {
-      const response = await fetch(API_ENDPOINTS.auth.register, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
