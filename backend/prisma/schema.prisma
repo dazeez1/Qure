@@ -20,6 +20,33 @@ enum StaffRole {
   NURSE
 }
 
+enum AppointmentStatus {
+  BOOKED
+  CHECKED_IN
+  MOVED_TO_QUEUE
+  IN_CONSULTATION
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum QueueStatus {
+  WAITING
+  TRIAGE
+  CALLED
+  IN_CONSULTATION
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PriorityLevel {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 model Hospital {
   id                  String              @id @default(auto()) @map("_id") @db.ObjectId
   name                String
@@ -34,6 +61,9 @@ model Hospital {
   users               User[]
   departments         Department[]
   notificationSetting NotificationSetting?
+  appointments        Appointment[]
+  queueEntries        QueueEntry[]
+  rooms               Room[]
 
   @@map("hospitals")
 }
@@ -49,6 +79,9 @@ model User {
   password     String
   role         Role
   staffRole    StaffRole?
+  isAvailable            Boolean  @default(true)
+  currentActivePatients  Int      @default(0)
+  maxConcurrentPatients  Int      @default(3)
   isPrimary    Boolean  @default(false)
   isVerified   Boolean  @default(false)
   isActive     Boolean  @default(true)
@@ -58,6 +91,8 @@ model User {
 
   departmentId String?  @db.ObjectId
   department   Department? @relation(fields: [departmentId], references: [id])
+
+  assignedQueueEntries QueueEntry[]
 
   passwordResetTokens PasswordResetToken[]
 
@@ -88,6 +123,9 @@ model Department {
 
   hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   staff      User[]
+  appointments Appointment[]
+  queueEntries QueueEntry[]
+  rooms      Room[]
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -115,15 +153,81 @@ model NotificationSetting {
 }
 
 model Patient {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
   fullName    String
-  email       String   @unique
+  email       String        @unique
   password    String
   phone       String?
   gender      String?
   dateOfBirth DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  appointments Appointment[]
+  queueEntries QueueEntry[]
 
   @@map("patients")
+}
+
+model Appointment {
+  id           String            @id @default(auto()) @map("_id") @db.ObjectId
+  patientId    String            @db.ObjectId
+  patient      Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  hospitalId   String            @db.ObjectId
+  hospital     Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  departmentId String            @db.ObjectId
+  department   Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  appointmentDate DateTime
+  status       AppointmentStatus @default(BOOKED)
+  reason       String?
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  queueEntry   QueueEntry?
+
+  @@map("appointments")
+}
+
+model QueueEntry {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  patientId         String        @db.ObjectId
+  patient           Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentId     String?       @unique @db.ObjectId
+  appointment       Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  hospitalId        String        @db.ObjectId
+  hospital          Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  departmentId      String        @db.ObjectId
+  department        Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  assignedDoctorId String?       @db.ObjectId
+  assignedDoctor    User?        @relation(fields: [assignedDoctorId], references: [id], onDelete: SetNull)
+  assignedRoomId    String?       @db.ObjectId
+  assignedRoom      Room?         @relation(fields: [assignedRoomId], references: [id], onDelete: SetNull)
+  ticketNumber      String
+  sequenceNumber    Int
+  status            QueueStatus  @default(WAITING)
+  priority          PriorityLevel @default(NORMAL)
+  checkInTime       DateTime      @default(now())
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([hospitalId, departmentId, ticketNumber])
+  @@map("queue_entries")
+}
+
+model Room {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  hospitalId   String   @db.ObjectId
+  hospital     Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  departmentId String   @db.ObjectId
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  queueEntries QueueEntry[]
+
+  @@unique([hospitalId, departmentId, name])
+  @@map("rooms")
 }

@@ -9,7 +9,7 @@ const DEFAULT_ROUTE = 'dashboard';
 // Route to view mapping
 const ROUTE_TO_VIEW = {
   'dashboard': 'dashboard',
-  'queues': 'coming-soon',
+  'queues': 'queue',
   'waiting-area': 'coming-soon',
   'appointments': 'coming-soon',
   'settings': 'settings'
@@ -57,6 +57,15 @@ async function loadView(route) {
             console.error('Failed to load settings navigation:', err);
           });
         }
+      }, 50);
+    }
+
+    // Initialize queue page if queues view is loaded
+    if (route === 'queues') {
+      setTimeout(() => {
+        import('../pages/staff/queue.js').catch(err => {
+          console.error('Failed to load queue page:', err);
+        });
       }, 50);
     }
   } catch (err) {

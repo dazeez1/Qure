@@ -20,6 +20,15 @@ export const API_ENDPOINTS = {
     getOrganization: `${API_BASE_URL}/settings/organization`,
     updateOrganization: `${API_BASE_URL}/settings/organization`,
   },
+  staff: {
+    getQueue: `${API_BASE_URL}/staff/queue`,
+  },
+  queue: {
+    updateStatus: (id) => `${API_BASE_URL}/queue/${id}/status`,
+  },
+  rooms: {
+    list: `${API_BASE_URL}/rooms`,
+  },
 };
 
 export default API_BASE_URL;

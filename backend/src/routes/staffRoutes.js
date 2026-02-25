@@ -1,15 +1,16 @@
 import express from 'express';
-import { authenticate, requireRole, requireStaffVerified } from '../middleware/authMiddleware.js';
+import { authenticate, requireRole, requireStaffOrAdmin, requireStaffVerified } from '../middleware/authMiddleware.js';
 import { verifyAccessCode } from '../controllers/authController.js';
+import { getStaffQueue } from '../controllers/queueController.js';
 
 const router = express.Router();
 
 // Verification endpoint - requires auth and STAFF role, but NOT verification (they're verifying!)
 router.post('/verify-access', authenticate, requireRole('STAFF'), verifyAccessCode);
 
-// All other staff routes require authentication, STAFF role, and verification
+// All other staff routes require authentication, STAFF or ADMIN role, and verification
 router.use(authenticate);
-router.use(requireRole('STAFF'));
+router.use(requireStaffOrAdmin);
 router.use(requireStaffVerified);
 
 /**
@@ -26,6 +27,15 @@ router.get('/dashboard', (req, res) => {
     },
   });
 });
+
+/**
+ * GET /api/staff/queue
+ * Get queue entries with filters and pagination
+ * Query params: departmentId (Admin only), status, priority, search, dateFrom, dateTo, page, limit
+ * Requires: STAFF (Doctor) or ADMIN role
+ * Role-aware: Doctor sees assigned only, Admin sees hospital-wide
+ */
+router.get('/queue', getStaffQueue);
 
 export default router;
 
