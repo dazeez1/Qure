@@ -32,3 +32,34 @@ export const requirePrimaryOrAdmin = (req, res, next) => {
   // User has permission - continue
   next();
 };
+
+/**
+ * Require Admin role OR Primary staff
+ * Allows users with role === ADMIN OR isPrimary === true
+ * Must be used AFTER authenticate middleware
+ * This is for endpoints that were previously ADMIN-only but should also allow Primary staff
+ * @returns {Function} - Express middleware function
+ */
+export const requireAdminOrPrimary = (req, res, next) => {
+  // Ensure user is authenticated (from authenticate middleware)
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required. Please log in.',
+    });
+  }
+
+  // Check if user is admin or primary staff
+  const isAdmin = req.user.role === 'ADMIN';
+  const isPrimary = req.user.isPrimary === true;
+
+  if (!isAdmin && !isPrimary) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Admin role or Primary staff required.',
+    });
+  }
+
+  // User has permission - continue
+  next();
+};

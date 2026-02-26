@@ -62,6 +62,7 @@ export const authenticate = async (req, res, next) => {
         id: true,
         email: true,
         role: true,
+        staffRole: true, // Added for doctor queue management
         firstName: true,
         lastName: true,
         phone: true,
@@ -69,6 +70,8 @@ export const authenticate = async (req, res, next) => {
         isPrimary: true,
         isVerified: true,
         hospitalId: true, // Added hospitalId for staff access code verification
+        currentActivePatients: true, // Added for doctor load badge
+        maxConcurrentPatients: true, // Added for doctor load badge
       },
     });
 
@@ -219,6 +222,8 @@ export const optionalAuthenticate = async (req, res, next) => {
           isPrimary: true,
           isVerified: true,
           hospitalId: true,
+          currentActivePatients: true,
+          maxConcurrentPatients: true,
         },
       });
 

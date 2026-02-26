@@ -9,7 +9,7 @@ const DEFAULT_ROUTE = 'dashboard';
 // Route to view mapping
 const ROUTE_TO_VIEW = {
   'dashboard': 'dashboard',
-  'queues': 'coming-soon',
+  'queues': 'queue',
   'waiting-area': 'coming-soon',
   'appointments': 'coming-soon',
   'settings': 'settings'
@@ -43,8 +43,25 @@ async function loadView(route) {
       location.hash = route;
     }
 
-    // Dispatch event for view-specific initialization
-    window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+    // Initialize queue page if queues view is loaded
+    if (route === 'queues') {
+      // Import module first, then dispatch event after it's loaded
+      import('../pages/staff/queue.js').then(() => {
+        // Module loaded, wait a bit for event listener to be registered, then dispatch
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      }).catch(err => {
+        console.error('Failed to load queue page:', err);
+        // Still dispatch event even if import fails
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      });
+    } else {
+      // Dispatch event for other views immediately
+      window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+    }
 
     // Initialize settings navigation if settings view is loaded
     if (route === 'settings') {

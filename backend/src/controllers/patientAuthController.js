@@ -135,6 +135,14 @@ export const login = async (req, res, next) => {
     // Normalize email
     const normalizedEmail = normalizeEmail(email);
 
+    // Debug logging (only in development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 Patient Login Attempt:', {
+        originalEmail: email,
+        normalizedEmail: normalizedEmail,
+      });
+    }
+
     // Find patient by email
     const patient = await prisma.patient.findUnique({
       where: { email: normalizedEmail },
@@ -152,6 +160,16 @@ export const login = async (req, res, next) => {
     // Security: Use same error message whether patient exists or password is wrong
     // This prevents email enumeration attacks
     if (!patient) {
+      // Debug: Check if email exists in User table (might be registered as staff)
+      if (process.env.NODE_ENV !== 'production') {
+        const userExists = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true, role: true },
+        });
+        if (userExists) {
+          console.log('⚠️  Email found in User table (Staff account), not Patient table');
+        }
+      }
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -160,6 +178,14 @@ export const login = async (req, res, next) => {
 
     // Compare password with stored hash
     const isPasswordValid = await comparePassword(password, patient.password);
+    
+    // Debug logging (only in development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 Password Validation:', {
+        patientId: patient.id,
+        passwordValid: isPasswordValid,
+      });
+    }
 
     if (!isPasswordValid) {
       return res.status(401).json({

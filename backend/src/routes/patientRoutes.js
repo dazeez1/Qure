@@ -1,5 +1,7 @@
 import express from 'express';
 import { authenticatePatient } from '../middleware/patientAuthMiddleware.js';
+import { getPatientAppointments } from '../controllers/appointmentController.js';
+import { getPatientQueueStatus } from '../controllers/queueController.js';
 
 const router = express.Router();
 
@@ -20,6 +22,18 @@ router.get('/dashboard', (req, res) => {
     },
   });
 });
+
+/**
+ * GET /api/patient/appointments
+ * Get patient's appointments (Patient only)
+ */
+router.get('/appointments', getPatientAppointments);
+
+/**
+ * GET /api/patient/queue-status
+ * Get patient's active queue status (Patient only)
+ */
+router.get('/queue-status', getPatientQueueStatus);
 
 export default router;
 

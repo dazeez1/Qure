@@ -258,13 +258,27 @@ async function handleLogin(role) {
   }
 }
 
+// Prevent form submission (we handle login via button clicks)
+if (loginForm) {
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    // Don't do anything - login is handled by button clicks
+  });
+}
+
 // Add event listeners to login buttons
 if (patientBtn) {
-  patientBtn.addEventListener('click', () => handleLogin('PATIENT'));
+  patientBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    handleLogin('PATIENT');
+  });
 }
 
 if (staffBtn) {
-  staffBtn.addEventListener('click', () => handleLogin('STAFF'));
+  staffBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    handleLogin('STAFF');
+  });
 }
 
 // Prevent form submission on Enter key (we use buttons instead)
