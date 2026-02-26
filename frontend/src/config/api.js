@@ -22,12 +22,16 @@ export const API_ENDPOINTS = {
   },
   staff: {
     getQueue: `${API_BASE_URL}/staff/queue`,
+    getDashboardSummary: `${API_BASE_URL}/staff/dashboard-summary`,
   },
   queue: {
     updateStatus: (id) => `${API_BASE_URL}/queue/${id}/status`,
   },
   rooms: {
     list: `${API_BASE_URL}/rooms`,
+  },
+  waitingAreas: {
+    list: `${API_BASE_URL}/waiting-areas`,
   },
 };
 

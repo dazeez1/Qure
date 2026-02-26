@@ -340,6 +340,62 @@ export const checkInToQueue = async (req, res, next) => {
         },
       });
 
+      // Auto-assign default waiting area (if available and has capacity)
+      let assignedWaitingArea = null;
+      // First try to find area marked as default
+      let defaultWaitingArea = await tx.waitingArea.findFirst({
+        where: {
+          hospitalId: appointment.hospitalId,
+          isActive: true,
+          isDefault: true,
+        },
+      });
+
+      // Fallback to first active area if no default is set (backward compatibility)
+      if (!defaultWaitingArea) {
+        defaultWaitingArea = await tx.waitingArea.findFirst({
+          where: {
+            hospitalId: appointment.hospitalId,
+            isActive: true,
+          },
+          orderBy: {
+            createdAt: 'asc', // First active area = fallback default
+          },
+        });
+      }
+
+      if (defaultWaitingArea) {
+        // Check capacity before assigning
+        const currentOccupancy = await tx.queueEntry.count({
+          where: {
+            waitingAreaId: defaultWaitingArea.id,
+            status: {
+              in: ['WAITING', 'TRIAGE', 'CALLED'],
+            },
+            id: { not: queueEntry.id }, // Exclude current queue entry
+          },
+        });
+
+        // Only assign if capacity available
+        if (currentOccupancy < defaultWaitingArea.capacity) {
+          // Update queue entry with waiting area
+          await tx.queueEntry.update({
+            where: { id: queueEntry.id },
+            data: {
+              waitingAreaId: defaultWaitingArea.id,
+            },
+          });
+
+          assignedWaitingArea = {
+            id: defaultWaitingArea.id,
+            name: defaultWaitingArea.name,
+            floor: defaultWaitingArea.floor,
+            facility: defaultWaitingArea.facility,
+          };
+        }
+        // If full, skip assignment (don't reject check-in)
+      }
+
       // Update appointment → CHECKED_IN
       await tx.appointment.update({
         where: { id: appointmentId },
@@ -404,6 +460,7 @@ export const checkInToQueue = async (req, res, next) => {
         sequenceNumber: sequenceNumber,
         assignedDoctor: assignedDoctorName,
         estimatedWaitMinutes: estimatedWaitMinutes,
+        waitingArea: assignedWaitingArea,
       };
     });
 
@@ -416,6 +473,7 @@ export const checkInToQueue = async (req, res, next) => {
         sequenceNumber: result.sequenceNumber,
         assignedDoctor: result.assignedDoctor,
         estimatedWaitMinutes: result.estimatedWaitMinutes,
+        waitingArea: result.waitingArea, // null if no default area or full capacity
       },
     });
   } catch (error) {
@@ -739,7 +797,7 @@ export const updateQueueEntryStatus = async (req, res, next) => {
   try {
     const user = req.user;
     const { id } = req.params;
-    const { status, roomId } = req.body;
+    const { status, roomId, waitingAreaId } = req.body;
 
     // Validate user is STAFF
     if (!user || user.role !== 'STAFF') {
@@ -771,6 +829,26 @@ export const updateQueueEntryStatus = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Room assignment is only allowed when transitioning to IN_CONSULTATION.',
+      });
+    }
+
+    // Validate waitingAreaId can only be provided for WAITING, TRIAGE, CALLED
+    const waitingAreaAllowedStatuses = ['WAITING', 'TRIAGE', 'CALLED'];
+    if (waitingAreaId) {
+      if (!waitingAreaAllowedStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Waiting area assignment is only allowed when status is WAITING, TRIAGE, or CALLED.',
+        });
+      }
+    }
+
+    // Reject waitingAreaId for IN_CONSULTATION or terminal states
+    const terminalStates = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
+    if (waitingAreaId && (status === 'IN_CONSULTATION' || terminalStates.includes(status))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Waiting area assignment is not allowed for IN_CONSULTATION or terminal states.',
       });
     }
 
@@ -844,8 +922,13 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         );
       }
 
+      // Location assignment logic
+      let assignedRoomId = queueEntry.assignedRoomId;
+      let assignedWaitingAreaId = queueEntry.waitingAreaId;
+      let assignedRoom = null;
+      let assignedWaitingArea = null;
+
       // Room assignment logic (only when transitioning to IN_CONSULTATION)
-      let assignedRoomId = null;
       if (newStatus === 'IN_CONSULTATION' && roomId) {
         // Validate room exists
         const room = await tx.room.findUnique({
@@ -893,12 +976,65 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         }
 
         assignedRoomId = roomId;
+        assignedWaitingAreaId = null; // Clear waiting area when assigning room
+        assignedRoom = room;
+      }
+
+      // Waiting area assignment logic (only for WAITING, TRIAGE, CALLED)
+      if (waitingAreaAllowedStatuses.includes(newStatus)) {
+        if (waitingAreaId) {
+          // New waiting area assignment provided
+          // Validate waiting area exists
+          const waitingArea = await tx.waitingArea.findUnique({
+            where: { id: waitingAreaId },
+          });
+
+          if (!waitingArea) {
+            throw new Error('Waiting area not found.');
+          }
+
+          // Validate waiting area is active
+          if (!waitingArea.isActive) {
+            throw new Error('Waiting area is not active. Cannot assign inactive waiting area.');
+          }
+
+          // Validate waiting area belongs to same hospital
+          if (waitingArea.hospitalId !== queueEntry.hospitalId) {
+            throw new Error('Waiting area does not belong to the same hospital.');
+          }
+
+          // Check capacity: Count active queue entries in this waiting area
+          const currentOccupancy = await tx.queueEntry.count({
+            where: {
+              waitingAreaId: waitingAreaId,
+              status: {
+                in: ['WAITING', 'TRIAGE', 'CALLED'],
+              },
+              id: { not: id }, // Exclude current queue entry
+            },
+          });
+
+          if (currentOccupancy >= waitingArea.capacity) {
+            throw new Error('Waiting area is at full capacity.');
+          }
+
+          assignedWaitingAreaId = waitingAreaId;
+          assignedRoomId = null; // Clear room when assigning waiting area
+          assignedWaitingArea = waitingArea;
+        }
+        // If no waitingAreaId provided but status allows it, preserve existing waiting area
+        // (assignedWaitingAreaId already set to queueEntry.waitingAreaId above)
       }
 
       // Clear room assignment when transitioning from IN_CONSULTATION to terminal state
       if (currentStatus === 'IN_CONSULTATION' && 
           ['COMPLETED', 'NO_SHOW', 'CANCELLED'].includes(newStatus)) {
         assignedRoomId = null;
+      }
+
+      // Clear waiting area when transitioning to IN_CONSULTATION or terminal states
+      if (newStatus === 'IN_CONSULTATION' || terminalStates.includes(newStatus)) {
+        assignedWaitingAreaId = null;
       }
 
       // Load management logic
@@ -926,9 +1062,14 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         status: newStatus,
       };
 
-      // Update room assignment if provided or clearing
-      if (assignedRoomId !== null || (currentStatus === 'IN_CONSULTATION' && ['COMPLETED', 'NO_SHOW', 'CANCELLED'].includes(newStatus))) {
+      // Update room assignment if changed
+      if (assignedRoomId !== queueEntry.assignedRoomId) {
         updateData.assignedRoomId = assignedRoomId;
+      }
+
+      // Update waiting area assignment if changed
+      if (assignedWaitingAreaId !== queueEntry.waitingAreaId) {
+        updateData.waitingAreaId = assignedWaitingAreaId;
       }
 
       // Update queue entry status
@@ -969,6 +1110,14 @@ export const updateQueueEntryStatus = async (req, res, next) => {
             select: {
               id: true,
               name: true,
+            },
+          },
+          waitingArea: {
+            select: {
+              id: true,
+              name: true,
+              floor: true,
+              facility: true,
             },
           },
         },
@@ -1723,6 +1872,265 @@ export const bulkReassignQueueEntries = async (req, res, next) => {
         message: error.message,
       });
     }
+    next(error);
+  }
+};
+
+/**
+ * Get dashboard summary
+ * GET /api/staff/dashboard-summary
+ * 
+ * Access:
+ * - ADMIN: Full hospital-wide metrics
+ * - Primary Staff: Full hospital-wide metrics
+ * - DOCTOR: Only their assigned queue entries
+ * 
+ * Returns:
+ * - Queue counts by status (WAITING, TRIAGE, CALLED, IN_CONSULTATION)
+ * - Waiting area occupancy
+ * - Room occupancy status
+ * - Doctor load summary (active count, overloaded count)
+ * - Today stats (completed, noShows, averageWaitTimeToday)
+ */
+export const getDashboardSummary = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const hospitalId = user.hospitalId;
+
+    if (!hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hospital ID is required.',
+      });
+    }
+
+    // Determine access scope
+    const isAdmin = user.role === 'ADMIN';
+    const isPrimary = user.isPrimary === true;
+    const isDoctor = user.role === 'STAFF' && user.staffRole === 'DOCTOR';
+    const isDoctorScoped = isDoctor && !isPrimary;
+
+    // Build queue entry filter based on role
+    const queueEntryFilter = {
+      hospitalId: hospitalId,
+      ...(isDoctorScoped && { assignedDoctorId: user.id }),
+    };
+
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // Execute all queries in a single transaction for atomic read
+    const summary = await prisma.$transaction(async (tx) => {
+      // 1. Queue counts by status
+      const queueCounts = await tx.queueEntry.groupBy({
+        by: ['status'],
+        where: {
+          ...queueEntryFilter,
+          status: {
+            in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
+          },
+        },
+        _count: {
+          id: true,
+        },
+      });
+
+      // Convert to object format
+      const queue = {
+        waiting: 0,
+        triage: 0,
+        called: 0,
+        inConsultation: 0,
+      };
+
+      queueCounts.forEach((item) => {
+        const status = item.status.toLowerCase();
+        if (status === 'waiting') queue.waiting = item._count.id;
+        else if (status === 'triage') queue.triage = item._count.id;
+        else if (status === 'called') queue.called = item._count.id;
+        else if (status === 'in_consultation') queue.inConsultation = item._count.id;
+      });
+
+      // 2. Waiting area occupancy
+      const waitingAreas = await tx.waitingArea.findMany({
+        where: {
+          hospitalId: hospitalId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          capacity: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+      // Get occupancy for each waiting area
+      const waitingAreasWithOccupancy = await Promise.all(
+        waitingAreas.map(async (area) => {
+          const occupancy = await tx.queueEntry.count({
+            where: {
+              waitingAreaId: area.id,
+              status: {
+                in: ['WAITING', 'TRIAGE', 'CALLED'],
+              },
+            },
+          });
+
+          return {
+            id: area.id,
+            name: area.name,
+            capacity: area.capacity,
+            currentOccupancy: occupancy,
+          };
+        })
+      );
+
+      // 3. Room occupancy
+      const rooms = await tx.room.findMany({
+        where: {
+          hospitalId: hospitalId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+      // Get occupancy status for each room
+      const roomsWithOccupancy = await Promise.all(
+        rooms.map(async (room) => {
+          const occupiedEntry = await tx.queueEntry.findFirst({
+            where: {
+              assignedRoomId: room.id,
+              status: 'IN_CONSULTATION',
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          return {
+            id: room.id,
+            name: room.name,
+            occupied: !!occupiedEntry,
+          };
+        })
+      );
+
+      // 4. Doctor load summary
+      // Count active doctors
+      const activeDoctors = await tx.user.count({
+        where: {
+          hospitalId: hospitalId,
+          role: 'STAFF',
+          staffRole: 'DOCTOR',
+          isActive: true,
+        },
+      });
+
+      // Count overloaded doctors
+      // Note: Prisma doesn't support comparing fields directly in count,
+      // so we need to fetch and filter in memory
+      const allDoctors = await tx.user.findMany({
+        where: {
+          hospitalId: hospitalId,
+          role: 'STAFF',
+          staffRole: 'DOCTOR',
+          isActive: true,
+        },
+        select: {
+          currentActivePatients: true,
+          maxConcurrentPatients: true,
+        },
+      });
+
+      const overloadedDoctors = allDoctors.filter(
+        (doctor) => doctor.currentActivePatients >= doctor.maxConcurrentPatients
+      ).length;
+
+      // 5. Today stats
+      const todayCompleted = await tx.queueEntry.count({
+        where: {
+          ...queueEntryFilter,
+          status: 'COMPLETED',
+          checkInTime: {
+            gte: today,
+            lte: todayEnd,
+          },
+        },
+      });
+
+      const todayNoShows = await tx.queueEntry.count({
+        where: {
+          ...queueEntryFilter,
+          status: 'NO_SHOW',
+          checkInTime: {
+            gte: today,
+            lte: todayEnd,
+          },
+        },
+      });
+
+      // 6. Calculate average wait time for completed entries today
+      const completedEntries = await tx.queueEntry.findMany({
+        where: {
+          ...queueEntryFilter,
+          status: 'COMPLETED',
+          checkInTime: {
+            gte: today,
+            lte: todayEnd,
+          },
+        },
+        select: {
+          checkInTime: true,
+          updatedAt: true,
+        },
+      });
+
+      let averageWaitTimeToday = null;
+      if (completedEntries.length > 0) {
+        const waitTimes = completedEntries.map((entry) => {
+          const checkIn = new Date(entry.checkInTime);
+          const completed = new Date(entry.updatedAt);
+          const diffMs = completed.getTime() - checkIn.getTime();
+          return diffMs / (1000 * 60); // Convert to minutes
+        });
+
+        const totalWaitTime = waitTimes.reduce((sum, time) => sum + time, 0);
+        averageWaitTimeToday = Math.round((totalWaitTime / waitTimes.length) * 10) / 10; // Round to 1 decimal place
+      }
+
+      return {
+        queue,
+        waitingAreas: waitingAreasWithOccupancy,
+        rooms: roomsWithOccupancy,
+        doctors: {
+          active: activeDoctors,
+          overloaded: overloadedDoctors,
+        },
+        today: {
+          completed: todayCompleted,
+          noShows: todayNoShows,
+          averageWaitTimeToday: averageWaitTimeToday,
+        },
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: summary,
+    });
+  } catch (error) {
     next(error);
   }
 };

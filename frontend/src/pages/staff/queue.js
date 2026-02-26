@@ -8,6 +8,7 @@
 import { apiGet, apiPatch } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { API_ENDPOINTS } from '../../config/api.js';
 
 // State
 let queueData = [];
@@ -17,6 +18,7 @@ let totalPages = 1;
 let pollingInterval = null;
 let currentQueueEntryId = null; // For room assignment
 let availableRooms = [];
+let waitingAreas = []; // Store waiting areas with occupancy
 
 // DOM Elements
 let queueTableBody;
@@ -48,7 +50,9 @@ let isPrimary = false;
 /**
  * Initialize queue page
  */
-function initQueuePage() {
+async function initQueuePage() {
+  console.log('initQueuePage called');
+  
   // Check authentication
   if (!isAuthenticated()) {
     toast.error('Please log in to access the queue');
@@ -87,6 +91,13 @@ function initQueuePage() {
   loadingSpinner = document.getElementById('loading-spinner');
   doctorLoadBadge = document.getElementById('doctor-load-badge');
   
+  // Verify critical DOM elements exist
+  if (!queueTableBody) {
+    console.error('queue-table-body not found!');
+    toast.error('Queue table not found. Please refresh the page.');
+    return;
+  }
+  
   // Sidebar close button
   const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
   if (sidebarCloseBtn) {
@@ -105,15 +116,25 @@ function initQueuePage() {
   // Setup role-aware button visibility
   setupRoleAwareButtons();
 
-  // Initial load
-  fetchQueue();
-  
-  // Fetch doctor load on initial load
-  if (isDoctor) {
-    fetchDoctorLoad();
+  // Initial load - ensure it completes
+  console.log('Starting initial queue fetch...');
+  try {
+    await fetchQueue();
+    console.log('Initial queue fetch completed');
+    
+    // Fetch waiting areas
+    await fetchWaitingAreas();
+    
+    // Fetch doctor load on initial load
+    if (isDoctor) {
+      await fetchDoctorLoad();
+    }
+  } catch (error) {
+    console.error('Error during initial load:', error);
+    toast.error('Failed to load queue data. Please refresh the page.');
   }
 
-  // Start polling
+  // Start polling after initial load completes
   startPolling();
 }
 
@@ -170,6 +191,32 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Move dropdown toggle
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('move-btn')) {
+      e.stopPropagation();
+      const wrapper = e.target.closest('.move-wrapper');
+      if (wrapper) {
+        const dropdown = wrapper.querySelector('.move-dropdown');
+
+        // Close all other dropdowns
+        document.querySelectorAll('.move-dropdown').forEach(d => {
+          if (d !== dropdown) d.classList.add('hidden');
+        });
+
+        // Toggle current dropdown
+        if (dropdown) {
+          dropdown.classList.toggle('hidden');
+        }
+      }
+    } else if (!e.target.closest('.move-dropdown') && !e.target.closest('.move-btn')) {
+      // Close all dropdowns when clicking outside
+      document.querySelectorAll('.move-dropdown').forEach(d => {
+        d.classList.add('hidden');
+      });
+    }
+  });
 }
 
 /**
@@ -206,14 +253,28 @@ function showSpinner(show) {
 
 /**
  * Fetch queue data
+ * @param {boolean} showLoading - Whether to show loading spinner (default: true)
  */
-async function fetchQueue() {
-  showSpinner(true);
+async function fetchQueue(showLoading = true) {
+  console.log('fetchQueue called, showLoading:', showLoading);
+  
+  // Clear loading message immediately when starting to fetch
+  if (queueTableBody) {
+    if (queueTableBody.querySelector('.loading-message')) {
+      queueTableBody.innerHTML = '';
+    }
+  } else {
+    console.warn('queueTableBody is null in fetchQueue');
+  }
+  
+  if (showLoading) {
+    showSpinner(true);
+  }
   
   try {
     const params = new URLSearchParams();
     params.append('page', currentPage.toString());
-    params.append('limit', '20');
+    params.append('limit', '10');
 
     if (queueSearchInput && queueSearchInput.value.trim()) {
       params.append('search', queueSearchInput.value.trim());
@@ -223,15 +284,25 @@ async function fetchQueue() {
       params.append('date', queueDatePicker.value);
     }
 
-    const response = await apiGet(`/staff/queue?${params.toString()}`);
+    const endpoint = `/staff/queue?${params.toString()}`;
+    console.log('Fetching queue from:', endpoint);
+    
+    const response = await apiGet(endpoint);
+    console.log('Queue API response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
     const result = await response.json();
+    console.log('Queue API result:', result);
 
     if (result.success && result.data) {
       queueData = result.data.queueEntries || [];
       const pagination = result.data.pagination || {};
       currentPage = pagination.page || 1;
       totalPages = pagination.totalPages || 1;
-      renderQueueTable();
+      await renderQueueTable();
       updateSummary();
       updatePaginationButtons();
       
@@ -239,26 +310,34 @@ async function fetchQueue() {
       if (isDoctor) {
         await fetchDoctorLoad();
       }
+
+      // Refresh waiting areas after queue data is loaded
+      await fetchWaitingAreas();
     } else {
       toast.error(result.message || 'Failed to load queue');
       queueData = [];
-      renderQueueTable();
+      await renderQueueTable();
     }
   } catch (error) {
     console.error('Error fetching queue:', error);
     toast.error('Failed to load queue data');
     queueData = [];
-    renderQueueTable();
+    await renderQueueTable();
   } finally {
-    showSpinner(false);
+    if (showLoading) {
+      showSpinner(false);
+    }
   }
 }
 
 /**
  * Render queue table
  */
-function renderQueueTable() {
+async function renderQueueTable() {
   if (!queueTableBody) return;
+
+  // Clear loading message first
+  queueTableBody.innerHTML = '';
 
   if (queueData.length === 0) {
     // Check if user is a doctor (non-primary, non-admin) for role-specific message
@@ -298,10 +377,16 @@ function renderQueueTable() {
     const statusClass = status.toLowerCase().replace('_', '_');
     const assignedRoom = entry.assignedRoom ? entry.assignedRoom.name : '-';
 
+    const isSelected = selectedQueueEntries.has(entry.id);
     return `
       <tr class="" data-entry-id="${entry.id}">
         <td>
-          <span class="select-indicator">Select</span>
+          <input 
+            type="checkbox" 
+            class="queue-checkbox" 
+            data-entry-id="${entry.id}"
+            ${isSelected ? 'checked' : ''}
+          />
         </td>
         <td>
           <div class="patient-name-cell">
@@ -315,19 +400,23 @@ function renderQueueTable() {
         </td>
         <td>In</td>
         <td>${assignedRoom}</td>
-        <td>
-          <div class="action-buttons">
-            ${isDoctor && canUpdateStatus(entry) ? `
-              <button class="action-btn status-update-btn" title="Update Status" data-entry-id="${entry.id}" data-status="${status}">
-                <span class="material-symbols-outlined">check_circle</span>
-              </button>
-            ` : ''}
-            <button class="action-btn" title="Call" onclick="handleCall('${entry.id}')">
-              <span class="material-symbols-outlined">phone</span>
+        <td class="actions-cell">
+          <button class="action-btn" title="Call" onclick="handleCall('${entry.id}')" data-entry-id="${entry.id}">
+            <span class="material-symbols-outlined">phone</span>
+          </button>
+          <button class="action-btn" title="Email" onclick="handleEmail('${entry.id}')" data-entry-id="${entry.id}">
+            <span class="material-symbols-outlined">email</span>
+          </button>
+          ${isDoctor && canUpdateStatus(entry) ? `
+            <button class="action-btn status-update-btn" title="Complete/Update Status" data-entry-id="${entry.id}" data-status="${status}">
+              <span class="material-symbols-outlined">check_circle</span>
             </button>
-            <button class="action-btn" title="Email" onclick="handleEmail('${entry.id}')">
-              <span class="material-symbols-outlined">email</span>
-            </button>
+          ` : ''}
+          <div class="move-wrapper">
+            <button class="move-btn" data-entry-id="${entry.id}">Move ▾</button>
+            <div class="move-dropdown hidden" data-queue-id="${entry.id}">
+              <!-- populated dynamically -->
+            </div>
           </div>
         </td>
       </tr>
@@ -344,10 +433,36 @@ function renderQueueTable() {
     });
   });
 
-  // Attach row click for patient details
+  // Populate move dropdowns after rendering
+  await populateMoveDropdowns();
+
+  // Attach checkbox listeners
+  queueTableBody.querySelectorAll('.queue-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const entryId = e.target.dataset.entryId;
+      const row = e.target.closest('tr[data-entry-id]');
+      
+      if (e.target.checked) {
+        selectedQueueEntries.add(entryId);
+        if (row) row.classList.add('selected-row');
+        showPatientDetails(entryId);
+      } else {
+        selectedQueueEntries.delete(entryId);
+        if (row) row.classList.remove('selected-row');
+        if (selectedQueueEntries.size === 0) {
+          hidePatientDetails();
+        }
+      }
+      updateActionButtons();
+    });
+  });
+
+  // Attach row click for patient details (but not on checkbox or action buttons)
   queueTableBody.querySelectorAll('tr[data-entry-id]').forEach(row => {
     row.addEventListener('click', (e) => {
-      if (!e.target.closest('.action-btn')) {
+      // Don't trigger row selection if clicking on checkbox, action buttons, or move dropdown
+      if (!e.target.closest('.queue-checkbox') && !e.target.closest('.action-btn') && !e.target.closest('.move-wrapper')) {
         const entryId = row.dataset.entryId;
         const isSelected = row.classList.contains('selected-row');
         
@@ -355,16 +470,28 @@ function renderQueueTable() {
         if (isSelected) {
           row.classList.remove('selected-row');
           selectedQueueEntries.delete(entryId);
-          hidePatientDetails();
+          const checkbox = row.querySelector('.queue-checkbox');
+          if (checkbox) checkbox.checked = false;
+          if (selectedQueueEntries.size === 0) {
+            hidePatientDetails();
+          } else {
+            // Show details for the first selected entry
+            const firstSelectedId = Array.from(selectedQueueEntries)[0];
+            showPatientDetails(firstSelectedId);
+          }
         } else {
           // Remove selection from other rows
           queueTableBody.querySelectorAll('tr.selected-row').forEach(r => {
             r.classList.remove('selected-row');
             const otherEntryId = r.dataset.entryId;
             selectedQueueEntries.delete(otherEntryId);
+            const otherCheckbox = r.querySelector('.queue-checkbox');
+            if (otherCheckbox) otherCheckbox.checked = false;
           });
           row.classList.add('selected-row');
           selectedQueueEntries.add(entryId);
+          const checkbox = row.querySelector('.queue-checkbox');
+          if (checkbox) checkbox.checked = true;
           showPatientDetails(entryId);
         }
         updateActionButtons();
@@ -756,26 +883,12 @@ function showPatientDetails(entryId) {
   if (sidebar) {
     sidebar.classList.add('visible');
   }
-  if (queueView) {
-    queueView.classList.add('has-selected-patient');
-  }
 
   patientDetailsCard.innerHTML = `
     <div class="patient-details-header">
       <div class="patient-details-avatar">${patientInitials}</div>
       <div class="patient-details-name">${patientName}</div>
       <div class="patient-details-info">${patient.age || 'N/A'}/${patient.gender || 'N/A'}</div>
-    </div>
-    <div class="patient-details-checkbox-section">
-      <label class="patient-checkbox-label">
-        <input 
-          type="checkbox" 
-          class="patient-details-checkbox" 
-          data-entry-id="${entryId}"
-          ${isSelected ? 'checked' : ''}
-        />
-        <span>Select patient</span>
-      </label>
     </div>
     <div class="patient-details-section">
       <div class="patient-details-section-title">Queue History</div>
@@ -790,22 +903,6 @@ function showPatientDetails(entryId) {
       </div>
     </div>
   `;
-
-  // Attach checkbox listener in patient details
-  const patientCheckbox = patientDetailsCard.querySelector('.patient-details-checkbox');
-  if (patientCheckbox) {
-    patientCheckbox.addEventListener('change', (e) => {
-      e.stopPropagation(); // Prevent any event bubbling
-      const entryId = e.target.dataset.entryId;
-      if (e.target.checked) {
-        selectedQueueEntries.add(entryId);
-      } else {
-        selectedQueueEntries.delete(entryId);
-      }
-      updateSelectedState();
-      updateActionButtons();
-    });
-  }
 }
 
 /**
@@ -813,13 +910,9 @@ function showPatientDetails(entryId) {
  */
 function hidePatientDetails() {
   const sidebar = document.getElementById('queue-sidebar');
-  const queueView = document.querySelector('.queue-view');
   
   if (sidebar) {
     sidebar.classList.remove('visible');
-  }
-  if (queueView) {
-    queueView.classList.remove('has-selected-patient');
   }
   
   if (patientDetailsCard) {
@@ -930,9 +1023,9 @@ function startPolling() {
     clearInterval(pollingInterval);
   }
 
-  // Poll every 10 seconds
+  // Poll every 10 seconds (without showing spinner)
   pollingInterval = setInterval(() => {
-    fetchQueue();
+    fetchQueue(false); // Don't show spinner during automatic polling
   }, 10000);
 }
 
@@ -943,6 +1036,120 @@ function stopPolling() {
   if (pollingInterval) {
     clearInterval(pollingInterval);
     pollingInterval = null;
+  }
+}
+
+/**
+ * Fetch waiting areas
+ */
+async function fetchWaitingAreas() {
+  try {
+    const response = await apiGet('/waiting-areas');
+    const result = await response.json();
+
+    if (result.success && result.data) {
+      waitingAreas = result.data.waitingAreas || [];
+      
+      // Calculate occupancy for each waiting area
+      for (const area of waitingAreas) {
+        const occupancy = queueData.filter(entry => 
+          entry.waitingArea && 
+          entry.waitingArea.id === area.id &&
+          ['WAITING', 'TRIAGE', 'CALLED'].includes(entry.status)
+        ).length;
+        area.currentOccupancy = occupancy;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching waiting areas:', error);
+    waitingAreas = [];
+  }
+}
+
+/**
+ * Populate move dropdowns with waiting areas
+ */
+async function populateMoveDropdowns() {
+  // Refresh waiting areas with current queue data
+  await fetchWaitingAreas();
+
+  document.querySelectorAll('.move-dropdown').forEach(dropdown => {
+    dropdown.innerHTML = '';
+
+    if (waitingAreas.length === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'move-dropdown-empty';
+      emptyMsg.textContent = 'No waiting areas available';
+      emptyMsg.style.padding = '8px 10px';
+      emptyMsg.style.fontSize = '13px';
+      emptyMsg.style.color = '#aaa';
+      dropdown.appendChild(emptyMsg);
+      return;
+    }
+
+    waitingAreas.forEach(area => {
+      const btn = document.createElement('button');
+      const occupancy = area.currentOccupancy || 0;
+      const isFull = occupancy >= area.capacity;
+      
+      btn.textContent = `${area.name} (${occupancy}/${area.capacity})`;
+      btn.disabled = isFull;
+      
+      if (isFull) {
+        btn.style.cursor = 'not-allowed';
+      }
+
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const queueId = dropdown.dataset.queueId;
+        assignWaitingArea(queueId, area.id);
+      };
+
+      dropdown.appendChild(btn);
+    });
+  });
+}
+
+/**
+ * Assign waiting area to queue entry
+ */
+async function assignWaitingArea(queueId, waitingAreaId) {
+  try {
+    // Close all dropdowns
+    document.querySelectorAll('.move-dropdown').forEach(d => {
+      d.classList.add('hidden');
+    });
+
+    // Find the entry to get current status
+    const entry = queueData.find(e => e.id === queueId);
+    if (!entry) {
+      toast.error('Queue entry not found');
+      return;
+    }
+
+    // Determine target status (must be WAITING, TRIAGE, or CALLED)
+    let targetStatus = entry.status;
+    if (!['WAITING', 'TRIAGE', 'CALLED'].includes(targetStatus)) {
+      // If current status doesn't allow waiting area, transition to WAITING first
+      targetStatus = 'WAITING';
+    }
+
+    const response = await apiPatch(`/queue/${queueId}/status`, {
+      status: targetStatus,
+      waitingAreaId: waitingAreaId,
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      toast.success(`Patient moved to ${waitingAreas.find(a => a.id === waitingAreaId)?.name || 'waiting area'}`);
+      await fetchQueue(false); // Refresh queue without spinner
+    } else {
+      toast.error(result.message || 'Failed to assign waiting area');
+    }
+  } catch (error) {
+    console.error('Error assigning waiting area:', error);
+    toast.error('Failed to assign waiting area');
   }
 }
 
@@ -961,12 +1168,19 @@ function debounce(func, wait) {
   };
 }
 
-// Initialize when view is loaded
-window.addEventListener('view-loaded', (e) => {
+// Register event listener immediately when module loads
+window.addEventListener('view-loaded', async (e) => {
   if (e.detail.route === 'queues') {
-    initQueuePage();
+    console.log('view-loaded event received for queues route');
+    // Wait a bit to ensure DOM is fully ready
+    setTimeout(() => {
+      initQueuePage().catch(err => {
+        console.error('Error initializing queue page:', err);
+        toast.error('Failed to initialize queue page');
+      });
+    }, 150);
   }
-});
+}, { once: false }); // Allow multiple calls if needed
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {

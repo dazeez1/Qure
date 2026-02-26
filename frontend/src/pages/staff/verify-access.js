@@ -17,8 +17,8 @@ if (!isAuthenticated()) {
 // Get user data
 const user = getAuthUser();
 
-// Guard 2: Must be STAFF role
-if (!user || user.role !== 'STAFF') {
+// Guard 2: Must be STAFF or ADMIN role (ADMIN is a type of staff)
+if (!user || (user.role !== 'STAFF' && user.role !== 'ADMIN')) {
   toast.error('Access denied');
   window.location.href = '/login.html';
 }

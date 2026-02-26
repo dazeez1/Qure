@@ -119,7 +119,9 @@
     flex-direction: column;
     gap: 2rem;
     padding: 0;
+    padding-bottom: 4rem;
     background-color: transparent;
+    width: 100%;
   }
 
   .queue-header {
@@ -266,7 +268,8 @@
   .queue-table-container {
     background-color: var(--color-background-white);
     border-radius: 0.8rem;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: visible;
     box-shadow: 0 2px 8px var(--color-shadow-light);
   }
 
@@ -280,7 +283,7 @@
   }
 
   .queue-table th {
-    padding: 1.2rem;
+    padding: 0.8rem 1rem;
     text-align: left;
     font-size: 1.2rem;
     font-weight: 600;
@@ -289,8 +292,8 @@
   }
 
   .queue-table td {
-    padding: 1.2rem;
-    font-size: 1.2rem;
+    padding: 0.6rem 1rem;
+    font-size: 1rem;
     color: var(--color-text-primary);
     border-bottom: 1px solid var(--color-border-light);
   }
@@ -304,34 +307,36 @@
   }
 
   .queue-table tbody tr.selected-row {
-    background-color: var(--color-primary-blue);
-    color: white;
+    background-color: transparent;
   }
 
   .queue-table tbody tr.selected-row td {
-    color: white;
+    color: var(--color-text-primary);
   }
 
   .queue-table tbody tr.selected-row .status-badge {
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
+    background-color: inherit;
+    color: inherit;
   }
 
-  .select-indicator {
-    font-size: 1.2rem;
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-  }
-
-  .queue-table tbody tr.selected-row .select-indicator {
-    color: white;
-  }
-
-  .queue-table input[type="checkbox"] {
+  .queue-checkbox {
     width: 1.8rem;
     height: 1.8rem;
     cursor: pointer;
     accent-color: var(--color-primary-blue);
+  }
+
+  .queue-table tbody tr.selected-row {
+    background-color: transparent;
+  }
+
+  .queue-table tbody tr.selected-row td {
+    color: var(--color-text-primary);
+  }
+
+  .queue-table tbody tr.selected-row .status-badge {
+    background-color: inherit;
+    color: inherit;
   }
 
   .patient-name-cell {
@@ -355,9 +360,9 @@
 
   .status-badge {
     display: inline-block;
-    padding: 0.4rem 1rem;
+    padding: 0.3rem 0.8rem;
     border-radius: 1.6rem;
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-weight: 500;
     text-transform: capitalize;
   }
@@ -397,6 +402,12 @@
     color: white;
   }
 
+  .actions-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
   .action-buttons {
     display: flex;
     gap: 0.8rem;
@@ -413,6 +424,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 1.6rem;
   }
 
   .action-btn:hover {
@@ -420,8 +432,79 @@
   }
 
   .action-btn .material-symbols-outlined {
-    font-size: 2rem;
+    font-size: 1.6rem;
     color: var(--color-icon-secondary);
+  }
+
+
+  .move-wrapper {
+    position: relative;
+  }
+
+  .move-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 1rem;
+    border-radius: 0.6rem;
+    border: 1px solid #1f3c88;
+    background: white;
+    color: #1f3c88;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .move-btn:hover {
+    background: #f3f6ff;
+  }
+
+  .move-dropdown {
+    position: absolute;
+    top: 3.5rem;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 0.6rem;
+    width: 22rem;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    z-index: 100;
+    max-height: 25rem;
+    overflow-y: auto;
+  }
+
+  .move-dropdown.hidden {
+    display: none;
+  }
+
+  .move-dropdown button {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: none;
+    background: white;
+    text-align: left;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .move-dropdown button:hover:not(:disabled) {
+    background: #f5f5f5;
+  }
+
+  .move-dropdown button:disabled {
+    color: #aaa;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .move-dropdown-empty {
+    padding: 0.8rem 1rem;
+    font-size: 1.3rem;
+    color: #aaa;
+    text-align: center;
+  }
+
+  .queue-summary-wrapper {
+    margin-top: 1rem;
+    margin-bottom: 2rem;
   }
 
   .queue-summary {
@@ -431,6 +514,8 @@
     padding: 1.2rem 0;
     font-size: 1.4rem;
     color: var(--color-text-secondary);
+    position: relative;
+    z-index: 1;
   }
 
   .queue-pagination {
@@ -478,41 +563,49 @@
   }
 
   .queue-view.has-selected-patient {
-    padding-right: 36rem;
+    padding-right: 0;
   }
 
   .queue-sidebar {
     position: fixed;
-    right: 0;
-    top: 0;
-    width: 36rem;
-    height: 100vh;
+    right: 2rem;
+    top: 2rem;
+    width: 32rem;
+    max-width: calc(100vw - 28rem);
     background-color: var(--color-background-white);
-    border-left: 1px solid var(--color-border-light);
+    border-radius: 0.8rem;
     padding: 2rem;
     overflow-y: auto;
     z-index: 100;
-    margin-top: 0;
-    transform: translateX(100%);
+    transform: translateX(calc(100% + 4rem));
     transition: transform 0.3s ease;
-    box-shadow: -2px 0 8px var(--color-shadow-light);
+    box-shadow: 0 4px 16px var(--color-shadow-medium);
+    max-height: calc(100vh - 4rem);
   }
 
   .queue-sidebar.visible {
     transform: translateX(0);
   }
 
+  @media (max-width: 1200px) {
+    .queue-sidebar {
+      width: 30rem;
+      right: 1rem;
+      top: 1rem;
+    }
+  }
+
   .sidebar-header-controls {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1.6rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
     border-bottom: 1px solid var(--color-border-light);
   }
 
   .sidebar-header-controls h3 {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     font-weight: 600;
     color: var(--color-text-primary);
     margin: 0;
@@ -540,32 +633,29 @@
   }
 
   .patient-details-card {
-    background-color: var(--color-background-white);
-    border-radius: 0.8rem;
-    padding: 2rem;
-    box-shadow: 0 2px 8px var(--color-shadow-light);
+    width: 100%;
   }
 
   .patient-details-placeholder {
     text-align: center;
-    padding: 4rem 2rem;
+    padding: 2rem;
     color: var(--color-text-tertiary);
-    font-size: 1.4rem;
+    font-size: 1.2rem;
   }
 
   .patient-details-header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.2rem;
-    margin-bottom: 2rem;
-    padding-bottom: 2rem;
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
     border-bottom: 1px solid var(--color-border-light);
   }
 
   .patient-details-avatar {
-    width: 8rem;
-    height: 8rem;
+    width: 5rem;
+    height: 5rem;
     border-radius: 50%;
     background-color: var(--color-primary-blue);
     display: flex;
@@ -573,40 +663,40 @@
     justify-content: center;
     color: white;
     font-weight: 600;
-    font-size: 3.2rem;
+    font-size: 2rem;
   }
 
   .patient-details-name {
-    font-size: 2rem;
+    font-size: 1.6rem;
     font-weight: 600;
     color: var(--color-text-primary);
   }
 
   .patient-details-info {
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     color: var(--color-text-tertiary);
   }
 
   .patient-details-section {
-    margin-top: 2rem;
+    margin-top: 1.5rem;
   }
 
   .patient-details-section-title {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
     font-weight: 600;
     color: var(--color-text-primary);
-    margin-bottom: 1.2rem;
+    margin-bottom: 0.8rem;
   }
 
   .patient-details-section-content {
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     color: var(--color-text-secondary);
     line-height: 1.6;
   }
 
   .patient-details-checkbox-section {
-    margin: 1.6rem 0;
-    padding: 1.2rem;
+    margin: 1.2rem 0;
+    padding: 1rem;
     background-color: var(--color-background-gray-lighter);
     border-radius: 0.6rem;
   }
@@ -614,9 +704,9 @@
   .patient-checkbox-label {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.8rem;
     cursor: pointer;
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     color: var(--color-text-primary);
     user-select: none;
   }
@@ -777,7 +867,7 @@
     
     .queue-sidebar {
       width: 100%;
-      max-width: 36rem;
+      max-width: 28rem;
     }
   }
 

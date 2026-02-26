@@ -261,11 +261,15 @@ export const login = async (req, res, next) => {
     }
 
     // Validate role if provided (optional, but helps with routing)
-    if (role && user.role !== role) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or phone number or password',
-      });
+    // ADMIN is a type of staff, so allow ADMIN when STAFF is requested
+    if (role) {
+      const isRoleMatch = user.role === role || (role === 'STAFF' && user.role === 'ADMIN');
+      if (!isRoleMatch) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid email or phone number or password',
+        });
+      }
     }
 
     // Compare password with stored hash

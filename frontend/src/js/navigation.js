@@ -43,8 +43,25 @@ async function loadView(route) {
       location.hash = route;
     }
 
-    // Dispatch event for view-specific initialization
-    window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+    // Initialize queue page if queues view is loaded
+    if (route === 'queues') {
+      // Import module first, then dispatch event after it's loaded
+      import('../pages/staff/queue.js').then(() => {
+        // Module loaded, wait a bit for event listener to be registered, then dispatch
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      }).catch(err => {
+        console.error('Failed to load queue page:', err);
+        // Still dispatch event even if import fails
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      });
+    } else {
+      // Dispatch event for other views immediately
+      window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+    }
 
     // Initialize settings navigation if settings view is loaded
     if (route === 'settings') {
@@ -57,15 +74,6 @@ async function loadView(route) {
             console.error('Failed to load settings navigation:', err);
           });
         }
-      }, 50);
-    }
-
-    // Initialize queue page if queues view is loaded
-    if (route === 'queues') {
-      setTimeout(() => {
-        import('../pages/staff/queue.js').catch(err => {
-          console.error('Failed to load queue page:', err);
-        });
       }, 50);
     }
   } catch (err) {

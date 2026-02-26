@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticate, requireRole, requireStaffOrAdmin, requireStaffVerified } from '../middleware/authMiddleware.js';
 import { verifyAccessCode } from '../controllers/authController.js';
-import { getStaffQueue } from '../controllers/queueController.js';
+import { getStaffQueue, getDashboardSummary } from '../controllers/queueController.js';
 
 const router = express.Router();
 
@@ -27,6 +27,13 @@ router.get('/dashboard', (req, res) => {
     },
   });
 });
+
+/**
+ * GET /api/staff/dashboard-summary
+ * Get dashboard summary with queue counts, waiting areas, rooms, doctors, and today stats
+ * Access: ADMIN, Primary Staff (hospital-wide), or DOCTOR (assigned entries only)
+ */
+router.get('/dashboard-summary', getDashboardSummary);
 
 /**
  * GET /api/staff/queue

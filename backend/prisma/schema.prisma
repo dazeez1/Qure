@@ -47,6 +47,28 @@ enum PriorityLevel {
   URGENT
 }
 
+model WaitingArea {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  floor      String?
+  facility   String?
+  capacity   Int
+
+  hospitalId String   @db.ObjectId
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  isActive   Boolean  @default(true)
+  isDefault  Boolean  @default(false)
+
+  queueEntries QueueEntry[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([hospitalId, name])
+  @@map("waiting_areas")
+}
+
 model Hospital {
   id                  String              @id @default(auto()) @map("_id") @db.ObjectId
   name                String
@@ -64,6 +86,7 @@ model Hospital {
   appointments        Appointment[]
   queueEntries        QueueEntry[]
   rooms               Room[]
+  waitingAreas        WaitingArea[]
 
   @@map("hospitals")
 }
@@ -203,6 +226,8 @@ model QueueEntry {
   assignedDoctor    User?        @relation(fields: [assignedDoctorId], references: [id], onDelete: SetNull)
   assignedRoomId    String?       @db.ObjectId
   assignedRoom      Room?         @relation(fields: [assignedRoomId], references: [id], onDelete: SetNull)
+  waitingAreaId     String?       @db.ObjectId
+  waitingArea       WaitingArea?  @relation(fields: [waitingAreaId], references: [id], onDelete: SetNull)
   ticketNumber      String
   sequenceNumber    Int
   status            QueueStatus  @default(WAITING)

@@ -8,6 +8,7 @@
 import { apiGet } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { API_ENDPOINTS } from '../../config/api.js';
 
 // ============================================
 // AUTH GUARD - Initialize Once
@@ -23,8 +24,8 @@ if (!isAuthenticated()) {
 // Get user data
 const user = getAuthUser();
 
-// Guard: Must be STAFF role
-if (!user || user.role !== 'STAFF') {
+// Guard: Must be STAFF or ADMIN role (ADMIN is a type of staff)
+if (!user || (user.role !== 'STAFF' && user.role !== 'ADMIN')) {
   toast.error('Access denied');
   window.location.href = '/login.html';
   throw new Error('Invalid role'); // Stop execution
@@ -70,23 +71,33 @@ window.addEventListener('view-loaded', async (event) => {
 // ============================================
 
 async function initializeDashboard() {
-  const statusElement = document.getElementById('dashboard-status');
   const userNameInView = document.getElementById('user-name');
+  const loadingElement = document.getElementById('dashboard-loading');
+  const errorElement = document.getElementById('dashboard-error');
+  const contentElement = document.getElementById('dashboard-content');
+  const errorMessage = document.getElementById('error-message');
   
   // Update user name in view if element exists
   if (userNameInView && user) {
     userNameInView.textContent = `${user.firstName} ${user.lastName}`;
   }
 
-  if (!statusElement) return;
+  // Show loading, hide content and error
+  if (loadingElement) loadingElement.classList.remove('hidden');
+  if (contentElement) contentElement.classList.add('hidden');
+  if (errorElement) errorElement.classList.add('hidden');
 
   try {
-    const response = await apiGet('/staff/dashboard');
+    const response = await apiGet('/staff/dashboard-summary');
     const result = await response.json();
 
     if (response.ok && result.success) {
-      statusElement.textContent = 'Dashboard loaded successfully.';
-      statusElement.className = 'status-message success';
+      // Hide loading, show content
+      if (loadingElement) loadingElement.classList.add('hidden');
+      if (contentElement) {
+        contentElement.classList.remove('hidden');
+        renderDashboardData(result.data);
+      }
     } else {
       // Handle errors
       if (response.status === 403) {
@@ -106,19 +117,101 @@ async function initializeDashboard() {
         }, 1500);
         return;
       } else {
-        toast.error(result.message || 'Access denied');
+        toast.error(result.message || 'Failed to load dashboard');
       }
 
-      statusElement.textContent = 'Access denied.';
-      statusElement.className = 'status-message error';
+      // Show error state
+      if (loadingElement) loadingElement.classList.add('hidden');
+      if (errorElement) {
+        if (errorMessage) errorMessage.textContent = result.message || 'Please try refreshing the page.';
+        errorElement.classList.remove('hidden');
+      }
     }
   } catch (error) {
     console.error('Dashboard access error:', error);
     toast.error('Failed to load dashboard. Please try again.');
     
-    if (statusElement) {
-      statusElement.textContent = 'Error loading dashboard. Please try again.';
-      statusElement.className = 'status-message error';
+    // Show error state
+    if (loadingElement) loadingElement.classList.add('hidden');
+    if (errorElement) {
+      if (errorMessage) errorMessage.textContent = 'Network error. Please check your connection and try again.';
+      errorElement.classList.remove('hidden');
+    }
+  }
+}
+
+/**
+ * Render dashboard data
+ */
+function renderDashboardData(data) {
+  // Queue status
+  if (data.queue) {
+    document.getElementById('stat-waiting').textContent = data.queue.waiting || 0;
+    document.getElementById('stat-triage').textContent = data.queue.triage || 0;
+    document.getElementById('stat-called').textContent = data.queue.called || 0;
+    document.getElementById('stat-consultation').textContent = data.queue.inConsultation || 0;
+  }
+
+  // Today's stats
+  if (data.today) {
+    document.getElementById('stat-completed').textContent = data.today.completed || 0;
+    document.getElementById('stat-no-shows').textContent = data.today.noShows || 0;
+    
+    const avgWait = data.today.averageWaitTimeToday;
+    const avgWaitElement = document.getElementById('stat-avg-wait');
+    if (avgWait !== null && avgWait !== undefined) {
+      avgWaitElement.textContent = `${avgWait} min`;
+    } else {
+      avgWaitElement.textContent = 'N/A';
+    }
+  }
+
+  // Doctor status
+  if (data.doctors) {
+    document.getElementById('stat-active-doctors').textContent = data.doctors.active || 0;
+    document.getElementById('stat-overloaded').textContent = data.doctors.overloaded || 0;
+  }
+
+  // Waiting areas
+  const waitingAreasList = document.getElementById('waiting-areas-list');
+  if (waitingAreasList && data.waitingAreas) {
+    if (data.waitingAreas.length === 0) {
+      waitingAreasList.innerHTML = '<p class="empty-state">No waiting areas configured.</p>';
+    } else {
+      waitingAreasList.innerHTML = data.waitingAreas.map(area => `
+        <div class="info-card">
+          <div class="info-card-header">
+            <h3>${area.name}</h3>
+            <span class="capacity-badge ${area.currentOccupancy >= area.capacity ? 'full' : ''}">
+              ${area.currentOccupancy}/${area.capacity}
+            </span>
+          </div>
+          <div class="info-card-content">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${Math.min((area.currentOccupancy / area.capacity) * 100, 100)}%"></div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Rooms
+  const roomsList = document.getElementById('rooms-list');
+  if (roomsList && data.rooms) {
+    if (data.rooms.length === 0) {
+      roomsList.innerHTML = '<p class="empty-state">No rooms configured.</p>';
+    } else {
+      roomsList.innerHTML = data.rooms.map(room => `
+        <div class="info-card">
+          <div class="info-card-header">
+            <h3>${room.name}</h3>
+            <span class="status-badge ${room.occupied ? 'occupied' : 'available'}">
+              ${room.occupied ? 'Occupied' : 'Available'}
+            </span>
+          </div>
+        </div>
+      `).join('');
     }
   }
 }
