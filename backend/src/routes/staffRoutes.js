@@ -2,6 +2,8 @@ import express from 'express';
 import { authenticate, requireRole, requireStaffOrAdmin, requireStaffVerified } from '../middleware/authMiddleware.js';
 import { verifyAccessCode } from '../controllers/authController.js';
 import { getStaffQueue, getDashboardSummary } from '../controllers/queueController.js';
+import { getStaffDashboard } from '../controllers/staffController.js';
+import { exportHospitalData } from '../controllers/exportController.js';
 
 const router = express.Router();
 
@@ -16,17 +18,9 @@ router.use(requireStaffVerified);
 /**
  * GET /api/staff/dashboard
  * Staff dashboard data endpoint
+ * Returns comprehensive dashboard overview with queue preview, metrics, and stats
  */
-router.get('/dashboard', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Access granted to staff dashboard',
-    data: {
-      user: req.user,
-      // Dashboard data will be added later
-    },
-  });
-});
+router.get('/dashboard', authenticate, requireStaffOrAdmin, getStaffDashboard);
 
 /**
  * GET /api/staff/dashboard-summary
@@ -43,6 +37,14 @@ router.get('/dashboard-summary', getDashboardSummary);
  * Role-aware: Doctor sees assigned only, Admin sees hospital-wide
  */
 router.get('/queue', getStaffQueue);
+
+/**
+ * GET /api/staff/export
+ * Export hospital data as CSV
+ * Query params: days (optional, default 7)
+ * Access: Authenticated staff/admin users
+ */
+router.get('/export', exportHospitalData);
 
 export default router;
 

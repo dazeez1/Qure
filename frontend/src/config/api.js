@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
     login: `${API_BASE_URL}/auth/login`,
     forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
     resetPassword: `${API_BASE_URL}/auth/reset-password`,
+    acceptInvite: `${API_BASE_URL}/auth/accept-invite`,
   },
   patientAuth: {
     register: `${API_BASE_URL}/patient/auth/register`, // Patient registration

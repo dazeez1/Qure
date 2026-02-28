@@ -14,6 +14,7 @@ export default defineConfig({
         login: resolve(__dirname, 'login.html'),
         'forgot-password': resolve(__dirname, 'forgot-password.html'),
         'reset-password': resolve(__dirname, 'reset-password.html'),
+        'accept-invite': resolve(__dirname, 'accept-invite.html'),
         '404': resolve(__dirname, '404.html'),
         'patient-dashboard': resolve(__dirname, 'patient/dashboard.html'),
         'staff-dashboard': resolve(__dirname, 'staff/dashboard.html'),

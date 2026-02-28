@@ -37,7 +37,13 @@ const clearError = (errorElementId) => {
   const errorElement = document.getElementById(errorElementId);
   if (errorElement) {
     errorElement.textContent = '';
-    errorElement.style.display = 'none';
+  }
+  
+  // Remove error class from input
+  const inputId = errorElementId.replace('-error', '');
+  const input = document.getElementById(inputId);
+  if (input) {
+    input.classList.remove('error');
   }
 };
 
@@ -48,7 +54,6 @@ const showError = (errorElementId, message) => {
   const errorElement = document.getElementById(errorElementId);
   if (errorElement) {
     errorElement.textContent = message;
-    errorElement.style.display = 'block';
   }
 
   // Add error class to input
