@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { hashPassword } from '../utils/password.js';
 import { generateResetToken } from '../utils/resetToken.js';
 import { isValidEmail, normalizeEmail } from '../utils/validation.js';
+import { getDashboardOverview } from '../services/dashboard.service.js';
+import { sendStaffInvitationEmail } from '../services/emailService.js';
 
 /**
  * Get All Staff
@@ -268,14 +270,50 @@ export const inviteStaff = async (req, res, next) => {
       },
     });
 
-    // Log invite link for development (no email sending yet)
+    // Generate invite link
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const inviteUrl = `${frontendUrl}/accept-invite?token=${inviteToken}`;
     
-    console.log('\n📧 Staff Invite Generated:');
-    console.log('   Email:', normalizedEmail);
-    console.log('   Name:', `${firstName} ${lastName}`);
-    console.log('   Role:', role);
+    // Get hospital name for email
+    const hospital = await prisma.hospital.findUnique({
+      where: { id: user.hospitalId },
+      select: { name: true },
+    });
+
+    const hospitalName = hospital?.name || 'Hospital';
+    const inviterName = `${user.firstName} ${user.lastName}`;
+
+    // Send invitation email
+    try {
+      console.log('\n📧 Sending staff invitation email...');
+      console.log('   To:', normalizedEmail);
+      console.log('   Name:', `${firstName} ${lastName}`);
+      console.log('   Role:', role);
+      
+      const emailResult = await sendStaffInvitationEmail(
+        normalizedEmail,
+        inviteUrl,
+        firstName.trim(),
+        inviterName,
+        hospitalName,
+        role,
+        role === 'STAFF' ? staffRole : null
+      );
+
+      if (emailResult.success) {
+        console.log('✅ Invitation email sent successfully!');
+        console.log('   Message ID:', emailResult.messageId);
+      } else {
+        console.error('❌ Failed to send invitation email:', emailResult.error);
+        // Don't fail the request - invite is still created
+        console.log('   Invite link (manual):', inviteUrl);
+      }
+    } catch (emailError) {
+      console.error('❌ Error sending invitation email:', emailError);
+      // Don't fail the request - invite is still created
+      console.log('   Invite link (manual):', inviteUrl);
+    }
+
     console.log('   Invite Link:', inviteUrl);
     console.log('   Expires:', expiresAt.toISOString());
     console.log('');
@@ -283,7 +321,7 @@ export const inviteStaff = async (req, res, next) => {
     // Return success
     res.status(201).json({
       success: true,
-      message: 'Staff invited successfully',
+      message: 'Staff invited successfully. Invitation email has been sent.',
     });
   } catch (error) {
     // Handle Prisma unique constraint errors
@@ -295,6 +333,56 @@ export const inviteStaff = async (req, res, next) => {
     }
     // Pass to error handler middleware
     next(error);
+  }
+};
+
+/**
+ * Get Staff Dashboard Overview
+ * GET /api/staff/dashboard-overview
+ *
+ * Thin controller that delegates all business logic to the dashboard service.
+ */
+export const getStaffDashboard = async (req, res) => {
+  try {
+    const user = req.user;
+
+    // Basic access control: only STAFF, ADMIN, or primary staff can access
+    if (
+      !user ||
+      (!['STAFF', 'ADMIN'].includes(user.role) && user.isPrimary !== true)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Staff or Admin privileges required.',
+      });
+    }
+
+    const hospitalId = user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No hospital associated with your account.',
+      });
+    }
+
+    const { departmentId, search } = req.query;
+
+    const dashboardData = await getDashboardOverview({
+      hospitalId,
+      departmentId,
+      search,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: dashboardData,
+    });
+  } catch (error) {
+    console.error('[Dashboard Error]', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 

@@ -47,6 +47,19 @@ enum PriorityLevel {
   URGENT
 }
 
+enum AnnouncementAudience {
+  PATIENT
+  STAFF
+  BOTH
+}
+
+enum AnnouncementPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 model WaitingArea {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   name       String
@@ -87,6 +100,7 @@ model Hospital {
   queueEntries        QueueEntry[]
   rooms               Room[]
   waitingAreas        WaitingArea[]
+  announcements       Announcement[]
 
   @@map("hospitals")
 }
@@ -116,6 +130,7 @@ model User {
   department   Department? @relation(fields: [departmentId], references: [id])
 
   assignedQueueEntries QueueEntry[]
+  createdAnnouncements Announcement[]
 
   passwordResetTokens PasswordResetToken[]
 
@@ -128,8 +143,10 @@ model User {
 model PasswordResetToken {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   token     String   @unique
-  userId    String   @db.ObjectId
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?  @db.ObjectId // Made optional to support patients
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patientId String?  @db.ObjectId // Added for patient password resets
+  patient   Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -188,6 +205,7 @@ model Patient {
 
   appointments Appointment[]
   queueEntries QueueEntry[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("patients")
 }
@@ -255,4 +273,21 @@ model Room {
 
   @@unique([hospitalId, departmentId, name])
   @@map("rooms")
+}
+
+model Announcement {
+  id          String              @id @default(auto()) @map("_id") @db.ObjectId
+  hospitalId  String              @db.ObjectId
+  hospital    Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  audience    AnnouncementAudience
+  title       String
+  content     String
+  priority    AnnouncementPriority @default(NORMAL)
+  isActive    Boolean             @default(true)
+  createdBy   String?             @db.ObjectId
+  creator     User?               @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@map("announcements")
 }

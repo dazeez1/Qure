@@ -1,0 +1,162 @@
+import { getDashboardOverview } from './dashboard.service.js';
+import { getDailyTrends, getPeakHours } from './analytics.service.js';
+
+/**
+ * Escape CSV field - handles commas, quotes, and newlines
+ * @param {string} field - Field value to escape
+ * @returns {string} - Escaped field value
+ */
+function escapeCsvField(field) {
+  if (field === null || field === undefined) {
+    return '';
+  }
+
+  const str = String(field);
+  
+  // If field contains comma, quote, or newline, wrap in quotes and escape quotes
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  
+  return str;
+}
+
+/**
+ * Generate hospital export as CSV string
+ * 
+ * @param {Object} params - Parameters object
+ * @param {string} params.hospitalId - Hospital ID (required)
+ * @param {number} params.days - Number of days for trends (default: 7)
+ * @returns {Promise<string>} - CSV string
+ */
+export async function generateHospitalExport({ hospitalId, days = 7 }) {
+  // Validate hospitalId
+  if (!hospitalId) {
+    throw new Error('hospitalId is required');
+  }
+
+  // Validate days
+  if (typeof days !== 'number' || days < 1 || days > 365) {
+    throw new Error('days must be a number between 1 and 365');
+  }
+
+  // Fetch all data in parallel
+  const [dashboard, dailyTrends, peakHours] = await Promise.all([
+    getDashboardOverview({ hospitalId }),
+    getDailyTrends({ hospitalId, days }),
+    getPeakHours({ hospitalId, days }),
+  ]);
+
+  // Build CSV string
+  const csvLines = [];
+
+  // Header
+  csvLines.push('=== Hospital Export ===');
+  csvLines.push('');
+
+  // Queue Preview Section
+  csvLines.push('--- Queue Preview ---');
+  csvLines.push('Ticket, Patient, Department, Status, Priority, Check-In Time');
+  
+  if (dashboard.queuePreview && dashboard.queuePreview.length > 0) {
+    dashboard.queuePreview.forEach((entry) => {
+      const ticket = escapeCsvField(entry.ticketNumber || '');
+      const patient = escapeCsvField(entry.patient?.fullName || 'Unknown');
+      const department = escapeCsvField(entry.department?.name || 'Unknown');
+      const status = escapeCsvField(entry.status || '');
+      const priority = escapeCsvField(entry.priority || '');
+      const checkInTime = entry.checkInTime 
+        ? escapeCsvField(new Date(entry.checkInTime).toLocaleString())
+        : '';
+      
+      csvLines.push(`${ticket}, ${patient}, ${department}, ${status}, ${priority}, ${checkInTime}`);
+    });
+  } else {
+    csvLines.push('No queue entries');
+  }
+  
+  csvLines.push('');
+  csvLines.push('');
+
+  // Doctor Load Summary Section
+  csvLines.push('--- Doctor Load Summary ---');
+  csvLines.push('Doctor, Current Active, Max Concurrent, Available');
+  
+  if (dashboard.doctorLoadSummary && dashboard.doctorLoadSummary.length > 0) {
+    dashboard.doctorLoadSummary.forEach((doctor) => {
+      const doctorName = escapeCsvField(
+        `${doctor.firstName || ''} ${doctor.lastName || ''}`.trim() || 'Unknown'
+      );
+      const currentActive = escapeCsvField(doctor.currentActivePatients || 0);
+      const maxConcurrent = escapeCsvField(doctor.maxConcurrentPatients || 0);
+      const available = escapeCsvField(
+        doctor.isAvailable && 
+        (doctor.currentActivePatients || 0) < (doctor.maxConcurrentPatients || 0)
+          ? 'Yes'
+          : 'No'
+      );
+      
+      csvLines.push(`${doctorName}, ${currentActive}, ${maxConcurrent}, ${available}`);
+    });
+  } else {
+    csvLines.push('No doctors found');
+  }
+  
+  csvLines.push('');
+  csvLines.push('');
+
+  // Waiting Areas Section
+  csvLines.push('--- Waiting Areas ---');
+  csvLines.push('Name, Capacity, Current Occupancy');
+  
+  if (dashboard.waitingAreaStats && dashboard.waitingAreaStats.length > 0) {
+    dashboard.waitingAreaStats.forEach((area) => {
+      const name = escapeCsvField(area.name || '');
+      const capacity = escapeCsvField(area.capacity || 0);
+      const occupancy = escapeCsvField(area.currentOccupancy || 0);
+      
+      csvLines.push(`${name}, ${capacity}, ${occupancy}`);
+    });
+  } else {
+    csvLines.push('No waiting areas found');
+  }
+  
+  csvLines.push('');
+  csvLines.push('');
+
+  // Daily Trends Section
+  csvLines.push('--- Daily Trends ---');
+  csvLines.push('Date, Count');
+  
+  if (dailyTrends.labels && dailyTrends.data && dailyTrends.labels.length > 0) {
+    for (let i = 0; i < dailyTrends.labels.length; i++) {
+      const date = escapeCsvField(dailyTrends.labels[i] || '');
+      const count = escapeCsvField(dailyTrends.data[i] || 0);
+      
+      csvLines.push(`${date}, ${count}`);
+    }
+  } else {
+    csvLines.push('No daily trends data');
+  }
+  
+  csvLines.push('');
+  csvLines.push('');
+
+  // Peak Hours Section
+  csvLines.push('--- Peak Hours ---');
+  csvLines.push('Hour, Count');
+  
+  if (peakHours.labels && peakHours.data && peakHours.labels.length > 0) {
+    for (let i = 0; i < peakHours.labels.length; i++) {
+      const hour = escapeCsvField(peakHours.labels[i] || '');
+      const count = escapeCsvField(peakHours.data[i] || 0);
+      
+      csvLines.push(`${hour}, ${count}`);
+    }
+  } else {
+    csvLines.push('No peak hours data');
+  }
+
+  // Join all lines with newlines
+  return csvLines.join('\n');
+}

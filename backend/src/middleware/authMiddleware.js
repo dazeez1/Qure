@@ -55,6 +55,15 @@ export const authenticate = async (req, res, next) => {
       throw error;
     }
 
+    // SECURITY: Reject patient tokens - this middleware is for staff/admin only
+    // Patient tokens have patientId and type: 'PATIENT', not id
+    if (decoded.patientId || decoded.type === 'PATIENT' || !decoded.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid authentication token. Please log in again.',
+      });
+    }
+
     // Fetch user from database to ensure user still exists
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },

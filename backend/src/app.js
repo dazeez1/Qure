@@ -10,6 +10,8 @@ import staffRoutes from './routes/staffRoutes.js';
 import settingsRoutes from './routes/settingsRoutes.js';
 import roomRoutes from './routes/roomRoutes.js';
 import waitingAreaRoutes from './routes/waitingAreaRoutes.js';
+import announcementRoutes from './routes/announcementRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
@@ -35,9 +37,11 @@ app.use('/api/patient', patientRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/queue', queueRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/staff/analytics', analyticsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/waiting-areas', waitingAreaRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

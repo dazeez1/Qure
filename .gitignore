@@ -7,14 +7,10 @@ yarn-error.log*
 lerna-debug.log*
 
 #Documentation
-Implementation.md
-Rule.md
-BRANCH_PROTECTION_SETUP.md
-REGISTRATION_SETUP.md
-SETUP_INSTRUCTIONS.md
 .DS_Store
 **/.DS_Store
 .cursor/rules/coding-guidelines.mdc
+
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

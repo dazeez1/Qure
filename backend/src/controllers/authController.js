@@ -8,7 +8,7 @@ import {
   normalizeEmail,
 } from '../utils/validation.js';
 import { generateAccessCode } from '../utils/accessCode.js';
-import { sendAccessCodeEmail, sendPasswordResetEmail } from '../utils/email.js';
+import { sendAccessCodeEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { generateResetToken } from '../utils/resetToken.js';
 
 /**
@@ -487,7 +487,7 @@ export const forgotPassword = async (req, res, next) => {
       });
     }
 
-    // Find user by email
+    // Find user by email (check both User and Patient tables)
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: {
@@ -497,14 +497,26 @@ export const forgotPassword = async (req, res, next) => {
       },
     });
 
+    // Also check Patient table
+    const patient = await prisma.patient.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+      },
+    });
+
     console.log('🔍 Forgot Password Request:', {
       email: normalizedEmail,
       userFound: !!user,
+      patientFound: !!patient,
       userId: user?.id,
+      patientId: patient?.id,
     });
 
     // Always return success message (security best practice - don't reveal if email exists)
-    // But only send email if user exists
+    // But only send email if user or patient exists
     if (user) {
       console.log('✅ User found, generating reset token...');
 
@@ -541,14 +553,94 @@ export const forgotPassword = async (req, res, next) => {
       // Send reset email
       try {
         console.log('📧 Attempting to send password reset email...');
-        await sendPasswordResetEmail(user.email, resetToken, user.firstName);
-        console.log('✅ Password reset email sent successfully!');
+        console.log('   To:', user.email);
+        
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+        
+        const emailResult = await sendPasswordResetEmail(user.email, resetLink, user.firstName);
+        
+        if (emailResult.success) {
+          console.log('✅ Password reset email sent successfully!');
+          console.log('   Message ID:', emailResult.messageId);
+          console.log('   Check Brevo dashboard or email inbox for confirmation');
+        } else {
+          console.error('❌ Failed to send password reset email:', emailResult.error);
+        }
       } catch (emailError) {
         console.error('❌ Error sending password reset email:', emailError);
+        console.error('   Error details:', {
+          message: emailError.message,
+          code: emailError.code,
+          response: emailError.response,
+        });
+        // Don't fail the request if email fails - token is still created
+        // But log the error so we can debug
+      }
+    } else if (patient) {
+      // Handle patient password reset
+      console.log('✅ Patient found, generating reset token...');
+
+      // Invalidate any existing reset tokens for this patient
+      await prisma.passwordResetToken.updateMany({
+        where: {
+          patientId: patient.id,
+          used: false,
+        },
+        data: {
+          used: true,
+        },
+      });
+
+      // Generate reset token
+      const resetToken = generateResetToken();
+      console.log('🔑 Reset token generated:', resetToken.substring(0, 10) + '...');
+
+      // Calculate expiration (1 hour from now)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1);
+
+      // Save reset token to database (for patient)
+      await prisma.passwordResetToken.create({
+        data: {
+          token: resetToken,
+          patientId: patient.id,
+          expiresAt,
+        },
+      });
+
+      console.log('💾 Reset token saved to database (patient)');
+
+      // Send reset email
+      try {
+        console.log('📧 Attempting to send password reset email to patient...');
+        console.log('   To:', patient.email);
+        
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+        
+        // Extract first name from fullName
+        const firstName = patient.fullName.split(' ')[0] || 'Patient';
+        const emailResult = await sendPasswordResetEmail(patient.email, resetLink, firstName);
+        
+        if (emailResult.success) {
+          console.log('✅ Password reset email sent successfully to patient!');
+          console.log('   Message ID:', emailResult.messageId);
+          console.log('   Check Brevo dashboard or email inbox for confirmation');
+        } else {
+          console.error('❌ Failed to send password reset email to patient:', emailResult.error);
+        }
+      } catch (emailError) {
+        console.error('❌ Error sending password reset email to patient:', emailError);
+        console.error('   Error details:', {
+          message: emailError.message,
+          code: emailError.code,
+          response: emailError.response,
+        });
         // Don't fail the request if email fails - token is still created
       }
     } else {
-      console.log('ℹ️  User not found (email does not exist in database)');
+      console.log('ℹ️  User/Patient not found (email does not exist in database)');
       console.log('   (This is normal - we return success for security)');
     }
 
@@ -587,11 +679,17 @@ export const resetPassword = async (req, res, next) => {
       });
     }
 
-    // Find reset token in database
+    // Find reset token in database (check both user and patient)
     const resetTokenRecord = await prisma.passwordResetToken.findUnique({
       where: { token },
       include: {
         user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        patient: {
           select: {
             id: true,
             email: true,
@@ -623,16 +721,36 @@ export const resetPassword = async (req, res, next) => {
       });
     }
 
+    // Check if user or patient exists
+    const isUser = !!resetTokenRecord.user;
+    const isPatient = !!resetTokenRecord.patient;
+
+    if (!isUser && !isPatient) {
+      return res.status(400).json({
+        success: false,
+        message: 'User or patient associated with this token not found',
+      });
+    }
+
     // Hash new password
     const hashedPassword = await hashPassword(password);
 
-    // Update user password
-    await prisma.user.update({
-      where: { id: resetTokenRecord.userId },
-      data: {
-        password: hashedPassword,
-      },
-    });
+    // Update password (for user or patient)
+    if (isUser) {
+      await prisma.user.update({
+        where: { id: resetTokenRecord.user.id },
+        data: {
+          password: hashedPassword,
+        },
+      });
+    } else if (isPatient) {
+      await prisma.patient.update({
+        where: { id: resetTokenRecord.patient.id },
+        data: {
+          password: hashedPassword,
+        },
+      });
+    }
 
     // Mark token as used
     await prisma.passwordResetToken.update({

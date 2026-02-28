@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticatePatient } from '../middleware/patientAuthMiddleware.js';
 import { getPatientAppointments } from '../controllers/appointmentController.js';
 import { getPatientQueueStatus } from '../controllers/queueController.js';
+import { getAnnouncements } from '../controllers/announcementController.js';
 
 const router = express.Router();
 
@@ -34,6 +35,13 @@ router.get('/appointments', getPatientAppointments);
  * Get patient's active queue status (Patient only)
  */
 router.get('/queue-status', getPatientQueueStatus);
+
+/**
+ * GET /api/patient/announcements
+ * Get announcements for patients
+ * Access: Authenticated patients
+ */
+router.get('/announcements', getAnnouncements);
 
 export default router;
 

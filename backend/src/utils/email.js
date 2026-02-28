@@ -4,36 +4,58 @@ let transporter = null;
 
 /**
  * Initialize email transporter (lazy initialization)
- * Uses Ethereal Email for development/testing
+ * Uses Brevo SMTP for production, falls back to Ethereal for development if Brevo not configured
  */
 async function getTransporter() {
   if (transporter) {
     return transporter;
   }
 
+  // Check if Brevo credentials are configured
+  const smtpUser = process.env.BREVO_SMTP_USER;
+  const smtpPass = process.env.BREVO_SMTP_PASS;
+
+  if (smtpUser && smtpPass) {
+    // Use Brevo SMTP
+    const smtpHost = process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com';
+    const smtpPort = parseInt(process.env.BREVO_SMTP_PORT || '587', 10);
+
+    transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: false, // true for 465, false for other ports
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    console.log('📧 Brevo SMTP Transporter Initialized');
+    return transporter;
+  }
+
+  // Fallback to Ethereal Email for development/testing
   try {
-    // Create a test account for Ethereal Email (development only)
     const testAccount = await nodemailer.createTestAccount();
 
-    // Create transporter using the test account
     transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',
       port: 587,
-      secure: false, // true for 465, false for other ports
+      secure: false,
       auth: {
         user: testAccount.user,
         pass: testAccount.pass,
       },
     });
 
-    console.log('📧 Ethereal Email Test Account Created');
+    console.log('📧 Ethereal Email Test Account Created (Brevo not configured)');
     console.log('   User:', testAccount.user);
     console.log('   Pass:', testAccount.pass);
     console.log('   Use the Preview URL from console to view emails');
 
     return transporter;
   } catch (error) {
-    console.error('Error creating Ethereal test account:', error);
+    console.error('Error creating email transporter:', error);
     throw error;
   }
 }
@@ -51,7 +73,7 @@ export const sendAccessCodeEmail = async (email, accessCode, hospitalName) => {
 
     // Email content
     const mailOptions = {
-      from: '"Qure" <no-reply@qure.com>',
+      from: process.env.BREVO_SMTP_FROM || '"Qure" <no-reply@qure.com>',
       to: email,
       subject: 'Hospital Access Code',
       text: `Your hospital access code for ${hospitalName} is: ${accessCode}`,
@@ -107,7 +129,7 @@ export const sendPasswordResetEmail = async (email, resetToken, firstName = 'Use
 
     // Email content
     const mailOptions = {
-      from: '"Qure" <no-reply@qure.com>',
+      from: process.env.BREVO_SMTP_FROM || '"Qure" <no-reply@qure.com>',
       to: email,
       subject: 'Reset Your Password',
       text: `Hello ${firstName},\n\nYou requested to reset your password. Click the link below to reset it:\n\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, please ignore this email.\n\nBest regards,\nThe Qure Team`,
