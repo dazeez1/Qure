@@ -10,7 +10,7 @@ const DEFAULT_ROUTE = 'dashboard';
 const ROUTE_TO_VIEW = {
   'dashboard': 'dashboard',
   'queues': 'queue',
-  'waiting-area': 'coming-soon',
+  'waiting-area': 'waiting-area',
   'appointments': 'coming-soon',
   'settings': 'settings'
 };
@@ -54,6 +54,18 @@ async function loadView(route) {
       }).catch(err => {
         console.error('Failed to load queue page:', err);
         // Still dispatch event even if import fails
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      });
+    } else if (route === 'waiting-area') {
+      // Import waiting area module
+      import('../pages/staff/waitingArea.js').then(() => {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      }).catch(err => {
+        console.error('Failed to load waiting area page:', err);
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
         }, 100);
