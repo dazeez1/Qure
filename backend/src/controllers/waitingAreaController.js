@@ -182,9 +182,49 @@ export const getWaitingAreas = async (req, res, next) => {
       },
     });
 
+    // Calculate occupancy for each waiting area using efficient groupBy query
+    const waitingAreaOccupancyByArea = await prisma.queueEntry.groupBy({
+      by: ['waitingAreaId'],
+      _count: {
+        id: true,
+      },
+      where: {
+        hospitalId: user.hospitalId,
+        waitingAreaId: {
+          not: null,
+        },
+        status: {
+          in: ['WAITING', 'TRIAGE', 'CALLED'],
+        },
+      },
+    });
+
+    // Build occupancy map for quick lookup
+    const occupancyMap = new Map();
+    waitingAreaOccupancyByArea.forEach((row) => {
+      if (row.waitingAreaId) {
+        occupancyMap.set(row.waitingAreaId, row._count.id || 0);
+      }
+    });
+
+    // Add occupancy to each waiting area
+    const waitingAreasWithOccupancy = waitingAreas.map((area) => ({
+      id: area.id,
+      name: area.name,
+      floor: area.floor,
+      facility: area.facility,
+      capacity: area.capacity,
+      isActive: area.isActive,
+      isDefault: area.isDefault,
+      hospitalId: area.hospitalId,
+      createdAt: area.createdAt,
+      updatedAt: area.updatedAt,
+      currentOccupancy: occupancyMap.get(area.id) || 0,
+    }));
+
     res.status(200).json({
       success: true,
-      data: { waitingAreas },
+      data: { waitingAreas: waitingAreasWithOccupancy },
     });
   } catch (error) {
     next(error);
