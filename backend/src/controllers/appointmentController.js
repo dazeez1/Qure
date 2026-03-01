@@ -412,3 +412,225 @@ export const cancelAppointment = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Mark appointment as no-show (Staff only)
+ * PATCH /api/staff/appointments/:id/no-show
+ * 
+ * Only BOOKED appointments can be marked as no-show.
+ * Staff can mark any appointment in their hospital as no-show.
+ */
+export const markAppointmentNoShow = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (!user || !user.hospitalId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. Please log in.',
+      });
+    }
+
+    const { id } = req.params;
+
+    // Find appointment
+    const appointment = await prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found.',
+      });
+    }
+
+    // Verify appointment belongs to staff's hospital
+    if (appointment.hospitalId !== user.hospitalId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to modify this appointment.',
+      });
+    }
+
+    // Verify appointment can be marked as no-show (only BOOKED status)
+    if (appointment.status !== 'BOOKED') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot mark appointment as no-show. Current status is ${appointment.status}. Only BOOKED appointments can be marked as no-show.`,
+      });
+    }
+
+    // Update appointment status to NO_SHOW
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id },
+      data: {
+        status: 'NO_SHOW',
+      },
+      include: {
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Appointment marked as no-show successfully.',
+      data: {
+        appointment: {
+          id: updatedAppointment.id,
+          appointmentDate: updatedAppointment.appointmentDate,
+          status: updatedAppointment.status,
+          reason: updatedAppointment.reason,
+          hospital: updatedAppointment.hospital,
+          department: updatedAppointment.department,
+          updatedAt: updatedAppointment.updatedAt,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Cancel appointment (Staff override)
+ * PATCH /api/staff/appointments/:id/cancel
+ * 
+ * Staff can cancel any BOOKED appointment in their hospital.
+ */
+export const cancelAppointmentStaff = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (!user || !user.hospitalId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. Please log in.',
+      });
+    }
+
+    const { id } = req.params;
+
+    // Find appointment
+    const appointment = await prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found.',
+      });
+    }
+
+    // Verify appointment belongs to staff's hospital
+    if (appointment.hospitalId !== user.hospitalId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to cancel this appointment.',
+      });
+    }
+
+    // Verify appointment can be cancelled (only BOOKED status)
+    if (appointment.status !== 'BOOKED') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot cancel appointment with status: ${appointment.status}. Only BOOKED appointments can be cancelled.`,
+      });
+    }
+
+    // Check if appointment has an active queue entry
+    const existingQueueEntry = await prisma.queueEntry.findFirst({
+      where: {
+        appointmentId: id,
+        status: {
+          notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+        },
+      },
+    });
+
+    if (existingQueueEntry) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot cancel appointment. Patient has an active queue entry. Please handle the queue entry first.',
+      });
+    }
+
+    // Update appointment status to CANCELLED
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+      },
+      include: {
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Appointment cancelled successfully.',
+      data: {
+        appointment: {
+          id: updatedAppointment.id,
+          appointmentDate: updatedAppointment.appointmentDate,
+          status: updatedAppointment.status,
+          reason: updatedAppointment.reason,
+          hospital: updatedAppointment.hospital,
+          department: updatedAppointment.department,
+          updatedAt: updatedAppointment.updatedAt,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

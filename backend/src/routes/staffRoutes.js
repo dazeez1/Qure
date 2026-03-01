@@ -1,10 +1,11 @@
 import express from 'express';
 import { authenticate, requireRole, requireStaffOrAdmin, requireStaffVerified } from '../middleware/authMiddleware.js';
 import { verifyAccessCode } from '../controllers/authController.js';
-import { getStaffQueue, getDashboardSummary } from '../controllers/queueController.js';
+import { getStaffQueue, getDashboardSummary, checkInToQueueStaff } from '../controllers/queueController.js';
 import { getStaffDashboard } from '../controllers/staffController.js';
 import { exportHospitalData } from '../controllers/exportController.js';
 import { getStaffAppointmentsController } from '../controllers/staffAppointmentController.js';
+import { markAppointmentNoShow, cancelAppointmentStaff } from '../controllers/appointmentController.js';
 
 const router = express.Router();
 
@@ -40,6 +41,15 @@ router.get('/dashboard-summary', getDashboardSummary);
 router.get('/queue', getStaffQueue);
 
 /**
+ * POST /api/staff/queue/check-in
+ * Check in patient to queue (Staff only)
+ * Body: { appointmentId: string }
+ * Access: Authenticated staff/admin users (verified)
+ * Protected by: authenticate → requireStaffOrAdmin → requireStaffVerified
+ */
+router.post('/queue/check-in', checkInToQueueStaff);
+
+/**
  * GET /api/staff/export
  * Export hospital data as CSV
  * Query params: days (optional, default 7)
@@ -55,6 +65,22 @@ router.get('/export', exportHospitalData);
  * Protected by: authenticate → requireStaffOrAdmin → requireStaffVerified
  */
 router.get('/appointments', getStaffAppointmentsController);
+
+/**
+ * PATCH /api/staff/appointments/:id/no-show
+ * Mark appointment as no-show (Staff only)
+ * Access: Authenticated staff/admin users (verified)
+ * Protected by: authenticate → requireStaffOrAdmin → requireStaffVerified
+ */
+router.patch('/appointments/:id/no-show', markAppointmentNoShow);
+
+/**
+ * PATCH /api/staff/appointments/:id/cancel
+ * Cancel appointment (Staff override)
+ * Access: Authenticated staff/admin users (verified)
+ * Protected by: authenticate → requireStaffOrAdmin → requireStaffVerified
+ */
+router.patch('/appointments/:id/cancel', cancelAppointmentStaff);
 
 export default router;
 

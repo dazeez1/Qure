@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { apiGet, apiPost, apiPatch } from '../../utils/apiClient.js';
+import { apiGet, apiPost, apiPatch, createRequestController, cancelRequest } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated, getAuthToken } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -79,6 +79,65 @@ window.addEventListener('view-loaded', async (event) => {
 // DASHBOARD VIEW INITIALIZATION
 // ============================================
 
+/**
+ * Update URL parameters with current filters
+ * @param {string} departmentId - Current department filter
+ * @param {string} search - Current search filter
+ */
+function updateDashboardURLParams(departmentId = '', search = '') {
+  const params = new URLSearchParams();
+  
+  if (departmentId) params.set('departmentId', departmentId);
+  if (search) params.set('search', search);
+  
+  // Update hash without triggering navigation
+  const newHash = `dashboard${params.toString() ? `?${params.toString()}` : ''}`;
+  if (window.location.hash !== `#${newHash}`) {
+    window.history.replaceState(null, '', `#${newHash}`);
+  }
+}
+
+/**
+ * Read URL parameters and return filters
+ * @returns {Object} - { departmentId, search }
+ */
+function readDashboardURLParams() {
+  const hash = window.location.hash;
+  if (!hash || !hash.startsWith('#dashboard')) {
+    return { departmentId: '', search: '' };
+  }
+  
+  const hashParts = hash.split('?');
+  if (hashParts.length < 2) {
+    return { departmentId: '', search: '' };
+  }
+  
+  const params = new URLSearchParams(hashParts[1]);
+  
+  return {
+    departmentId: params.get('departmentId') || '',
+    search: params.get('search') || ''
+  };
+}
+
+/**
+ * Apply filters from URL to UI elements
+ * @param {Object} filters - Filters to apply
+ */
+function applyDashboardFiltersToUI(filters) {
+  // Apply department filter
+  const departmentSelect = document.getElementById('department-select');
+  if (departmentSelect && filters.departmentId) {
+    departmentSelect.value = filters.departmentId;
+  }
+  
+  // Apply search input
+  const searchInput = document.getElementById('dashboard-search-input');
+  if (searchInput && filters.search) {
+    searchInput.value = filters.search;
+  }
+}
+
 async function initializeDashboard() {
   // Double-check verification status before making any API calls
   const currentUser = getAuthUser();
@@ -94,6 +153,14 @@ async function initializeDashboard() {
   // Populate department dropdown on load
   await populateDepartments();
 
+  // Read filters from URL params
+  const urlFilters = readDashboardURLParams();
+  
+  // Apply URL filters to UI
+  if (urlFilters.departmentId || urlFilters.search) {
+    applyDashboardFiltersToUI(urlFilters);
+  }
+
   // Wire up search input with debounce
   setupSearchInput();
 
@@ -103,21 +170,30 @@ async function initializeDashboard() {
   // Setup add staff button (same logic as invite staff)
   setupAddStaffButton();
 
-  // Fetch dashboard data on initialization
-  await fetchDashboardSummary();
+  // Fetch dashboard data on initialization (with URL params if they exist)
+  const departmentFilter = document.getElementById('department-select');
+  const searchInput = document.getElementById('dashboard-search-input');
+  const depId = (urlFilters.departmentId || (departmentFilter && departmentFilter.value)) || '';
+  const search = (urlFilters.search || (searchInput && searchInput.value.trim())) || '';
+  
+  await fetchDashboardSummary(depId, search);
   
   // Fetch queue entries separately
-  await fetchQueueEntries();
+  await fetchQueueEntries(depId, search);
   
   // Initialize announcement tabs and create button (immediately, no delay)
   initializeAnnouncementTabs();
   setupAnnouncementCreateButton();
 
   // Set up auto-refresh every 15 seconds (keeps filters applied)
-  const departmentFilter = document.getElementById('department-select');
-  const searchInput = document.getElementById('dashboard-search-input');
+  // Reuse departmentFilter and searchInput variables already declared above
   
-  setInterval(() => {
+  // Store interval ID for cleanup
+  if (window.dashboardInterval) {
+    clearInterval(window.dashboardInterval);
+  }
+  
+  window.dashboardInterval = setInterval(() => {
     // Check verification status before each auto-refresh
     const refreshUser = getAuthUser();
     if (refreshUser && refreshUser.role === 'STAFF' && !refreshUser.isPrimary && !refreshUser.isVerified) {
@@ -134,23 +210,43 @@ async function initializeDashboard() {
   }, 15000);
 }
 
+// Track debounced search timeout for cleanup
+let dashboardSearchTimeout = null;
+
 /**
- * Debounce utility function
+ * Debounce utility function (cancelable)
  * @param {Function} func - Function to debounce
  * @param {number} wait - Wait time in milliseconds
- * @returns {Function} - Debounced function
+ * @returns {Function} - Debounced function with cancel method
  */
 function debounce(func, wait) {
   let timeout;
-  return function executedFunction(...args) {
+  const debounced = function executedFunction(...args) {
     const later = () => {
       clearTimeout(timeout);
+      timeout = null;
       func(...args);
     };
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
+    // Store timeout reference for cleanup
+    if (func.name === 'executedFunction' || arguments.callee.caller?.name === 'setupSearchInput') {
+      dashboardSearchTimeout = timeout;
+    }
   };
+  // Add cancel method
+  debounced.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+      dashboardSearchTimeout = null;
+    }
+  };
+  return debounced;
 }
+
+// Store debounced search function reference for cleanup
+let debouncedSearchHandler = null;
 
 /**
  * Setup search input with debounce
@@ -161,13 +257,22 @@ function setupSearchInput() {
   
   if (!searchInput || !departmentSelect) return;
   
-  searchInput.addEventListener('input', debounce(() => {
+  // Remove old listener if exists
+  if (debouncedSearchHandler) {
+    searchInput.removeEventListener('input', debouncedSearchHandler);
+    debouncedSearchHandler.cancel?.();
+  }
+  
+  // Create new debounced handler
+  debouncedSearchHandler = debounce(() => {
     const value = searchInput.value.trim();
     const depId = departmentSelect.value || '';
     
     fetchDashboardSummary(depId, value);
     fetchQueueEntries(depId, value);
-  }, 400));
+  }, 400);
+  
+  searchInput.addEventListener('input', debouncedSearchHandler);
 }
 
 /**
@@ -221,6 +326,63 @@ async function populateDepartments() {
  * @param {string} departmentId - Optional department filter
  * @param {string} search - Optional search query
  */
+/**
+ * Show skeleton loader in dashboard metrics
+ */
+function showDashboardMetricsSkeleton() {
+  const metricsContainer = document.querySelector('.dashboard-metrics');
+  if (!metricsContainer) return;
+  
+  metricsContainer.innerHTML = `
+    <div class="metric-card">
+      <div class="skeleton skeleton-metric"></div>
+    </div>
+    <div class="metric-card">
+      <div class="skeleton skeleton-metric"></div>
+    </div>
+    <div class="metric-card">
+      <div class="skeleton skeleton-metric"></div>
+    </div>
+    <div class="metric-card">
+      <div class="skeleton skeleton-metric"></div>
+    </div>
+  `;
+}
+
+/**
+ * Show skeleton loader in dashboard queue table
+ */
+function showDashboardQueueSkeleton() {
+  const queueTableBody = document.querySelector('#dashboard-queue-table-body');
+  if (!queueTableBody) return;
+  
+  const skeletonRows = 8; // Show 8 skeleton rows for dashboard preview
+  const fragment = document.createDocumentFragment();
+  
+  for (let i = 0; i < skeletonRows; i++) {
+    const row = document.createElement('tr');
+    row.className = 'skeleton-row';
+    row.innerHTML = `
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-short"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-medium"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-badge"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-short"></div>
+      </td>
+    `;
+    fragment.appendChild(row);
+  }
+  
+  queueTableBody.innerHTML = '';
+  queueTableBody.appendChild(fragment);
+}
+
 async function fetchDashboardSummary(departmentId = '', search = '') {
   // Check verification status before making API call
   const currentUser = getAuthUser();
@@ -230,6 +392,9 @@ async function fetchDashboardSummary(departmentId = '', search = '') {
     return;
   }
 
+  // Show skeleton loader
+  showDashboardMetricsSkeleton();
+
   try {
     const query = new URLSearchParams();
     if (departmentId) query.append('departmentId', departmentId);
@@ -238,7 +403,13 @@ async function fetchDashboardSummary(departmentId = '', search = '') {
     const queryString = query.toString();
     const endpoint = `/staff/dashboard${queryString ? `?${queryString}` : ''}`;
     
-    const response = await apiGet(endpoint);
+    // Cancel previous request if exists
+    cancelRequest('dashboard-summary');
+    
+    // Create new controller for this request
+    const controller = createRequestController('dashboard-summary');
+    
+    const response = await apiGet(endpoint, { signal: controller.signal });
     const result = await response.json();
 
     if (!response.ok || !result.success) {
@@ -256,6 +427,11 @@ async function fetchDashboardSummary(departmentId = '', search = '') {
     renderHospitalName(data.hospitalName);
     // Queue table is handled separately by fetchQueueEntries()
   } catch (error) {
+    // Ignore aborted requests
+    if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
+      return; // Request was cancelled, don't show error
+    }
+    
     // Check if it's a verification error
     if (error.message?.includes('access code') || error.message?.includes('Access denied')) {
       // Redirect to verify access page without showing toast
@@ -366,6 +542,9 @@ async function fetchQueueEntries(departmentId = '', search = '') {
     return;
   }
 
+  // Show skeleton loader
+  showDashboardQueueSkeleton();
+
   try {
     const query = new URLSearchParams();
     if (departmentId) query.append('departmentId', departmentId);
@@ -377,7 +556,13 @@ async function fetchQueueEntries(departmentId = '', search = '') {
     const queryString = query.toString();
     const endpoint = `/staff/queue${queryString ? `?${queryString}` : ''}`;
     
-    const response = await apiGet(endpoint);
+    // Cancel previous request if exists
+    cancelRequest('dashboard-queue');
+    
+    // Create new controller for this request
+    const controller = createRequestController('dashboard-queue');
+    
+    const response = await apiGet(endpoint, { signal: controller.signal });
     const result = await response.json();
 
     if (!response.ok || !result.success) {
@@ -393,6 +578,11 @@ async function fetchQueueEntries(departmentId = '', search = '') {
     // Response structure: { success: true, data: { queueEntries: [...], pagination: {...} } }
     renderQueueTable(result.data);
   } catch (error) {
+    // Ignore aborted requests
+    if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
+      return; // Request was cancelled, don't show error
+    }
+    
     // Check if it's a verification error
     if (error.message?.includes('access code') || error.message?.includes('Access denied')) {
       // Redirect to verify access page without showing toast
@@ -416,32 +606,31 @@ function renderQueueTable(data) {
   // Response structure: { success: true, data: { queueEntries: [...], pagination: {...} } }
   const entries = data.queueEntries || [];
 
+  // Use DocumentFragment for smooth updates (no flicker)
+  const fragment = document.createDocumentFragment();
+
   if (!entries || entries.length === 0) {
-    tbody.innerHTML = `
-      <tr class="empty-queue-row">
-        <td colspan="6" class="empty-queue-message">No queue entries</td>
-      </tr>
-    `;
-    return;
-  }
+    const emptyRow = document.createElement('tr');
+    emptyRow.className = 'empty-queue-row';
+    emptyRow.innerHTML = `<td colspan="6" class="empty-queue-message">No queue entries</td>`;
+    fragment.appendChild(emptyRow);
+  } else {
+    entries.forEach(entry => {
+      const patientName = entry.patient?.fullName || 'Unknown';
+      const departmentName = entry.department?.name || 'Unknown';
+      const ticketNumber = entry.ticketNumber || '-';
+      const status = entry.status || 'WAITING';
+      
+      // Calculate wait time (minutes since checkInTime)
+      const waitTime = entry.checkInTime 
+        ? Math.floor((new Date() - new Date(entry.checkInTime)) / 60000)
+        : 0;
 
-  tbody.innerHTML = entries.map(entry => {
-    const patientName = entry.patient?.fullName || 'Unknown';
-    const departmentName = entry.department?.name || 'Unknown';
-    const ticketNumber = entry.ticketNumber || '-';
-    const status = entry.status || 'WAITING';
-    
-    // Calculate wait time (minutes since checkInTime)
-    const waitTime = entry.checkInTime 
-      ? Math.floor((new Date() - new Date(entry.checkInTime)) / 60000)
-      : 0;
+      // Status badge styling
+      const statusClass = status.toLowerCase().replace('_', '-');
+      const statusLabel = status.replace('_', ' ');
 
-    // Status badge styling
-    const statusClass = status.toLowerCase().replace('_', '-');
-    const statusLabel = status.replace('_', ' ');
-
-    return `
-      <tr>
+      const rowHTML = `
         <td>${escapeHtml(patientName)}</td>
         <td>${escapeHtml(ticketNumber)}</td>
         <td>${escapeHtml(departmentName)}</td>
@@ -452,9 +641,17 @@ function renderQueueTable(data) {
             <span class="material-symbols-outlined">more_vert</span>
           </button>
         </td>
-      </tr>
-    `;
-  }).join('');
+      `;
+      
+      const row = document.createElement('tr');
+      row.innerHTML = rowHTML;
+      fragment.appendChild(row);
+    });
+  }
+
+  // Clear and update table in one operation (no flicker)
+  tbody.innerHTML = '';
+  tbody.appendChild(fragment);
 }
 
 /**
@@ -714,6 +911,39 @@ function setupAnnouncementCreateButton() {
     textarea.value = '';
   });
 }
+
+// Cleanup function for SPA navigation
+function cleanupDashboard() {
+  if (window.dashboardInterval) {
+    clearInterval(window.dashboardInterval);
+    window.dashboardInterval = null;
+  }
+  
+  // Cancel any pending requests
+  cancelRequest('dashboard-summary');
+  cancelRequest('dashboard-queue');
+  
+  // Clear search timeout
+  if (dashboardSearchTimeout) {
+    clearTimeout(dashboardSearchTimeout);
+    dashboardSearchTimeout = null;
+  }
+  
+  // Cancel debounced search handler
+  if (debouncedSearchHandler) {
+    debouncedSearchHandler.cancel?.();
+    debouncedSearchHandler = null;
+  }
+  
+  // Remove search input listener
+  const searchInput = document.getElementById('dashboard-search-input');
+  if (searchInput && debouncedSearchHandler) {
+    searchInput.removeEventListener('input', debouncedSearchHandler);
+  }
+}
+
+// Export cleanup function for SPA navigation
+export { cleanupDashboard };
 
 // Note: Verification check is now done at the top of the file
 // and in each API call function to prevent unnecessary API calls

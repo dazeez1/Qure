@@ -3,7 +3,7 @@
  * Handles appointment listing, filtering, and details display
  */
 
-import { apiGet } from '../../utils/apiClient.js';
+import { apiGet, apiPost, apiPatch, createRequestController, cancelRequest } from '../../utils/apiClient.js';
 import { isAuthenticated, getAuthUser } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -13,6 +13,7 @@ let appointmentsState = [];
 let selectedAppointmentId = null;
 let currentPage = 1;
 let currentFilters = {};
+let searchTimeout = null; // Global timeout for cleanup
 
 // Store handlers for cleanup on re-initialization
 let dateRangeClickHandler = null;
@@ -23,14 +24,56 @@ let departmentChangeHandler = null;
 let searchInputHandler = null;
 let searchKeypressHandler = null;
 let searchBtnHandler = null;
-let searchTimeout = null;
 
 /**
  * Fetch appointments from API
  * @param {Object} filters - Filter parameters
  * @param {number} page - Page number
  */
+/**
+ * Show skeleton loader in appointments table
+ */
+function showAppointmentsSkeleton() {
+  const tbody = document.getElementById('appointments-table-body');
+  if (!tbody) return;
+  
+  const skeletonRows = 10; // Show 10 skeleton rows
+  const fragment = document.createDocumentFragment();
+  
+  for (let i = 0; i < skeletonRows; i++) {
+    const row = document.createElement('tr');
+    row.className = 'skeleton-row';
+    row.innerHTML = `
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-medium"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-short"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-medium"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-medium"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-badge"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-short"></div>
+      </td>
+    `;
+    fragment.appendChild(row);
+  }
+  
+  tbody.innerHTML = '';
+  tbody.appendChild(fragment);
+}
+
 async function fetchAppointments(filters = {}, page = 1) {
+  // Show skeleton loader
+  showAppointmentsSkeleton();
+  
   try {
     const user = getAuthUser();
     if (!user || !user.hospitalId) {
@@ -55,7 +98,13 @@ async function fetchAppointments(filters = {}, page = 1) {
     const queryString = params.toString();
     const endpoint = `/staff/appointments${queryString ? `?${queryString}` : ''}`;
 
-    const response = await apiGet(endpoint);
+    // Cancel previous request if exists
+    cancelRequest('appointments-fetch');
+    
+    // Create new controller for this request
+    const controller = createRequestController('appointments-fetch');
+    
+    const response = await apiGet(endpoint, { signal: controller.signal });
     const result = await response.json();
 
     if (!response.ok || !result.success) {
@@ -66,12 +115,32 @@ async function fetchAppointments(filters = {}, page = 1) {
     appointmentsState = result.data.appointments || [];
     currentPage = page;
     currentFilters = filters;
+    
+    // Update URL with current filters
+    updateURLParams(filters, page);
+
+    // Clear selection when page changes (selected appointment might not be on new page)
+    if (selectedAppointmentId) {
+      const stillExists = appointmentsState.some(apt => apt.id === selectedAppointmentId);
+      if (!stillExists) {
+        selectedAppointmentId = null;
+        const sidebar = document.getElementById('appointment-details-sidebar');
+        const contentContainer = document.querySelector('.appointments-content');
+        if (sidebar) sidebar.classList.remove('visible');
+        if (contentContainer) contentContainer.classList.remove('sidebar-visible');
+      }
+    }
 
     // Render
     renderAppointments();
     renderPagination(result.data.pagination);
 
   } catch (error) {
+    // Ignore aborted requests
+    if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
+      return; // Request was cancelled, don't show error
+    }
+    
     console.error('Error fetching appointments:', error);
     toast.error(error.message || 'Failed to load appointments');
     appointmentsState = [];
@@ -87,26 +156,29 @@ function renderAppointments() {
   const tbody = document.getElementById('appointments-table-body');
   if (!tbody) return;
 
-  // Clear table
-  tbody.innerHTML = '';
+  // Use DocumentFragment for smooth updates (no flicker)
+  const fragment = document.createDocumentFragment();
 
   // Handle empty state
   if (appointmentsState.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="6" class="empty-state">
-          No appointments found
-        </td>
-      </tr>
+    const emptyRow = document.createElement('tr');
+    emptyRow.innerHTML = `
+      <td colspan="6" class="empty-state">
+        No appointments found
+      </td>
     `;
-    return;
+    fragment.appendChild(emptyRow);
+  } else {
+    // Render each appointment
+    appointmentsState.forEach((appointment) => {
+      const row = createAppointmentRow(appointment);
+      fragment.appendChild(row);
+    });
   }
 
-  // Render each appointment
-  appointmentsState.forEach((appointment) => {
-    const row = createAppointmentRow(appointment);
-    tbody.appendChild(row);
-  });
+  // Clear and update table in one operation (no flicker)
+  tbody.innerHTML = '';
+  tbody.appendChild(fragment);
 }
 
 /**
@@ -304,6 +376,39 @@ function renderAppointmentDetails() {
   if (notesTextEl) {
     notesTextEl.textContent = appointment.notes || 'No notes available.';
   }
+
+  // Update action buttons visibility
+  updateActionButtons(appointment);
+}
+
+/**
+ * Update action buttons visibility based on appointment status
+ * @param {Object} appointment - Appointment object
+ */
+function updateActionButtons(appointment) {
+  const checkInBtn = document.getElementById('check-in-btn');
+  const noShowBtn = document.getElementById('no-show-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+
+  const now = new Date();
+  const appointmentDate = new Date(appointment.appointmentDate);
+  const isPastAppointment = appointmentDate < now;
+  const isBooked = appointment.status === 'BOOKED';
+
+  // Check-In button: Show if status === BOOKED
+  if (checkInBtn) {
+    checkInBtn.style.display = isBooked ? 'block' : 'none';
+  }
+
+  // No-Show button: Show if status === BOOKED AND appointmentDate < now
+  if (noShowBtn) {
+    noShowBtn.style.display = (isBooked && isPastAppointment) ? 'block' : 'none';
+  }
+
+  // Cancel button: Show if status === BOOKED
+  if (cancelBtn) {
+    cancelBtn.style.display = isBooked ? 'block' : 'none';
+  }
 }
 
 /**
@@ -355,6 +460,125 @@ function renderPagination(pagination) {
 }
 
 /**
+ * Update URL parameters with current filters
+ * @param {Object} filters - Current filter state
+ * @param {number} page - Current page number
+ */
+function updateURLParams(filters = {}, page = 1) {
+  const params = new URLSearchParams();
+  
+  if (filters.status) params.set('status', filters.status);
+  if (filters.departmentId) params.set('departmentId', filters.departmentId);
+  if (filters.startDate) params.set('startDate', filters.startDate);
+  if (filters.endDate) params.set('endDate', filters.endDate);
+  if (filters.search) params.set('search', filters.search);
+  if (page > 1) params.set('page', page.toString());
+  
+  // Update hash without triggering navigation
+  const newHash = `appointments${params.toString() ? `?${params.toString()}` : ''}`;
+  if (window.location.hash !== `#${newHash}`) {
+    window.history.replaceState(null, '', `#${newHash}`);
+  }
+}
+
+/**
+ * Read URL parameters and return filters
+ * @returns {Object} - { filters, page }
+ */
+function readURLParams() {
+  const hash = window.location.hash;
+  if (!hash || !hash.startsWith('#appointments')) {
+    return { filters: {}, page: 1 };
+  }
+  
+  const hashParts = hash.split('?');
+  if (hashParts.length < 2) {
+    return { filters: {}, page: 1 };
+  }
+  
+  const params = new URLSearchParams(hashParts[1]);
+  const filters = {};
+  
+  if (params.has('status')) filters.status = params.get('status');
+  if (params.has('departmentId')) filters.departmentId = params.get('departmentId');
+  if (params.has('startDate')) filters.startDate = params.get('startDate');
+  if (params.has('endDate')) filters.endDate = params.get('endDate');
+  if (params.has('search')) filters.search = params.get('search');
+  
+  const page = params.has('page') ? parseInt(params.get('page'), 10) : 1;
+  
+  return { filters, page };
+}
+
+/**
+ * Apply filters from URL to UI elements
+ * @param {Object} filters - Filters to apply
+ */
+function applyFiltersToUI(filters) {
+  // Apply status filter button
+  const statusFiltersContainer = document.querySelector('.status-filters');
+  if (statusFiltersContainer) {
+    const allButtons = statusFiltersContainer.querySelectorAll('.status-filter-btn');
+    allButtons.forEach(b => b.classList.remove('active'));
+    
+    // Determine which filter button should be active based on filters
+    if (filters.status === 'CANCELLED') {
+      const cancelledBtn = statusFiltersContainer.querySelector('[data-filter="cancelled"]');
+      if (cancelledBtn) cancelledBtn.classList.add('active');
+    } else if (filters.startDate && filters.endDate) {
+      // Check if it's "today" filter
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      const startDate = new Date(filters.startDate);
+      const endDate = new Date(filters.endDate);
+      
+      if (startDate.getTime() === today.getTime() && endDate.getTime() === todayEnd.getTime()) {
+        const todayBtn = statusFiltersContainer.querySelector('[data-filter="today"]');
+        if (todayBtn) todayBtn.classList.add('active');
+      } else {
+        // Custom date range - no status button active
+      }
+    } else if (filters.status === 'BOOKED' && filters.startDate) {
+      // Upcoming filter
+      const upcomingBtn = statusFiltersContainer.querySelector('[data-filter="upcoming"]');
+      if (upcomingBtn) upcomingBtn.classList.add('active');
+    } else if (filters.endDate && !filters.startDate) {
+      // Past filter
+      const pastBtn = statusFiltersContainer.querySelector('[data-filter="past"]');
+      if (pastBtn) pastBtn.classList.add('active');
+    } else {
+      // All filter
+      const allBtn = statusFiltersContainer.querySelector('[data-filter="all"]');
+      if (allBtn) allBtn.classList.add('active');
+    }
+  }
+  
+  // Apply date range inputs
+  const startDateInput = document.getElementById('start-date-input');
+  const endDateInput = document.getElementById('end-date-input');
+  if (startDateInput && filters.startDate) {
+    startDateInput.value = filters.startDate.split('T')[0]; // Extract date part
+  }
+  if (endDateInput && filters.endDate) {
+    endDateInput.value = filters.endDate.split('T')[0]; // Extract date part
+  }
+  
+  // Apply department filter
+  const departmentSelect = document.getElementById('department-select');
+  if (departmentSelect && filters.departmentId) {
+    departmentSelect.value = filters.departmentId;
+  }
+  
+  // Apply search input
+  const searchInput = document.getElementById('appointments-search-input');
+  if (searchInput && filters.search) {
+    searchInput.value = filters.search;
+  }
+}
+
+/**
  * Setup filter event listeners
  */
 function setupFilters() {
@@ -375,9 +599,52 @@ function setupFilters() {
       // Add active to clicked
       btn.classList.add('active');
       
-      // Update filters
-      const status = btn.dataset.status || '';
-      currentFilters.status = status || undefined;
+      // Get filter type
+      const filterType = btn.dataset.filter || 'all';
+      
+      // Apply filter logic based on type
+      const now = new Date();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      
+      // Clear previous date/status filters
+      currentFilters.status = undefined;
+      currentFilters.startDate = undefined;
+      currentFilters.endDate = undefined;
+      
+      switch (filterType) {
+        case 'all':
+          // No filters - show all
+          break;
+          
+        case 'today':
+          // Today → startDate = today 00:00, endDate = today 23:59
+          currentFilters.startDate = today.toISOString();
+          currentFilters.endDate = todayEnd.toISOString();
+          break;
+          
+        case 'upcoming':
+          // Upcoming → appointmentDate > now AND status = BOOKED
+          // Use a time slightly in the future to ensure > now (since backend uses gte)
+          const futureTime = new Date(now.getTime() + 1000); // Add 1 second to ensure > now
+          currentFilters.status = 'BOOKED';
+          currentFilters.startDate = futureTime.toISOString();
+          currentFilters.endDate = undefined;
+          break;
+          
+        case 'past':
+          // Past → appointmentDate < now
+          currentFilters.startDate = undefined;
+          currentFilters.endDate = now.toISOString();
+          break;
+          
+        case 'cancelled':
+          // Cancelled → status = CANCELLED
+          currentFilters.status = 'CANCELLED';
+          break;
+      }
       
       // Reset to page 1 and fetch
       fetchAppointments(currentFilters, 1);
@@ -483,7 +750,7 @@ function setupFilters() {
   let searchInputHandler = null;
   let searchKeypressHandler = null;
   let searchBtnHandler = null;
-  let searchTimeout = null;
+  // searchTimeout is now global (declared at top of file)
   
   if (searchInput) {
     // Remove old handlers if they exist
@@ -588,15 +855,258 @@ async function initializeAppointments() {
   // Populate departments
   await populateDepartments();
 
-  // Setup filters
+  // Read filters from URL params
+  const { filters: urlFilters, page: urlPage } = readURLParams();
+  
+  // Apply URL filters to current state
+  if (Object.keys(urlFilters).length > 0 || urlPage > 1) {
+    currentFilters = { ...currentFilters, ...urlFilters };
+    currentPage = urlPage;
+    
+    // Apply filters to UI
+    applyFiltersToUI(urlFilters);
+  }
+
+  // Setup filters (after applying URL params)
   setupFilters();
 
-  // Initial fetch
-  await fetchAppointments({}, 1);
+  // Setup action buttons
+  setupActionButtons();
+  
+  // Fetch appointments with URL params if they exist
+  if (Object.keys(urlFilters).length > 0 || urlPage > 1) {
+    await fetchAppointments(currentFilters, currentPage);
+  } else {
+    // Initial load - fetch with default filters
+    await fetchAppointments({}, 1);
+  }
+}
+
+/**
+ * Setup action button handlers
+ */
+function setupActionButtons() {
+  const checkInBtn = document.getElementById('check-in-btn');
+  const noShowBtn = document.getElementById('no-show-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+
+  if (checkInBtn) {
+    checkInBtn.addEventListener('click', handleCheckIn);
+  }
+
+  if (noShowBtn) {
+    noShowBtn.addEventListener('click', handleMarkNoShow);
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', handleCancel);
+  }
+}
+
+/**
+ * Handle Check-In button click
+ */
+async function handleCheckIn() {
+  if (!selectedAppointmentId) {
+    toast.error('Please select an appointment');
+    return;
+  }
+
+  const appointment = appointmentsState.find(apt => apt.id === selectedAppointmentId);
+  if (!appointment) {
+    toast.error('Appointment not found');
+    return;
+  }
+
+  if (appointment.status !== 'BOOKED') {
+    toast.error('Only BOOKED appointments can be checked in');
+    return;
+  }
+
+  const checkInBtn = document.getElementById('check-in-btn');
+  if (checkInBtn) {
+    checkInBtn.disabled = true;
+    checkInBtn.textContent = 'Checking in...';
+  }
+
+  try {
+    const response = await apiPost(API_ENDPOINTS.staff.checkIn, {
+      appointmentId: selectedAppointmentId,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to check in patient');
+    }
+
+    toast.success(result.message || 'Patient checked in successfully');
+    
+    // Refetch appointments to update status
+    await fetchAppointments(currentFilters, currentPage);
+    
+    // Re-render details if still selected
+    if (selectedAppointmentId) {
+      renderAppointmentDetails();
+    }
+  } catch (error) {
+    console.error('Error checking in:', error);
+    toast.error(error.message || 'Failed to check in patient');
+  } finally {
+    if (checkInBtn) {
+      checkInBtn.disabled = false;
+      checkInBtn.textContent = 'Check-In';
+    }
+  }
+}
+
+/**
+ * Handle Mark No-Show button click
+ */
+async function handleMarkNoShow() {
+  if (!selectedAppointmentId) {
+    toast.error('Please select an appointment');
+    return;
+  }
+
+  const appointment = appointmentsState.find(apt => apt.id === selectedAppointmentId);
+  if (!appointment) {
+    toast.error('Appointment not found');
+    return;
+  }
+
+  if (appointment.status !== 'BOOKED') {
+    toast.error('Only BOOKED appointments can be marked as no-show');
+    return;
+  }
+
+  const now = new Date();
+  const appointmentDate = new Date(appointment.appointmentDate);
+  if (appointmentDate >= now) {
+    toast.error('Cannot mark as no-show. Appointment date has not passed.');
+    return;
+  }
+
+  const noShowBtn = document.getElementById('no-show-btn');
+  if (noShowBtn) {
+    noShowBtn.disabled = true;
+    noShowBtn.textContent = 'Marking...';
+  }
+
+  try {
+    const response = await apiPatch(API_ENDPOINTS.staff.markNoShow(selectedAppointmentId));
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to mark as no-show');
+    }
+
+    toast.success(result.message || 'Appointment marked as no-show');
+    
+    // Refetch appointments to update status
+    await fetchAppointments(currentFilters, currentPage);
+    
+    // Re-render details if still selected
+    if (selectedAppointmentId) {
+      renderAppointmentDetails();
+    }
+  } catch (error) {
+    console.error('Error marking no-show:', error);
+    toast.error(error.message || 'Failed to mark as no-show');
+  } finally {
+    if (noShowBtn) {
+      noShowBtn.disabled = false;
+      noShowBtn.textContent = 'Mark No-Show';
+    }
+  }
+}
+
+/**
+ * Handle Cancel button click
+ */
+async function handleCancel() {
+  if (!selectedAppointmentId) {
+    toast.error('Please select an appointment');
+    return;
+  }
+
+  const appointment = appointmentsState.find(apt => apt.id === selectedAppointmentId);
+  if (!appointment) {
+    toast.error('Appointment not found');
+    return;
+  }
+
+  if (appointment.status !== 'BOOKED') {
+    toast.error('Only BOOKED appointments can be cancelled');
+    return;
+  }
+
+  // Confirm cancellation
+  if (!confirm('Are you sure you want to cancel this appointment?')) {
+    return;
+  }
+
+  const cancelBtn = document.getElementById('cancel-btn');
+  if (cancelBtn) {
+    cancelBtn.disabled = true;
+    cancelBtn.textContent = 'Cancelling...';
+  }
+
+  try {
+    const response = await apiPatch(API_ENDPOINTS.staff.cancelAppointment(selectedAppointmentId));
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to cancel appointment');
+    }
+
+    toast.success(result.message || 'Appointment cancelled successfully');
+    
+    // Refetch appointments to update status
+    await fetchAppointments(currentFilters, currentPage);
+    
+    // Clear selection since appointment is cancelled
+    selectedAppointmentId = null;
+    const sidebar = document.getElementById('appointment-details-sidebar');
+    const contentContainer = document.querySelector('.appointments-content');
+    if (sidebar) sidebar.classList.remove('visible');
+    if (contentContainer) contentContainer.classList.remove('sidebar-visible');
+    
+    // Re-render to clear selection highlight
+    renderAppointments();
+  } catch (error) {
+    console.error('Error cancelling appointment:', error);
+    toast.error(error.message || 'Failed to cancel appointment');
+  } finally {
+    if (cancelBtn) {
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = 'Cancel Appointment';
+    }
+  }
+}
+
+// Cleanup function for SPA navigation
+function cleanupAppointments() {
+  // Clear search timeout
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  }
+  
+  // Cancel any pending requests
+  cancelRequest('appointments-fetch');
+  
+  // Reset state
+  selectedAppointmentId = null;
+  appointmentsState = [];
+  currentPage = 1;
+  currentFilters = {};
 }
 
 // Export for use in navigation
-export { initializeAppointments };
+export { initializeAppointments, cleanupAppointments };
 
 // Listen for view-loaded event (SPA navigation)
 window.addEventListener('view-loaded', async (event) => {

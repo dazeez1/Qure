@@ -9,11 +9,11 @@
     <div class="appointments-filters-row">
       <!-- Status Filter Buttons -->
       <div class="status-filters">
-        <button class="status-filter-btn active" data-status="">All</button>
-        <button class="status-filter-btn" data-status="BOOKED">Today</button>
-        <button class="status-filter-btn" data-status="CHECKED_IN">Upcoming</button>
-        <button class="status-filter-btn" data-status="COMPLETED">Past</button>
-        <button class="status-filter-btn" data-status="CANCELLED">Cancelled</button>
+        <button class="status-filter-btn active" data-filter="all">All</button>
+        <button class="status-filter-btn" data-filter="today">Today</button>
+        <button class="status-filter-btn" data-filter="upcoming">Upcoming</button>
+        <button class="status-filter-btn" data-filter="past">Past</button>
+        <button class="status-filter-btn" data-filter="cancelled">Cancelled</button>
       </div>
 
       <!-- Filter Controls -->
@@ -132,8 +132,9 @@
 
         <!-- Action Buttons -->
         <div class="appointment-actions">
-          <button class="btn btn-secondary" id="no-show-btn">No Show</button>
-          <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
+          <button class="btn btn-primary" id="check-in-btn" style="display: none;">Check-In</button>
+          <button class="btn btn-secondary" id="no-show-btn" style="display: none;">Mark No-Show</button>
+          <button class="btn btn-secondary" id="cancel-btn" style="display: none;">Cancel Appointment</button>
           <div class="appointment-actions-row">
             <button class="btn btn-secondary" id="message-btn">Message</button>
             <button class="btn btn-primary" id="edit-btn">Edit</button>

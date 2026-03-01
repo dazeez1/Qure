@@ -489,6 +489,311 @@ export const checkInToQueue = async (req, res, next) => {
 };
 
 /**
+ * Check in patient to queue (Staff only)
+ * POST /api/staff/queue/check-in
+ * 
+ * Body: {
+ *   appointmentId: string (required)
+ * }
+ * 
+ * Staff can check in patients on their behalf.
+ * Validates appointment belongs to staff's hospital.
+ */
+export const checkInToQueueStaff = async (req, res, next) => {
+  try {
+    const user = req.user;
+    if (!user || !user.hospitalId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. Please log in.',
+      });
+    }
+
+    const { appointmentId } = req.body;
+
+    // Validate required field
+    if (!appointmentId) {
+      return res.status(400).json({
+        success: false,
+        message: 'appointmentId is required.',
+      });
+    }
+
+    // Wrap entire logic in Prisma transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Find appointment and validate
+      const appointment = await tx.appointment.findUnique({
+        where: { id: appointmentId },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+            },
+          },
+          hospital: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          department: {
+            select: {
+              id: true,
+              name: true,
+              shortCode: true,
+              hospitalId: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      if (!appointment) {
+        throw new Error('Appointment not found.');
+      }
+
+      // Validate appointment belongs to staff's hospital
+      if (appointment.hospitalId !== user.hospitalId) {
+        throw new Error('Appointment does not belong to your hospital.');
+      }
+
+      // Validate appointment status = BOOKED
+      if (appointment.status !== 'BOOKED') {
+        throw new Error(`Cannot check in. Appointment status is ${appointment.status}. Only BOOKED appointments can be checked in.`);
+      }
+
+      // Validate appointmentDate = today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const appointmentDate = new Date(appointment.appointmentDate);
+      appointmentDate.setHours(0, 0, 0, 0);
+
+      if (appointmentDate.getTime() !== today.getTime()) {
+        throw new Error('Cannot check in. Appointment date must be today.');
+      }
+
+      // Validate department is ACTIVE
+      if (appointment.department.status !== 'ACTIVE') {
+        throw new Error('Department is not active. Cannot check in.');
+      }
+
+      // Prevent duplicate queue entry
+      const existingQueueEntry = await tx.queueEntry.findFirst({
+        where: {
+          appointmentId: appointmentId,
+          status: {
+            notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+          },
+        },
+      });
+
+      if (existingQueueEntry) {
+        throw new Error('Patient already has an active queue entry for this appointment.');
+      }
+
+      // Generate department-based daily ticket number
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const todayQueueCount = await tx.queueEntry.count({
+        where: {
+          departmentId: appointment.departmentId,
+          hospitalId: appointment.hospitalId,
+          checkInTime: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+        },
+      });
+
+      const sequenceNumber = todayQueueCount + 1;
+      const ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
+
+      // Apply hybrid doctor assignment
+      const availableDoctors = await tx.user.findMany({
+        where: {
+          hospitalId: appointment.hospitalId,
+          departmentId: appointment.departmentId,
+          role: 'STAFF',
+          staffRole: 'DOCTOR',
+          isActive: true,
+          isAvailable: true,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          currentActivePatients: true,
+          maxConcurrentPatients: true,
+        },
+        orderBy: {
+          currentActivePatients: 'asc',
+        },
+      });
+
+      const doctorsWithCapacity = availableDoctors.filter(
+        (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
+      );
+
+      let assignedDoctor = null;
+      let assignedDoctorName = null;
+
+      if (doctorsWithCapacity.length > 0) {
+        assignedDoctor = doctorsWithCapacity[0];
+        assignedDoctorName = `Dr. ${assignedDoctor.firstName} ${assignedDoctor.lastName}`;
+      }
+
+      // Create QueueEntry
+      const queueEntry = await tx.queueEntry.create({
+        data: {
+          patientId: appointment.patientId,
+          appointmentId: appointmentId,
+          hospitalId: appointment.hospitalId,
+          departmentId: appointment.departmentId,
+          assignedDoctorId: assignedDoctor ? assignedDoctor.id : null,
+          ticketNumber: ticketNumber,
+          sequenceNumber: sequenceNumber,
+          status: 'WAITING',
+          priority: 'NORMAL',
+        },
+      });
+
+      // Auto-assign default waiting area
+      let assignedWaitingArea = null;
+      let defaultWaitingArea = await tx.waitingArea.findFirst({
+        where: {
+          hospitalId: appointment.hospitalId,
+          isActive: true,
+          isDefault: true,
+        },
+      });
+
+      if (!defaultWaitingArea) {
+        defaultWaitingArea = await tx.waitingArea.findFirst({
+          where: {
+            hospitalId: appointment.hospitalId,
+            isActive: true,
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        });
+      }
+
+      if (defaultWaitingArea) {
+        const currentOccupancy = await tx.queueEntry.count({
+          where: {
+            waitingAreaId: defaultWaitingArea.id,
+            status: {
+              in: ['WAITING', 'TRIAGE', 'CALLED'],
+            },
+            id: { not: queueEntry.id },
+          },
+        });
+
+        if (currentOccupancy < defaultWaitingArea.capacity) {
+          await tx.queueEntry.update({
+            where: { id: queueEntry.id },
+            data: {
+              waitingAreaId: defaultWaitingArea.id,
+            },
+          });
+
+          assignedWaitingArea = {
+            id: defaultWaitingArea.id,
+            name: defaultWaitingArea.name,
+            floor: defaultWaitingArea.floor,
+            facility: defaultWaitingArea.facility,
+          };
+        }
+      }
+
+      // Update appointment → CHECKED_IN
+      await tx.appointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: 'CHECKED_IN',
+        },
+      });
+
+      // Calculate estimated wait time
+      const AVG_CONSULTATION_TIME_MINUTES = 15;
+      let estimatedWaitMinutes = null;
+
+      const availableDoctorsForWait = await tx.user.findMany({
+        where: {
+          hospitalId: appointment.hospitalId,
+          departmentId: appointment.departmentId,
+          role: 'STAFF',
+          staffRole: 'DOCTOR',
+          isActive: true,
+          isAvailable: true,
+        },
+        select: {
+          id: true,
+          currentActivePatients: true,
+          maxConcurrentPatients: true,
+        },
+      });
+
+      const doctorsWithCapacityForWait = availableDoctorsForWait.filter(
+        (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
+      );
+
+      const activeDoctorsCount = doctorsWithCapacityForWait.length;
+
+      if (activeDoctorsCount > 0) {
+        const waitingCount = await tx.queueEntry.count({
+          where: {
+            hospitalId: appointment.hospitalId,
+            departmentId: appointment.departmentId,
+            status: {
+              in: ['WAITING', 'TRIAGE', 'CALLED'],
+            },
+          },
+        });
+
+        const batches = Math.ceil(waitingCount / activeDoctorsCount);
+        estimatedWaitMinutes = batches * AVG_CONSULTATION_TIME_MINUTES;
+      }
+
+      return {
+        ticketNumber: ticketNumber,
+        sequenceNumber: sequenceNumber,
+        assignedDoctor: assignedDoctorName,
+        estimatedWaitMinutes: estimatedWaitMinutes,
+        waitingArea: assignedWaitingArea,
+      };
+    });
+
+    // Return success response
+    res.status(201).json({
+      success: true,
+      message: 'Patient checked in to queue successfully.',
+      data: {
+        ticketNumber: result.ticketNumber,
+        sequenceNumber: result.sequenceNumber,
+        assignedDoctor: result.assignedDoctor,
+        estimatedWaitMinutes: result.estimatedWaitMinutes,
+        waitingArea: result.waitingArea,
+      },
+    });
+  } catch (error) {
+    // Handle validation errors
+    if (error.message) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    next(error);
+  }
+};
+
+/**
  * Get queue entries for staff (Doctor or Admin)
  * GET /api/staff/queue
  * 

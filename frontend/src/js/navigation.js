@@ -5,6 +5,7 @@
 
 const contentEl = document.getElementById('app-content');
 const DEFAULT_ROUTE = 'dashboard';
+let currentRoute = null; // Track current route for cleanup
 
 // Route to view mapping
 const ROUTE_TO_VIEW = {
@@ -16,6 +17,62 @@ const ROUTE_TO_VIEW = {
 };
 
 /**
+ * Cleanup previous view before loading new one
+ * @param {string} previousRoute - Previous route name
+ */
+async function cleanupPreviousView(previousRoute) {
+  if (!previousRoute) return;
+
+  try {
+    switch (previousRoute) {
+      case 'queues':
+        // Cleanup queue page
+        try {
+          const queueModule = await import('../pages/staff/queue.js');
+          if (queueModule.stopPolling) {
+            queueModule.stopPolling();
+          }
+        } catch (err) {
+          console.warn('Failed to cleanup queue page:', err);
+        }
+        break;
+
+      case 'dashboard':
+        // Cleanup dashboard page
+        try {
+          const dashboardModule = await import('../pages/staff/dashboard.js');
+          if (dashboardModule.cleanupDashboard) {
+            dashboardModule.cleanupDashboard();
+          }
+        } catch (err) {
+          console.warn('Failed to cleanup dashboard page:', err);
+        }
+        break;
+
+      case 'appointments':
+        // Cleanup appointments page
+        try {
+          const appointmentsModule = await import('../pages/staff/appointments.js');
+          if (appointmentsModule.cleanupAppointments) {
+            appointmentsModule.cleanupAppointments();
+          }
+        } catch (err) {
+          console.warn('Failed to cleanup appointments page:', err);
+        }
+        break;
+
+      // Add other routes as needed
+      case 'waiting-area':
+      case 'settings':
+        // These pages don't have critical cleanup needs yet
+        break;
+    }
+  } catch (err) {
+    console.warn('Error during view cleanup:', err);
+  }
+}
+
+/**
  * Load a view into the content container
  * @param {string} route - Route name (e.g., 'dashboard', 'queues')
  */
@@ -24,6 +81,14 @@ async function loadView(route) {
     console.error('Navigation: app-content element not found');
     return;
   }
+
+  // Cleanup previous view if different route
+  if (currentRoute && currentRoute !== route) {
+    await cleanupPreviousView(currentRoute);
+  }
+
+  // Update current route
+  currentRoute = route;
 
   // Get the view file name from route mapping
   const view = ROUTE_TO_VIEW[route] || ROUTE_TO_VIEW[DEFAULT_ROUTE];

@@ -1,0 +1,115 @@
+/**
+ * Skeleton Loader Styles
+ * Provides animated placeholder content while data is loading
+ */
+
+/* Skeleton base animation */
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 0px,
+    #f8f8f8 40px,
+    #f0f0f0 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+/* Skeleton table row */
+.skeleton-row {
+  display: table-row;
+}
+
+.skeleton-cell {
+  display: table-cell;
+  padding: 1.2rem;
+  vertical-align: middle;
+}
+
+.skeleton-cell .skeleton {
+  height: 1.2rem;
+  width: 100%;
+  margin-bottom: 0.4rem;
+}
+
+.skeleton-cell .skeleton:last-child {
+  margin-bottom: 0;
+}
+
+/* Skeleton text variations */
+.skeleton-text {
+  height: 1.2rem;
+  width: 100%;
+}
+
+.skeleton-text-short {
+  width: 60%;
+}
+
+.skeleton-text-medium {
+  width: 80%;
+}
+
+.skeleton-text-long {
+  width: 100%;
+}
+
+/* Skeleton badge */
+.skeleton-badge {
+  height: 2.4rem;
+  width: 8rem;
+  border-radius: 1.2rem;
+}
+
+/* Skeleton button */
+.skeleton-button {
+  height: 3.6rem;
+  width: 10rem;
+  border-radius: 0.6rem;
+}
+
+/* Skeleton card */
+.skeleton-card {
+  padding: 1.6rem;
+  border-radius: 0.8rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+}
+
+.skeleton-card .skeleton {
+  margin-bottom: 1.2rem;
+}
+
+.skeleton-card .skeleton:last-child {
+  margin-bottom: 0;
+}
+
+/* Skeleton metrics (for dashboard) */
+.skeleton-metric {
+  height: 4rem;
+  width: 100%;
+  border-radius: 0.6rem;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #2a2a2a 0px,
+      #333333 40px,
+      #2a2a2a 80px
+    );
+    background-size: 200px 100%;
+  }
+}

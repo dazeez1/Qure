@@ -20,7 +20,18 @@ export const ToastType = {
  * @param {string} type - Toast type (success, error, warning, info)
  * @param {number} duration - Duration in milliseconds (default: 5000)
  */
+// Track active toast to prevent duplicates
+let activeToast = null;
+let activeToastTimer = null;
+
 export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
+  // Remove existing toast if present (show only one at a time)
+  if (activeToast) {
+    clearTimeout(activeToastTimer);
+    removeToast(activeToast);
+    activeToast = null;
+  }
+
   // Remove existing toasts container if present
   let toastContainer = document.getElementById('toast-container');
   if (!toastContainer) {
@@ -35,6 +46,9 @@ export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
   toast.className = `toast toast-${type}`;
   toast.setAttribute('role', 'alert');
   toast.setAttribute('aria-live', 'assertive');
+  
+  // Store as active toast
+  activeToast = toast;
 
   // Toast content
   toast.innerHTML = `
@@ -56,21 +70,24 @@ export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
   });
 
   // Auto remove after duration
-  const autoRemoveTimer = setTimeout(() => {
+  activeToastTimer = setTimeout(() => {
     removeToast(toast);
+    activeToast = null;
   }, duration);
 
   // Manual close button
   const closeBtn = toast.querySelector('.toast-close');
   closeBtn.addEventListener('click', () => {
-    clearTimeout(autoRemoveTimer);
+    clearTimeout(activeToastTimer);
     removeToast(toast);
+    activeToast = null;
   });
 
   // Click to dismiss
   toast.addEventListener('click', () => {
-    clearTimeout(autoRemoveTimer);
+    clearTimeout(activeToastTimer);
     removeToast(toast);
+    activeToast = null;
   });
 };
 
@@ -78,12 +95,19 @@ export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
  * Remove toast with animation
  */
 const removeToast = (toast) => {
+  if (!toast) return;
+  
   toast.classList.remove('toast-show');
   toast.classList.add('toast-hide');
 
   setTimeout(() => {
     if (toast.parentNode) {
       toast.parentNode.removeChild(toast);
+    }
+
+    // Clear active toast if this was it
+    if (activeToast === toast) {
+      activeToast = null;
     }
 
     // Remove container if empty

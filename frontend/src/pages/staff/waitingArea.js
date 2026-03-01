@@ -319,24 +319,26 @@ function renderAreaPatients(entries) {
   // Store entries globally for move handler
   currentPatientEntries = entries || [];
 
-  // Clear container
-  container.innerHTML = '';
+  // Use DocumentFragment for smooth updates (no flicker)
+  const fragment = document.createDocumentFragment();
 
   // Handle empty state
   if (!entries || entries.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <p>No patients in this area</p>
-      </div>
-    `;
-    return;
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'empty-state';
+    emptyDiv.innerHTML = '<p>No patients in this area</p>';
+    fragment.appendChild(emptyDiv);
+  } else {
+    // Render each patient entry
+    entries.forEach((entry) => {
+      const patientItem = createPatientItem(entry);
+      fragment.appendChild(patientItem);
+    });
   }
 
-  // Render each patient entry
-  entries.forEach((entry) => {
-    const patientItem = createPatientItem(entry);
-    container.appendChild(patientItem);
-  });
+  // Clear and update container in one operation (no flicker)
+  container.innerHTML = '';
+  container.appendChild(fragment);
 
   // Setup event delegation for move buttons
   setupMoveHandlers();

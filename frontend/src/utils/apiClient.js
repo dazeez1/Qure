@@ -2,12 +2,61 @@
  * API Client utility
  * Automatically attaches authentication token to requests
  * Handles 401 (auto-logout) and 403 (toast) errors centrally
+ * Supports request cancellation via AbortController
  */
 
 import { getAuthToken, clearAuth } from './auth.js';
 import { toast } from './toast.js';
 
 const BASE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+
+// Global request controllers map (key: requestId, value: AbortController)
+const activeControllers = new Map();
+
+/**
+ * Create a new AbortController for a request
+ * @param {string} requestId - Unique identifier for the request
+ * @returns {AbortController} - New AbortController
+ */
+export function createRequestController(requestId) {
+  // Cancel previous request with same ID if exists
+  if (activeControllers.has(requestId)) {
+    activeControllers.get(requestId).abort();
+  }
+  
+  const controller = new AbortController();
+  activeControllers.set(requestId, controller);
+  return controller;
+}
+
+/**
+ * Cancel a specific request
+ * @param {string} requestId - Request identifier
+ */
+export function cancelRequest(requestId) {
+  if (activeControllers.has(requestId)) {
+    activeControllers.get(requestId).abort();
+    activeControllers.delete(requestId);
+  }
+}
+
+/**
+ * Cancel all active requests
+ */
+export function cancelAllRequests() {
+  activeControllers.forEach((controller) => {
+    controller.abort();
+  });
+  activeControllers.clear();
+}
+
+/**
+ * Remove a request controller (after completion)
+ * @param {string} requestId - Request identifier
+ */
+export function removeRequestController(requestId) {
+  activeControllers.delete(requestId);
+}
 
 /**
  * Make an authenticated API request
@@ -41,8 +90,21 @@ export const apiRequest = async (endpoint, options = {}) => {
     headers,
   };
   
-  // Make request
-  const response = await fetch(url, fetchOptions);
+  // Make request with error handling for aborted requests
+  let response;
+  try {
+    response = await fetch(url, fetchOptions);
+  } catch (error) {
+    // Handle aborted requests gracefully
+    if (error.name === 'AbortError') {
+      // Throw a special error that can be caught and ignored by callers
+      const abortError = new Error('Request aborted');
+      abortError.name = 'AbortError';
+      abortError.isAborted = true;
+      throw abortError;
+    }
+    throw error;
+  }
   
   // Handle 401 Unauthorized - Auto-logout
   if (response.status === 401) {
@@ -101,7 +163,7 @@ export const apiRequest = async (endpoint, options = {}) => {
 /**
  * GET request helper
  * @param {string} endpoint - API endpoint
- * @param {Object} options - Additional fetch options
+ * @param {Object} options - Additional fetch options (can include signal for AbortController)
  * @returns {Promise<Response>}
  */
 export const apiGet = (endpoint, options = {}) => {

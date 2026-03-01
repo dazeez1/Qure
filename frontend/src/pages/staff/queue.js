@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { apiGet, apiPatch } from '../../utils/apiClient.js';
+import { apiGet, apiPatch, createRequestController, cancelRequest, removeRequestController } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { API_ENDPOINTS } from '../../config/api.js';
@@ -19,6 +19,9 @@ let pollingInterval = null;
 let currentQueueEntryId = null; // For room assignment
 let availableRooms = [];
 let waitingAreas = []; // Store waiting areas with occupancy
+let fetchQueueController = null; // AbortController for queue fetch requests
+let queueSearchTimeout = null; // Track search timeout for cleanup
+let debouncedSearchHandler = null; // Track debounced search handler for cleanup
 
 // DOM Elements
 let queueTableBody;
@@ -114,6 +117,17 @@ async function initQueuePage() {
     sidebarCloseBtn.addEventListener('click', hidePatientDetails);
   }
 
+  // Read filters from URL params
+  const { filters: urlFilters, page: urlPage } = readQueueURLParams();
+  
+  // Apply URL filters to current state
+  if (Object.keys(urlFilters).length > 0 || urlPage > 1) {
+    currentPage = urlPage;
+    
+    // Apply filters to UI
+    applyQueueFiltersToUI(urlFilters);
+  }
+
   // Setup date range filter
   setupDateRangeFilter();
 
@@ -126,6 +140,7 @@ async function initQueuePage() {
   // Initial load - ensure it completes
   console.log('Starting initial queue fetch...');
   try {
+    // Fetch with URL params if they exist, otherwise default fetch
     await fetchQueue();
     console.log('Initial queue fetch completed');
     
@@ -256,23 +271,125 @@ function showSpinner(show) {
 }
 
 /**
+ * Update URL parameters with current filters
+ * @param {Object} filters - Current filter state (dateFrom, dateTo, search)
+ * @param {number} page - Current page number
+ */
+function updateQueueURLParams(filters = {}, page = 1) {
+  const params = new URLSearchParams();
+  
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters.search) params.set('search', filters.search);
+  if (page > 1) params.set('page', page.toString());
+  
+  // Update hash without triggering navigation
+  const newHash = `queues${params.toString() ? `?${params.toString()}` : ''}`;
+  if (window.location.hash !== `#${newHash}`) {
+    window.history.replaceState(null, '', `#${newHash}`);
+  }
+}
+
+/**
+ * Read URL parameters and return filters
+ * @returns {Object} - { filters, page }
+ */
+function readQueueURLParams() {
+  const hash = window.location.hash;
+  if (!hash || !hash.startsWith('#queues')) {
+    return { filters: {}, page: 1 };
+  }
+  
+  const hashParts = hash.split('?');
+  if (hashParts.length < 2) {
+    return { filters: {}, page: 1 };
+  }
+  
+  const params = new URLSearchParams(hashParts[1]);
+  const filters = {};
+  
+  if (params.has('dateFrom')) filters.dateFrom = params.get('dateFrom');
+  if (params.has('dateTo')) filters.dateTo = params.get('dateTo');
+  if (params.has('search')) filters.search = params.get('search');
+  
+  const page = params.has('page') ? parseInt(params.get('page'), 10) : 1;
+  
+  return { filters, page };
+}
+
+/**
+ * Apply filters from URL to UI elements
+ * @param {Object} filters - Filters to apply
+ */
+function applyQueueFiltersToUI(filters) {
+  // Apply date range inputs
+  if (queueStartDateInput && filters.dateFrom) {
+    queueStartDateInput.value = filters.dateFrom;
+  }
+  if (queueEndDateInput && filters.dateTo) {
+    queueEndDateInput.value = filters.dateTo;
+  }
+  
+  // Apply search input
+  if (queueSearchInput && filters.search) {
+    queueSearchInput.value = filters.search;
+  }
+}
+
+/**
+ * Show skeleton loader in queue table
+ */
+function showQueueSkeleton() {
+  if (!queueTableBody) return;
+  
+  const skeletonRows = 10; // Show 10 skeleton rows
+  const fragment = document.createDocumentFragment();
+  
+  for (let i = 0; i < skeletonRows; i++) {
+    const row = document.createElement('tr');
+    row.className = 'skeleton-row';
+    row.innerHTML = `
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-short"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-medium"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-medium"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-badge"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-text-short"></div>
+      </td>
+      <td class="skeleton-cell">
+        <div class="skeleton skeleton-button"></div>
+      </td>
+    `;
+    fragment.appendChild(row);
+  }
+  
+  queueTableBody.innerHTML = '';
+  queueTableBody.appendChild(fragment);
+}
+
+/**
  * Fetch queue data
- * @param {boolean} showLoading - Whether to show loading spinner (default: true)
+ * @param {boolean} showLoading - Whether to show loading skeleton (default: true)
  */
 async function fetchQueue(showLoading = true) {
   console.log('fetchQueue called, showLoading:', showLoading);
   
-  // Clear loading message immediately when starting to fetch
-  if (queueTableBody) {
-    if (queueTableBody.querySelector('.loading-message')) {
+  // Show skeleton loader instead of spinner
+  if (showLoading) {
+    showQueueSkeleton();
+  } else {
+    // For polling, just clear any loading message
+    if (queueTableBody && queueTableBody.querySelector('.loading-message')) {
       queueTableBody.innerHTML = '';
     }
-  } else {
-    console.warn('queueTableBody is null in fetchQueue');
-  }
-  
-  if (showLoading) {
-    showSpinner(true);
   }
   
   try {
@@ -295,7 +412,22 @@ async function fetchQueue(showLoading = true) {
     const endpoint = `/staff/queue?${params.toString()}`;
     console.log('Fetching queue from:', endpoint);
     
-    const response = await apiGet(endpoint);
+    // Update URL params
+    const filters = {};
+    if (queueStartDateInput && queueStartDateInput.value) filters.dateFrom = queueStartDateInput.value;
+    if (queueEndDateInput && queueEndDateInput.value) filters.dateTo = queueEndDateInput.value;
+    if (queueSearchInput && queueSearchInput.value.trim()) filters.search = queueSearchInput.value.trim();
+    updateQueueURLParams(filters, currentPage);
+    
+    // Cancel previous request if exists
+    if (fetchQueueController) {
+      fetchQueueController.abort();
+    }
+    
+    // Create new controller for this request
+    fetchQueueController = createRequestController('queue-fetch');
+    
+    const response = await apiGet(endpoint, { signal: fetchQueueController.signal });
     console.log('Queue API response status:', response.status);
     
     if (!response.ok) {
@@ -327,15 +459,17 @@ async function fetchQueue(showLoading = true) {
       await renderQueueTable();
     }
   } catch (error) {
+    // Ignore aborted requests
+    if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
+      return; // Request was cancelled, don't show error
+    }
+    
     console.error('Error fetching queue:', error);
     toast.error('Failed to load queue data');
     queueData = [];
     await renderQueueTable();
-  } finally {
-    if (showLoading) {
-      showSpinner(false);
-    }
   }
+  // Note: Skeleton is replaced by renderQueueTable, no need to hide spinner
 }
 
 /**
@@ -344,8 +478,8 @@ async function fetchQueue(showLoading = true) {
 async function renderQueueTable() {
   if (!queueTableBody) return;
 
-  // Clear loading message first
-  queueTableBody.innerHTML = '';
+  // Use DocumentFragment for smooth updates (no flicker)
+  const fragment = document.createDocumentFragment();
 
   if (queueData.length === 0) {
     // Check if user is a doctor (non-primary, non-admin) for role-specific message
@@ -368,26 +502,23 @@ async function renderQueueTable() {
       ? 'No active patients assigned to you.'
       : 'No active patients in this hospital.';
     
-    queueTableBody.innerHTML = `
-      <tr>
-        <td colspan="7" class="empty-state">${emptyMessage}</td>
-      </tr>
-    `;
-    return;
-  }
+    const emptyRow = document.createElement('tr');
+    emptyRow.innerHTML = `<td colspan="7" class="empty-state">${emptyMessage}</td>`;
+    fragment.appendChild(emptyRow);
+  } else {
+    // Create rows using DocumentFragment (no flicker)
+    queueData.forEach(entry => {
+      const patient = entry.patient || {};
+      const patientName = patient.fullName || 'Unknown';
+      const patientInitials = getInitials(patientName);
+      const ticketNumber = entry.ticketNumber || '-';
+      const status = entry.status || 'WAITING';
+      const statusClass = status.toLowerCase().replace('_', '_');
+      const assignedRoom = entry.assignedRoom ? entry.assignedRoom.name : '-';
 
-  queueTableBody.innerHTML = queueData.map(entry => {
-    const patient = entry.patient || {};
-    const patientName = patient.fullName || 'Unknown';
-    const patientInitials = getInitials(patientName);
-    const ticketNumber = entry.ticketNumber || '-';
-    const status = entry.status || 'WAITING';
-    const statusClass = status.toLowerCase().replace('_', '_');
-    const assignedRoom = entry.assignedRoom ? entry.assignedRoom.name : '-';
-
-    const isSelected = selectedQueueEntries.has(entry.id);
-    return `
-      <tr class="" data-entry-id="${entry.id}">
+      const isSelected = selectedQueueEntries.has(entry.id);
+      
+      const rowHTML = `
         <td>
           <input 
             type="checkbox" 
@@ -427,9 +558,19 @@ async function renderQueueTable() {
             </div>
           </div>
         </td>
-      </tr>
-    `;
-  }).join('');
+      `;
+      
+      const row = document.createElement('tr');
+      row.className = '';
+      row.dataset.entryId = entry.id;
+      row.innerHTML = rowHTML;
+      fragment.appendChild(row);
+    });
+  }
+
+  // Clear and update table in one operation (no flicker)
+  queueTableBody.innerHTML = '';
+  queueTableBody.appendChild(fragment);
 
   // Attach status update button listeners
   queueTableBody.querySelectorAll('.status-update-btn').forEach(btn => {
@@ -1077,6 +1218,30 @@ function stopPolling() {
     clearInterval(pollingInterval);
     pollingInterval = null;
   }
+  
+  // Cancel any pending queue fetch requests
+  if (fetchQueueController) {
+    fetchQueueController.abort();
+    fetchQueueController = null;
+  }
+  cancelRequest('queue-fetch');
+  
+  // Clear search timeout
+  if (queueSearchTimeout) {
+    clearTimeout(queueSearchTimeout);
+    queueSearchTimeout = null;
+  }
+  
+  // Cancel debounced search handler
+  if (debouncedSearchHandler) {
+    debouncedSearchHandler.cancel?.();
+    debouncedSearchHandler = null;
+  }
+  
+  // Remove search input listener
+  if (queueSearchInput && debouncedSearchHandler) {
+    queueSearchInput.removeEventListener('input', debouncedSearchHandler);
+  }
 }
 
 /**
@@ -1194,18 +1359,30 @@ async function assignWaitingArea(queueId, waitingAreaId) {
 }
 
 /**
- * Debounce helper
+ * Debounce helper (cancelable)
  */
 function debounce(func, wait) {
   let timeout;
-  return function executedFunction(...args) {
+  const debounced = function executedFunction(...args) {
     const later = () => {
       clearTimeout(timeout);
+      timeout = null;
       func(...args);
     };
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
+    // Store timeout reference for cleanup
+    queueSearchTimeout = timeout;
   };
+  // Add cancel method
+  debounced.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+      queueSearchTimeout = null;
+    }
+  };
+  return debounced;
 }
 
 // Register event listener immediately when module loads
@@ -1222,7 +1399,10 @@ window.addEventListener('view-loaded', async (e) => {
   }
 }, { once: false }); // Allow multiple calls if needed
 
-// Cleanup on page unload
+// Cleanup on page unload (for actual page close)
 window.addEventListener('beforeunload', () => {
   stopPolling();
 });
+
+// Export cleanup function for SPA navigation
+export { stopPolling };
