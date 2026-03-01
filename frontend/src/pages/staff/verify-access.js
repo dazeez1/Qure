@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { isAuthenticated, clearAuth, getAuthToken, getAuthUser } from '../../utils/auth.js';
+import { isAuthenticated, clearAuth, getAuthToken, getAuthUser, setAuthUser } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 
 // Guard 1: Check authentication
@@ -99,6 +99,16 @@ if (verifyForm) {
       if (response.ok && result.success) {
         // Success
         toast.success(result.message || 'Access verified successfully');
+
+        // Update user object in localStorage with isVerified: true
+        const currentUser = getAuthUser();
+        if (currentUser) {
+          const updatedUser = {
+            ...currentUser,
+            isVerified: true,
+          };
+          setAuthUser(updatedUser);
+        }
 
         // Clear form
         verifyForm.reset();

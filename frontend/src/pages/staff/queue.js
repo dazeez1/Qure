@@ -28,7 +28,12 @@ let notifyBtn;
 let reassignBtn;
 let noShowBtn;
 let queueSearchInput;
-let queueDatePicker;
+let queueDateRangeBtn;
+let queueDateRangePanel;
+let queueStartDateInput;
+let queueEndDateInput;
+let queueApplyDateBtn;
+let queueClearDateBtn;
 let patientDetailsCard;
 let roomModalOverlay;
 let roomList;
@@ -78,7 +83,12 @@ async function initQueuePage() {
   reassignBtn = document.getElementById('reassign-btn');
   noShowBtn = document.getElementById('no-show-btn');
   queueSearchInput = document.getElementById('queue-search-input');
-  queueDatePicker = document.getElementById('queue-date-picker');
+  queueDateRangeBtn = document.getElementById('queue-date-range-btn');
+  queueDateRangePanel = document.getElementById('queue-date-range-panel');
+  queueStartDateInput = document.getElementById('queue-start-date-input');
+  queueEndDateInput = document.getElementById('queue-end-date-input');
+  queueApplyDateBtn = document.getElementById('queue-apply-date-btn');
+  queueClearDateBtn = document.getElementById('queue-clear-date-btn');
   patientDetailsCard = document.getElementById('patient-details-card');
   roomModalOverlay = document.getElementById('room-modal-overlay');
   roomList = document.getElementById('room-list');
@@ -104,11 +114,8 @@ async function initQueuePage() {
     sidebarCloseBtn.addEventListener('click', hidePatientDetails);
   }
 
-  // Set today's date as default
-  const today = new Date().toISOString().split('T')[0];
-  if (queueDatePicker) {
-    queueDatePicker.value = today;
-  }
+  // Setup date range filter
+  setupDateRangeFilter();
 
   // Setup event listeners
   setupEventListeners();
@@ -161,10 +168,7 @@ function setupEventListeners() {
     queueSearchInput.addEventListener('input', debounce(handleSearch, 300));
   }
 
-  // Date picker
-  if (queueDatePicker) {
-    queueDatePicker.addEventListener('change', handleDateChange);
-  }
+  // Date range filter is set up in setupDateRangeFilter()
 
   // Pagination
   if (prevPageBtn) {
@@ -280,8 +284,12 @@ async function fetchQueue(showLoading = true) {
       params.append('search', queueSearchInput.value.trim());
     }
 
-    if (queueDatePicker && queueDatePicker.value) {
-      params.append('date', queueDatePicker.value);
+    // Date range filter
+    if (queueStartDateInput && queueStartDateInput.value) {
+      params.append('dateFrom', queueStartDateInput.value);
+    }
+    if (queueEndDateInput && queueEndDateInput.value) {
+      params.append('dateTo', queueEndDateInput.value);
     }
 
     const endpoint = `/staff/queue?${params.toString()}`;
@@ -933,11 +941,43 @@ function handleSearch() {
 }
 
 /**
- * Handle date change
+ * Setup date range filter
  */
-function handleDateChange() {
-  currentPage = 1;
-  fetchQueue();
+function setupDateRangeFilter() {
+  if (!queueDateRangeBtn || !queueDateRangePanel) return;
+
+  // Toggle panel visibility
+  queueDateRangeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    queueDateRangePanel.classList.toggle('visible');
+  });
+
+  // Close panel when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!queueDateRangePanel.contains(e.target) && !queueDateRangeBtn.contains(e.target)) {
+      queueDateRangePanel.classList.remove('visible');
+    }
+  });
+
+  // Apply date filter
+  if (queueApplyDateBtn) {
+    queueApplyDateBtn.addEventListener('click', () => {
+      queueDateRangePanel.classList.remove('visible');
+      currentPage = 1;
+      fetchQueue();
+    });
+  }
+
+  // Clear date filter
+  if (queueClearDateBtn) {
+    queueClearDateBtn.addEventListener('click', () => {
+      if (queueStartDateInput) queueStartDateInput.value = '';
+      if (queueEndDateInput) queueEndDateInput.value = '';
+      queueDateRangePanel.classList.remove('visible');
+      currentPage = 1;
+      fetchQueue();
+    });
+  }
 }
 
 /**

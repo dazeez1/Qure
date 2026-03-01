@@ -11,7 +11,7 @@ const ROUTE_TO_VIEW = {
   'dashboard': 'dashboard',
   'queues': 'queue',
   'waiting-area': 'waiting-area',
-  'appointments': 'coming-soon',
+  'appointments': 'appointments',
   'settings': 'settings'
 };
 
@@ -66,6 +66,18 @@ async function loadView(route) {
         }, 100);
       }).catch(err => {
         console.error('Failed to load waiting area page:', err);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      });
+    } else if (route === 'appointments') {
+      // Import appointments module
+      import('../pages/staff/appointments.js').then(() => {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
+        }, 100);
+      }).catch(err => {
+        console.error('Failed to load appointments page:', err);
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('view-loaded', { detail: { route, view } }));
         }, 100);
