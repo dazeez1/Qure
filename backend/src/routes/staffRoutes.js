@@ -4,6 +4,7 @@ import { verifyAccessCode } from '../controllers/authController.js';
 import { getStaffQueue, getDashboardSummary } from '../controllers/queueController.js';
 import { getStaffDashboard } from '../controllers/staffController.js';
 import { exportHospitalData } from '../controllers/exportController.js';
+import { getStaffAppointmentsController } from '../controllers/staffAppointmentController.js';
 
 const router = express.Router();
 
@@ -45,6 +46,15 @@ router.get('/queue', getStaffQueue);
  * Access: Authenticated staff/admin users
  */
 router.get('/export', exportHospitalData);
+
+/**
+ * GET /api/staff/appointments
+ * Get hospital appointments with filtering and pagination
+ * Query params: status, departmentId, startDate, endDate, search, page, limit
+ * Access: Authenticated staff/admin users (verified)
+ * Protected by: authenticate → requireStaffOrAdmin → requireStaffVerified
+ */
+router.get('/appointments', getStaffAppointmentsController);
 
 export default router;
 

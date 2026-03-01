@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
   staff: {
     getQueue: `${API_BASE_URL}/staff/queue`,
     getDashboardSummary: `${API_BASE_URL}/staff/dashboard-summary`,
+    appointments: `${API_BASE_URL}/staff/appointments`,
   },
   queue: {
     updateStatus: (id) => `${API_BASE_URL}/queue/${id}/status`,

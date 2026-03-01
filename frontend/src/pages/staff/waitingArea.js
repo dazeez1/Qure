@@ -762,6 +762,10 @@ function initializeWaitingArea() {
   fetchWaitingAreas();
 }
 
+// Store filter handlers for cleanup
+let facilityFilterHandler = null;
+let floorFilterHandler = null;
+
 /**
  * Setup filter dropdown event listeners
  */
@@ -769,16 +773,27 @@ function setupFilters() {
   const facilityFilter = document.getElementById('facility-filter');
   const floorFilter = document.getElementById('floor-filter');
 
+  // Remove old handlers if they exist
+  if (facilityFilter && facilityFilterHandler) {
+    facilityFilter.removeEventListener('change', facilityFilterHandler);
+  }
+  if (floorFilter && floorFilterHandler) {
+    floorFilter.removeEventListener('change', floorFilterHandler);
+  }
+
+  // Create new handlers
   if (facilityFilter) {
-    facilityFilter.addEventListener('change', () => {
+    facilityFilterHandler = () => {
       renderWaitingAreas(waitingAreas);
-    });
+    };
+    facilityFilter.addEventListener('change', facilityFilterHandler);
   }
 
   if (floorFilter) {
-    floorFilter.addEventListener('change', () => {
+    floorFilterHandler = () => {
       renderWaitingAreas(waitingAreas);
-    });
+    };
+    floorFilter.addEventListener('change', floorFilterHandler);
   }
 }
 
@@ -943,12 +958,27 @@ function cancelDeleteWaitingArea() {
   }
 }
 
-// Initialize on DOMContentLoaded
+// Export for potential use by navigation system
+export { fetchWaitingAreas, renderWaitingAreas, initializeWaitingArea };
+
+// Listen for view-loaded event (SPA navigation)
+window.addEventListener('view-loaded', async (event) => {
+  if (event.detail?.route === 'waiting-area') {
+    // Small delay to ensure DOM is ready
+    setTimeout(() => {
+      initializeWaitingArea();
+    }, 100);
+  }
+}, { once: false }); // Allow multiple calls when navigating back
+
+// Auto-initialize if page is loaded directly (non-SPA)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeWaitingArea);
 } else {
-  initializeWaitingArea();
+  // Check if we're in SPA mode (app-content exists) or standalone page
+  const contentEl = document.getElementById('app-content');
+  if (!contentEl) {
+    // Standalone page, initialize immediately
+    initializeWaitingArea();
+  }
 }
-
-// Export for potential use by navigation system
-export { fetchWaitingAreas, renderWaitingAreas };

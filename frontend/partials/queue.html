@@ -6,8 +6,33 @@
     </div>
     <!-- Filters at the top -->
     <div class="queue-filters">
-      <div class="filter-group">
-        <input type="date" id="queue-date-picker" class="date-picker" />
+      <!-- Date Range Filter -->
+      <div class="filter-dropdown date-range-dropdown">
+        <button class="filter-dropdown-btn" id="queue-date-range-btn">
+          <span class="material-symbols-outlined">calendar_today</span>
+          Date Range
+          <span class="material-symbols-outlined dropdown-arrow">keyboard_arrow_down</span>
+        </button>
+        <div class="date-range-panel" id="queue-date-range-panel">
+          <div class="date-range-content">
+            <div class="date-input-group">
+              <label>Start Date</label>
+              <div class="date-input-wrapper">
+                <input type="date" class="date-input" id="queue-start-date-input" placeholder="dd/mm/yyyy">
+              </div>
+            </div>
+            <div class="date-input-group">
+              <label>End Date</label>
+              <div class="date-input-wrapper">
+                <input type="date" class="date-input" id="queue-end-date-input" placeholder="dd/mm/yyyy">
+              </div>
+            </div>
+            <div class="date-range-actions">
+              <button class="btn btn-secondary" id="queue-clear-date-btn">Clear</button>
+              <button class="btn btn-primary" id="queue-apply-date-btn">Apply</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="filter-group search-group">
         <span class="material-symbols-outlined search-icon">search</span>
@@ -168,20 +193,100 @@
     position: relative;
   }
 
-  .date-picker {
+  .filter-dropdown {
+    position: relative;
+  }
+
+  .filter-dropdown-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     padding: 0.8rem 1.2rem;
-    border: 1px solid var(--color-border-gray);
+    border: 1px solid #e0e0e0;
+    background: #fff;
     border-radius: 0.6rem;
     font-size: 1.2rem;
-    width: 18rem;
-    background-color: var(--color-background-white);
-    color: var(--color-text-primary);
+    color: #666;
+    cursor: pointer;
     transition: border-color 0.2s;
   }
 
-  .date-picker:focus {
-    outline: none;
+  .filter-dropdown-btn:hover {
     border-color: var(--color-primary-blue);
+  }
+
+  .filter-dropdown-btn .material-symbols-outlined {
+    font-size: 1.8rem;
+  }
+
+  .filter-dropdown-btn .dropdown-arrow {
+    font-size: 1.8rem;
+    margin-left: auto;
+  }
+
+  .date-range-dropdown {
+    position: relative;
+  }
+
+  .date-range-panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.8rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+
+  .date-range-panel.visible {
+    display: block;
+  }
+
+  .date-range-content {
+    padding: 1.2rem;
+  }
+
+  .date-input-group {
+    margin-bottom: 1.2rem;
+  }
+
+  .date-input-group label {
+    display: block;
+    font-size: 1rem;
+    color: #666;
+    margin-bottom: 0.6rem;
+  }
+
+  .date-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .date-input {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    color: #333;
+  }
+
+  .date-range-actions {
+    display: flex;
+    gap: 0.8rem;
+    justify-content: flex-end;
+    margin-top: 1.2rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .date-range-actions .btn {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
   }
 
   .search-group {
@@ -203,7 +308,7 @@
     border: 1px solid var(--color-border-gray);
     border-radius: 0.6rem;
     font-size: 1.2rem;
-    width: 28rem;
+    width: 22rem;
     background-color: var(--color-background-white);
     color: var(--color-text-primary);
     transition: border-color 0.2s;
@@ -882,7 +987,6 @@
       width: 100%;
     }
 
-    .date-picker,
     .search-group .search-input {
       width: 100%;
     }

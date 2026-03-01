@@ -31,6 +31,15 @@ if (!user || (user.role !== 'STAFF' && user.role !== 'ADMIN')) {
   throw new Error('Invalid role'); // Stop execution
 }
 
+// Guard: Check if user is verified (for STAFF role only)
+// Primary staff and ADMIN are auto-verified, but regular STAFF need to verify access code
+if (user.role === 'STAFF' && !user.isPrimary && !user.isVerified) {
+  // Not verified - redirect to access code page immediately
+  // Don't show toast here to avoid multiple notifications
+  window.location.href = '/staff/verify-access.html';
+  throw new Error('Not verified'); // Stop execution
+}
+
 // ============================================
 // INITIALIZE UI - Run Once
 // ============================================
@@ -71,6 +80,14 @@ window.addEventListener('view-loaded', async (event) => {
 // ============================================
 
 async function initializeDashboard() {
+  // Double-check verification status before making any API calls
+  const currentUser = getAuthUser();
+  if (currentUser && currentUser.role === 'STAFF' && !currentUser.isPrimary && !currentUser.isVerified) {
+    // User is not verified - redirect immediately (no API calls)
+    window.location.href = '/staff/verify-access.html';
+    return;
+  }
+
   // Load stored hospital name immediately (before API call)
   loadStoredHospitalName();
   
@@ -101,6 +118,14 @@ async function initializeDashboard() {
   const searchInput = document.getElementById('dashboard-search-input');
   
   setInterval(() => {
+    // Check verification status before each auto-refresh
+    const refreshUser = getAuthUser();
+    if (refreshUser && refreshUser.role === 'STAFF' && !refreshUser.isPrimary && !refreshUser.isVerified) {
+      // User became unverified - redirect
+      window.location.href = '/staff/verify-access.html';
+      return;
+    }
+    
     const depId = departmentFilter.value || '';
     const search = searchInput.value.trim();
     
@@ -197,6 +222,14 @@ async function populateDepartments() {
  * @param {string} search - Optional search query
  */
 async function fetchDashboardSummary(departmentId = '', search = '') {
+  // Check verification status before making API call
+  const currentUser = getAuthUser();
+  if (currentUser && currentUser.role === 'STAFF' && !currentUser.isPrimary && !currentUser.isVerified) {
+    // User is not verified - don't make API call, redirect instead
+    window.location.href = '/staff/verify-access.html';
+    return;
+  }
+
   try {
     const query = new URLSearchParams();
     if (departmentId) query.append('departmentId', departmentId);
@@ -209,6 +242,12 @@ async function fetchDashboardSummary(departmentId = '', search = '') {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
+      // Check if it's a 403 verification error
+      if (response.status === 403 && (result.message === 'Hospital access code required' || result.message?.includes('access code'))) {
+        // Redirect to verify access page without showing toast
+        window.location.href = '/staff/verify-access.html';
+        return;
+      }
       throw new Error(result.message || 'Failed to load dashboard data');
     }
 
@@ -217,6 +256,12 @@ async function fetchDashboardSummary(departmentId = '', search = '') {
     renderHospitalName(data.hospitalName);
     // Queue table is handled separately by fetchQueueEntries()
   } catch (error) {
+    // Check if it's a verification error
+    if (error.message?.includes('access code') || error.message?.includes('Access denied')) {
+      // Redirect to verify access page without showing toast
+      window.location.href = '/staff/verify-access.html';
+      return;
+    }
     console.error('Dashboard fetch error:', error);
     toast.error('Failed to load dashboard data');
   }
@@ -284,7 +329,7 @@ function renderHospitalName(hospitalName) {
       hospitalNameEl.textContent = hospitalName;
       // Store in localStorage for persistence
       localStorage.setItem('hospitalName', hospitalName);
-    } else {
+      } else {
       // Try to load from localStorage if API didn't return it
       const storedName = localStorage.getItem('hospitalName');
       if (storedName) {
@@ -313,6 +358,14 @@ function loadStoredHospitalName() {
  * @param {string} search - Optional search query
  */
 async function fetchQueueEntries(departmentId = '', search = '') {
+  // Check verification status before making API call
+  const currentUser = getAuthUser();
+  if (currentUser && currentUser.role === 'STAFF' && !currentUser.isPrimary && !currentUser.isVerified) {
+    // User is not verified - don't make API call, redirect instead
+    window.location.href = '/staff/verify-access.html';
+    return;
+  }
+
   try {
     const query = new URLSearchParams();
     if (departmentId) query.append('departmentId', departmentId);
@@ -328,12 +381,24 @@ async function fetchQueueEntries(departmentId = '', search = '') {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
+      // Check if it's a 403 verification error
+      if (response.status === 403 && (result.message === 'Hospital access code required' || result.message?.includes('access code'))) {
+        // Redirect to verify access page without showing toast
+        window.location.href = '/staff/verify-access.html';
+        return;
+      }
       throw new Error(result.message || 'Failed to load queue entries');
     }
 
     // Response structure: { success: true, data: { queueEntries: [...], pagination: {...} } }
     renderQueueTable(result.data);
   } catch (error) {
+    // Check if it's a verification error
+    if (error.message?.includes('access code') || error.message?.includes('Access denied')) {
+      // Redirect to verify access page without showing toast
+      window.location.href = '/staff/verify-access.html';
+      return;
+    }
     console.error('Queue fetch error:', error);
     toast.error('Failed to load queue entries');
   }
@@ -650,39 +715,5 @@ function setupAnnouncementCreateButton() {
   });
 }
 
-// ============================================
-// INITIAL VERIFICATION
-// ============================================
-
-// Verify access to staff dashboard on initial load
-const verifyInitialAccess = async () => {
-  try {
-    const response = await apiGet('/staff/dashboard');
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      if (response.status === 403 && result.message === 'Hospital access code required') {
-        toast.error('Enter hospital access code to continue');
-        setTimeout(() => {
-          window.location.href = '/staff/verify-access.html';
-        }, 1500);
-        return;
-      }
-      
-      if (response.status === 401) {
-        toast.error('Session expired. Please log in again.');
-        clearAuth();
-        setTimeout(() => {
-          window.location.href = '/login.html';
-        }, 1500);
-        return;
-      }
-    }
-  } catch (error) {
-    console.error('Initial access verification error:', error);
-    // Don't block the app, but log the error
-  }
-};
-
-// Run initial verification
-verifyInitialAccess();
+// Note: Verification check is now done at the top of the file
+// and in each API call function to prevent unnecessary API calls

@@ -535,13 +535,9 @@ export const getStaffQueue = async (req, res, next) => {
     const isPrimary = user.isPrimary === true;
     const isDoctor = user.role === 'STAFF' && user.staffRole === 'DOCTOR';
 
-    // Validate role (must be Admin, Primary, or Doctor)
-    if (!isAdmin && !isPrimary && !isDoctor) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Doctor, Admin, or Primary staff role required.',
-      });
-    }
+    // Allow all verified STAFF members to access queue
+    // (Verification is already checked by requireStaffVerified middleware)
+    // Role-based filtering will be applied below
 
     // Parse query parameters
     const {
