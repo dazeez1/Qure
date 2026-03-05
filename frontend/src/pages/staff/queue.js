@@ -8,7 +8,6 @@
 import { apiGet, apiPatch } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
 
 // State
 let queueData = [];

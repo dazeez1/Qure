@@ -8,7 +8,6 @@
 import { apiGet, apiPost, apiPatch } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated, getAuthToken } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
 
 // ============================================
 // AUTH GUARD - Initialize Once
@@ -550,22 +549,8 @@ function setupExportDataButton() {
       const urlParams = new URLSearchParams(window.location.search);
       const days = urlParams.get('days') || '7';
 
-      // Get auth token
-      const token = getAuthToken();
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      // Use BASE_API_URL from apiClient
-      const BASE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-
-      // Call export endpoint
-      const response = await fetch(`${BASE_API_URL}/staff/export?days=${days}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      // Call export endpoint using relative path
+      const response = await apiGet(`/staff/export?days=${days}`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Export failed' }));

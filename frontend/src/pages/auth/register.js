@@ -8,7 +8,7 @@
 'use strict';
 
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { apiPost } from '../../utils/apiClient.js';
 
 const roleRadios = document.querySelectorAll('input[name="role"]');
 const patientForm = document.getElementById('form-patient');
@@ -345,7 +345,7 @@ function setupFormValidation(form, formType) {
         phone: data.phone || undefined,
         gender: data.gender || undefined,
       };
-      endpoint = API_ENDPOINTS.patientAuth.register;
+      endpoint = '/patient/auth/register';
     } else {
       // Staff registration - use existing auth endpoint
       apiData = {
@@ -357,18 +357,12 @@ function setupFormValidation(form, formType) {
         role: 'STAFF',
         hospitalName: data.hospitalName,
       };
-      endpoint = API_ENDPOINTS.auth.register;
+      endpoint = '/auth/register';
     }
 
     // Send to backend API
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(apiData),
-      });
+      const response = await apiPost(endpoint, apiData);
 
       const result = await response.json();
 

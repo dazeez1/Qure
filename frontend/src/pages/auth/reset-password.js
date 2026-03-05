@@ -6,7 +6,7 @@
 'use strict';
 
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { apiPost } from '../../utils/apiClient.js';
 
 // Get form elements
 const resetPasswordForm = document.getElementById('reset-password-form');
@@ -151,13 +151,7 @@ if (resetPasswordForm && token) {
     resetBtn.textContent = 'Resetting...';
 
     try {
-      const response = await fetch(API_ENDPOINTS.auth.resetPassword, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token, password }),
-      });
+      const response = await apiPost('/auth/reset-password', { token, password });
 
       const result = await response.json();
 

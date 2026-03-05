@@ -8,7 +8,7 @@
 'use strict';
 
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { apiPost } from '../../utils/apiClient.js';
 import { setAuthToken, setAuthUser } from '../../utils/auth.js';
 
 const loginForm = document.getElementById('login-form');
@@ -164,8 +164,8 @@ async function handleLogin(role) {
 
   // Use different endpoints for patient vs staff
   const endpoint = role === 'PATIENT' 
-    ? API_ENDPOINTS.patientAuth.login 
-    : API_ENDPOINTS.auth.login;
+    ? '/patient/auth/login'
+    : '/auth/login';
 
   // Add role field for staff login (not needed for patient)
   if (role !== 'PATIENT') {
@@ -173,13 +173,7 @@ async function handleLogin(role) {
   }
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(loginData),
-    });
+    const response = await apiPost(endpoint, loginData);
 
     const result = await response.json();
 

@@ -6,7 +6,7 @@
 'use strict';
 
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { apiPost } from '../../utils/apiClient.js';
 
 const acceptForm = document.getElementById('accept-invite-form');
 const passwordInput = document.getElementById('accept-password');
@@ -205,15 +205,9 @@ if (acceptForm) {
     acceptBtn.textContent = 'Accepting...';
 
     try {
-      const response = await fetch(API_ENDPOINTS.auth.acceptInvite, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          password: password,
-        }),
+      const response = await apiPost('/auth/accept-invite', {
+        token: token,
+        password: password,
       });
 
       const result = await response.json();

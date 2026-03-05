@@ -20,7 +20,18 @@ export const ToastType = {
  * @param {string} type - Toast type (success, error, warning, info)
  * @param {number} duration - Duration in milliseconds (default: 5000)
  */
+// Track active toast to prevent duplicates
+let activeToast = null;
+let activeToastTimer = null;
+
 export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
+  // Remove existing toast if present (show only one at a time)
+  if (activeToast) {
+    clearTimeout(activeToastTimer);
+    removeToast(activeToast);
+    activeToast = null;
+  }
+
   // Remove existing toasts container if present
   let toastContainer = document.getElementById('toast-container');
   if (!toastContainer) {
@@ -35,42 +46,61 @@ export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
   toast.className = `toast toast-${type}`;
   toast.setAttribute('role', 'alert');
   toast.setAttribute('aria-live', 'assertive');
+  
+  // Store as active toast
+  activeToast = toast;
 
-  // Toast content
-  toast.innerHTML = `
-    <div class="toast-content">
-      <span class="toast-icon">${getToastIcon(type)}</span>
-      <span class="toast-message">${escapeHtml(message)}</span>
-      <button class="toast-close" aria-label="Close notification">
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-  `;
+  // Toast content - create elements properly to avoid icon flashing
+  const toastContent = document.createElement('div');
+  toastContent.className = 'toast-content';
+  
+  const toastIcon = document.createElement('span');
+  toastIcon.className = 'toast-icon';
+  toastIcon.innerHTML = getToastIcon(type);
+  
+  const toastMessage = document.createElement('span');
+  toastMessage.className = 'toast-message';
+  toastMessage.textContent = message;
+  
+  const toastClose = document.createElement('button');
+  toastClose.className = 'toast-close';
+  toastClose.setAttribute('aria-label', 'Close notification');
+  toastClose.innerHTML = '<span class="material-symbols-outlined">close</span>';
+  
+  toastContent.appendChild(toastIcon);
+  toastContent.appendChild(toastMessage);
+  toastContent.appendChild(toastClose);
+  toast.appendChild(toastContent);
 
   // Add to container
   toastContainer.appendChild(toast);
 
-  // Trigger animation
+  // Trigger animation after a brief delay to ensure content is rendered
   requestAnimationFrame(() => {
-    toast.classList.add('toast-show');
+    requestAnimationFrame(() => {
+      toast.classList.add('toast-show');
+    });
   });
 
   // Auto remove after duration
-  const autoRemoveTimer = setTimeout(() => {
+  activeToastTimer = setTimeout(() => {
     removeToast(toast);
+    activeToast = null;
   }, duration);
 
   // Manual close button
   const closeBtn = toast.querySelector('.toast-close');
   closeBtn.addEventListener('click', () => {
-    clearTimeout(autoRemoveTimer);
+    clearTimeout(activeToastTimer);
     removeToast(toast);
+    activeToast = null;
   });
 
   // Click to dismiss
   toast.addEventListener('click', () => {
-    clearTimeout(autoRemoveTimer);
+    clearTimeout(activeToastTimer);
     removeToast(toast);
+    activeToast = null;
   });
 };
 
@@ -78,12 +108,19 @@ export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
  * Remove toast with animation
  */
 const removeToast = (toast) => {
+  if (!toast) return;
+  
   toast.classList.remove('toast-show');
   toast.classList.add('toast-hide');
 
   setTimeout(() => {
     if (toast.parentNode) {
       toast.parentNode.removeChild(toast);
+    }
+
+    // Clear active toast if this was it
+    if (activeToast === toast) {
+      activeToast = null;
     }
 
     // Remove container if empty
@@ -125,4 +162,3 @@ export const toast = {
   warning: (message, duration) => showToast(message, ToastType.WARNING, duration),
   info: (message, duration) => showToast(message, ToastType.INFO, duration),
 };
-

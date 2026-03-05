@@ -7,6 +7,7 @@
 
 import { isAuthenticated, clearAuth, getAuthToken, getAuthUser, setAuthUser } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { apiPost } from '../../utils/apiClient.js';
 
 // Guard 1: Check authentication
 if (!isAuthenticated()) {
@@ -84,15 +85,7 @@ if (verifyForm) {
         return;
       }
 
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-      const response = await fetch(`${API_BASE_URL}/staff/verify-access`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ accessCode }),
-      });
+      const response = await apiPost('/staff/verify-access', { accessCode });
 
       const result = await response.json();
 

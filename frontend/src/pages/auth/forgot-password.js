@@ -6,7 +6,7 @@
 'use strict';
 
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
+import { apiPost } from '../../utils/apiClient.js';
 
 // Get form elements
 const forgotPasswordForm = document.getElementById('forgot-password-form');
@@ -84,13 +84,7 @@ if (forgotPasswordForm) {
     sendResetBtn.textContent = 'Sending...';
 
     try {
-      const response = await fetch(API_ENDPOINTS.auth.forgotPassword, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email }),
-      });
+      const response = await apiPost('/auth/forgot-password', { email });
 
       const result = await response.json();
 

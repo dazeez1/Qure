@@ -1,39 +1,55 @@
 /**
  * API Configuration
  * Centralized API base URL configuration
+ * 
+ * Usage:
+ * - ALWAYS use relative paths with apiClient functions (apiGet, apiPost, apiPatch, etc.)
+ * - Example: apiGet('/auth/login'), apiPost('/patient/auth/register', data)
+ * - The apiClient.js automatically prepends the base URL to relative paths
+ * 
+ * Note: This file is kept for reference only. All API calls should use apiClient.js functions
+ * with relative paths instead of direct fetch() calls.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+// Internal use only - apiClient.js uses this
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+/**
+ * API Endpoints Reference (for documentation only)
+ * All API calls should use apiClient functions with relative paths:
+ * - apiGet('/auth/login')
+ * - apiPost('/patient/auth/register', data)
+ * - apiPatch('/queue/123/status', { status: 'CALLED' })
+ */
 export const API_ENDPOINTS = {
   auth: {
-    register: `${API_BASE_URL}/auth/register`, // Staff registration
-    login: `${API_BASE_URL}/auth/login`,
-    forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
-    resetPassword: `${API_BASE_URL}/auth/reset-password`,
-    acceptInvite: `${API_BASE_URL}/auth/accept-invite`,
+    register: '/auth/register', // Staff registration
+    login: '/auth/login',
+    forgotPassword: '/auth/forgot-password',
+    resetPassword: '/auth/reset-password',
+    acceptInvite: '/auth/accept-invite',
   },
   patientAuth: {
-    register: `${API_BASE_URL}/patient/auth/register`, // Patient registration
-    login: `${API_BASE_URL}/patient/auth/login`, // Patient login
+    register: '/patient/auth/register', // Patient registration
+    login: '/patient/auth/login', // Patient login
   },
   settings: {
-    getOrganization: `${API_BASE_URL}/settings/organization`,
-    updateOrganization: `${API_BASE_URL}/settings/organization`,
+    getOrganization: '/settings/organization',
+    updateOrganization: '/settings/organization',
   },
   staff: {
-    getQueue: `${API_BASE_URL}/staff/queue`,
-    getDashboardSummary: `${API_BASE_URL}/staff/dashboard-summary`,
-    appointments: `${API_BASE_URL}/staff/appointments`,
+    getQueue: '/staff/queue',
+    getDashboardSummary: '/staff/dashboard-summary',
+    appointments: '/staff/appointments',
   },
   queue: {
-    updateStatus: (id) => `${API_BASE_URL}/queue/${id}/status`,
+    updateStatus: (id) => `/queue/${id}/status`,
   },
   rooms: {
-    list: `${API_BASE_URL}/rooms`,
+    list: '/rooms',
   },
   waitingAreas: {
-    list: `${API_BASE_URL}/waiting-areas`,
+    list: '/waiting-areas',
   },
 };
 

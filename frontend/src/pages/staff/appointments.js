@@ -6,7 +6,6 @@
 import { apiGet } from '../../utils/apiClient.js';
 import { isAuthenticated, getAuthUser } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
-import { API_ENDPOINTS } from '../../config/api.js';
 
 // State
 let appointmentsState = [];
