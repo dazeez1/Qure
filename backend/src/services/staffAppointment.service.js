@@ -11,6 +11,9 @@ import prisma from '../config/database.js';
  * @param {string} [params.search] - Search by patient full name
  * @param {number} [params.page=1] - Page number (default: 1)
  * @param {number} [params.limit=20] - Items per page (default: 20)
+ * @param {string} [params.userRole] - User role (STAFF or ADMIN)
+ * @param {boolean} [params.isPrimary] - Whether user is primary staff
+ * @param {string} [params.userId] - User ID (for doctor filtering)
  * @returns {Promise<Object>} - Appointments with pagination metadata
  */
 async function getStaffAppointments({
@@ -22,6 +25,9 @@ async function getStaffAppointments({
   search,
   page = 1,
   limit = 20,
+  userRole,
+  isPrimary,
+  userId,
 }) {
   // Validate hospitalId required
   if (!hospitalId) {
@@ -51,6 +57,17 @@ async function getStaffAppointments({
     }),
   };
 
+  // Role-based filtering: Doctors see only their assigned appointments
+  // Note: Doctors can only see appointments that have been checked in (have a queueEntry)
+  // Admin and Primary staff see all appointments
+  const isDoctor = userRole === 'STAFF' && !isPrimary;
+  if (isDoctor && userId) {
+    // Filter to only appointments where queueEntry exists AND assignedDoctorId matches userId
+    where.queueEntry = {
+      assignedDoctorId: userId,
+    };
+  }
+
   // Count total
   const totalCount = await prisma.appointment.count({ where });
 
@@ -64,10 +81,20 @@ async function getStaffAppointments({
       department: {
         select: { id: true, name: true },
       },
-      queueEntry: true,
+      queueEntry: {
+        include: {
+          assignedDoctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      },
     },
     orderBy: {
-      appointmentDate: 'desc',
+      appointmentDate: 'asc',
     },
     skip: (page - 1) * limit,
     take: limit,

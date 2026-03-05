@@ -69,21 +69,36 @@
   <div class="appointments-content">
     <!-- Table Section -->
     <div class="appointments-table-container">
-      <table class="appointments-table">
-        <thead>
-          <tr>
-            <th>Patient Name</th>
-            <th>Doctor</th>
-            <th>Department</th>
-            <th>Type</th>
-            <th>Date & Time</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="appointments-table-body">
-          <!-- Appointments will be rendered here -->
-        </tbody>
-      </table>
+      <!-- Bulk Actions Bar -->
+      <div class="bulk-actions-bar" id="bulk-actions-bar" style="display: none;">
+        <span class="bulk-actions-count" id="bulk-actions-count">0 selected</span>
+        <div class="bulk-actions-buttons">
+          <button class="btn btn-secondary btn-sm" id="bulk-reschedule-btn">Bulk Reschedule</button>
+          <button class="btn btn-secondary btn-sm" id="bulk-cancel-btn">Bulk Cancel</button>
+          <button class="btn btn-secondary btn-sm" id="bulk-clear-btn">Clear Selection</button>
+        </div>
+      </div>
+
+      <div class="appointments-table-wrapper">
+        <table class="appointments-table">
+          <thead>
+            <tr>
+              <th class="checkbox-column">
+                <input type="checkbox" id="select-all-checkbox" class="appointment-checkbox" title="Select all">
+              </th>
+              <th>Patient Name</th>
+              <th>Doctor</th>
+              <th>Department</th>
+              <th>Type</th>
+              <th>Date & Time</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="appointments-table-body">
+            <!-- Appointments will be rendered here -->
+          </tbody>
+        </table>
+      </div>
 
       <!-- Pagination -->
       <div class="pagination-container" id="appointments-pagination">
@@ -119,6 +134,10 @@
             <span class="detail-value" id="detail-doctor">-</span>
           </div>
           <div class="detail-item">
+            <span class="detail-label">Reason:</span>
+            <span class="detail-value" id="detail-reason">-</span>
+          </div>
+          <div class="detail-item">
             <span class="detail-label">Notes:</span>
             <span class="detail-value" id="detail-notes">-</span>
           </div>
@@ -132,13 +151,129 @@
 
         <!-- Action Buttons -->
         <div class="appointment-actions">
+          <button class="btn btn-primary" id="check-in-btn" style="display: none;">Check-In</button>
+          <button class="btn btn-secondary" id="reschedule-btn" style="display: none;">Reschedule</button>
           <button class="btn btn-secondary" id="no-show-btn">No Show</button>
           <button class="btn btn-secondary" id="cancel-btn">Cancel</button>
           <div class="appointment-actions-row">
             <button class="btn btn-secondary" id="message-btn">Message</button>
             <button class="btn btn-primary" id="edit-btn">Edit</button>
           </div>
+          <button class="btn btn-secondary" id="assign-doctor-btn" style="display: none;">Assign Doctor</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Reschedule Modal -->
+    <div class="reschedule-modal-overlay" id="reschedule-modal-overlay" style="display: none;">
+      <div class="reschedule-modal-container">
+        <div class="reschedule-modal-content">
+          <h2 class="reschedule-modal-title">Reschedule Appointment</h2>
+          <p class="reschedule-modal-message">Select a new date and time for this appointment.</p>
+          
+          <div class="reschedule-form-group">
+            <label for="reschedule-datetime-input" class="reschedule-form-label">New Date & Time</label>
+            <input 
+              type="datetime-local" 
+              id="reschedule-datetime-input" 
+              class="reschedule-datetime-input"
+              required
+            />
+          </div>
+
+          <div class="reschedule-modal-actions">
+            <button class="btn btn-secondary" id="reschedule-cancel-btn">Cancel</button>
+            <button class="btn btn-primary" id="reschedule-submit-btn">Reschedule</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Appointment Modal -->
+    <div class="edit-modal-overlay" id="edit-modal-overlay" style="display: none;">
+      <div class="edit-modal-container">
+        <div class="edit-modal-content">
+          <h2 class="edit-modal-title">Edit Appointment</h2>
+          <p class="edit-modal-message">Update appointment notes and reason.</p>
+          
+          <div class="edit-form-group">
+            <label for="edit-reason-input" class="edit-form-label">Reason</label>
+            <input 
+              type="text" 
+              id="edit-reason-input" 
+              class="edit-text-input"
+              placeholder="e.g., Follow-up, Consultation"
+            />
+          </div>
+
+          <div class="edit-form-group">
+            <label for="edit-notes-input" class="edit-form-label">Notes</label>
+            <textarea 
+              id="edit-notes-input" 
+              class="edit-textarea-input"
+              rows="4"
+              placeholder="Add any additional notes..."
+            ></textarea>
+          </div>
+
+          <div class="edit-modal-actions">
+            <button class="btn btn-secondary" id="edit-cancel-btn">Cancel</button>
+            <button class="btn btn-primary" id="edit-submit-btn">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message Modal -->
+    <div class="message-modal-overlay" id="message-modal-overlay" style="display: none;">
+      <div class="message-modal-container">
+        <div class="message-modal-content">
+          <h2 class="message-modal-title">Send Message to Patient</h2>
+          <p class="message-modal-message">Send an email notification and in-app message to the patient about their appointment.</p>
+          
+          <div class="message-form-group">
+            <label for="message-input" class="message-form-label">Message</label>
+            <textarea 
+              id="message-input" 
+              class="message-textarea-input"
+              rows="6"
+              placeholder="Enter your message to the patient..."
+            ></textarea>
+          </div>
+
+          <div class="message-modal-actions">
+            <button class="btn btn-secondary" id="message-cancel-btn">Cancel</button>
+            <button class="btn btn-primary" id="message-submit-btn">Send Message</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Assign Doctor Modal -->
+    <div class="assign-doctor-modal-overlay" id="assign-doctor-modal-overlay" style="display: none;">
+      <div class="assign-doctor-modal-container">
+        <div class="assign-doctor-modal-content">
+          <h2 class="assign-doctor-modal-title">Assign Doctor</h2>
+          <p class="assign-doctor-modal-message">Select a doctor to assign to this appointment.</p>
+          
+          <div class="assign-doctor-form-group">
+            <label for="assign-doctor-select" class="assign-doctor-form-label">Doctor</label>
+            <select 
+              id="assign-doctor-select" 
+              class="assign-doctor-select"
+            >
+              <option value="">-- Select Doctor --</option>
+            </select>
+          </div>
+
+          <div class="assign-doctor-modal-actions">
+            <button class="btn btn-secondary" id="assign-doctor-cancel-btn">Cancel</button>
+            <button class="btn btn-primary" id="assign-doctor-submit-btn">Assign</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
       </div>
     </div>
   </div>
@@ -391,9 +526,21 @@
     flex: 1;
     background: #fff;
     border-radius: 0.8rem;
-    padding: 2rem;
-    overflow: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     transition: flex 0.3s ease;
+  }
+
+  .appointments-table-wrapper {
+    flex: 1;
+    overflow: auto;
+    padding: 2rem;
+  }
+
+  .pagination-container {
+    flex-shrink: 0;
+    padding: 0 2rem 2rem 2rem;
   }
 
   .appointments-content.sidebar-visible .appointments-table-container {
@@ -413,13 +560,48 @@
     background: #f9f9f9;
   }
 
+  /* Bulk Actions Bar */
+  .bulk-actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.2rem;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0;
+  }
+
+  .bulk-actions-count {
+    font-size: 1rem;
+    color: #666;
+    font-weight: 500;
+  }
+
+  .bulk-actions-buttons {
+    display: flex;
+    gap: 0.8rem;
+  }
+
+  .btn-sm {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    border-radius: 0.4rem;
+  }
+
   .appointments-table th {
     padding: 1.2rem;
     text-align: left;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: 600;
     color: #1a1a1a;
     border-bottom: 2px solid #e0e0e0;
+  }
+
+  .appointments-table th.checkbox-column {
+    width: 3rem;
+    max-width: 3rem;
+    padding: 1.2rem 0.6rem;
+    text-align: center;
   }
 
   .appointments-table tbody tr {
@@ -433,13 +615,35 @@
   }
 
   .appointments-table tbody tr.selected {
-    background: #e8f0fe;
+    background: rgba(0, 0, 0, 0.03);
+  }
+
+  .appointments-table tbody tr.checkbox-selected {
+    background: rgba(0, 0, 0, 0.03);
   }
 
   .appointments-table td {
     padding: 1.2rem;
-    font-size: 1.2rem;
+    font-size: 1rem;
     color: #333;
+  }
+
+  .appointments-table td.checkbox-column {
+    width: 3rem;
+    max-width: 3rem;
+    padding: 1.2rem 0.6rem;
+    text-align: center;
+  }
+
+  .appointment-checkbox {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    accent-color: #0E3995;
+  }
+
+  .appointment-checkbox:hover {
+    transform: scale(1.1);
   }
 
   .status-badge {
@@ -619,5 +823,370 @@
     padding: 4rem 2rem;
     color: #999;
     font-size: 1.4rem;
+  }
+
+  /* Reschedule Modal Styles */
+  .reschedule-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+    padding: 1.6rem;
+  }
+
+  .reschedule-modal-container {
+    background: #ffffff;
+    border-radius: 0.8rem;
+    box-shadow: 0 0.4rem 1.6rem rgba(0, 0, 0, 0.15),
+                0 0.2rem 0.4rem rgba(0, 0, 0, 0.1);
+    max-width: 40rem;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .reschedule-modal-content {
+    padding: 2.4rem;
+  }
+
+  .reschedule-modal-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 1.2rem 0;
+    text-align: center;
+  }
+
+  .reschedule-modal-message {
+    font-size: 1.1rem;
+    color: #64748b;
+    margin: 0 0 2rem 0;
+    text-align: center;
+  }
+
+  .reschedule-form-group {
+    margin-bottom: 2rem;
+  }
+
+  .reschedule-form-label {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.8rem;
+  }
+
+  .reschedule-datetime-input {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #333;
+    transition: border-color 0.2s;
+  }
+
+  .reschedule-datetime-input:focus {
+    outline: none;
+    border-color: #0E3995;
+    box-shadow: 0 0 0 0.3rem rgba(14, 57, 149, 0.1);
+  }
+
+  .reschedule-modal-actions {
+    display: flex;
+    gap: 1.2rem;
+    justify-content: flex-end;
+  }
+
+  .reschedule-modal-actions .btn {
+    padding: 0.8rem 1.6rem;
+    font-size: 1.1rem;
+    border-radius: 0.6rem;
+    min-width: 10rem;
+  }
+
+  /* Edit Modal Styles */
+  .edit-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+    padding: 1.6rem;
+  }
+
+  .edit-modal-container {
+    background: #ffffff;
+    border-radius: 0.8rem;
+    box-shadow: 0 0.4rem 1.6rem rgba(0, 0, 0, 0.15),
+                0 0.2rem 0.4rem rgba(0, 0, 0, 0.1);
+    max-width: 40rem;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .edit-modal-content {
+    padding: 2.4rem;
+  }
+
+  .edit-modal-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 1.2rem 0;
+    text-align: center;
+  }
+
+  .edit-modal-message {
+    font-size: 1.1rem;
+    color: #64748b;
+    margin: 0 0 2rem 0;
+    text-align: center;
+  }
+
+  .edit-form-group {
+    margin-bottom: 1.6rem;
+  }
+
+  .edit-form-label {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.8rem;
+  }
+
+  .edit-text-input {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #333;
+    transition: border-color 0.2s;
+  }
+
+  .edit-text-input:focus {
+    outline: none;
+    border-color: #0E3995;
+    box-shadow: 0 0 0 0.3rem rgba(14, 57, 149, 0.1);
+  }
+
+  .edit-textarea-input {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #333;
+    transition: border-color 0.2s;
+    resize: vertical;
+  }
+
+  .edit-textarea-input:focus {
+    outline: none;
+    border-color: #0E3995;
+    box-shadow: 0 0 0 0.3rem rgba(14, 57, 149, 0.1);
+  }
+
+  .edit-modal-actions {
+    display: flex;
+    gap: 1.2rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+  }
+
+  .edit-modal-actions .btn {
+    padding: 0.8rem 1.6rem;
+    font-size: 1.1rem;
+    border-radius: 0.6rem;
+    min-width: 10rem;
+  }
+
+  /* Message Modal Styles */
+  .message-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+    padding: 1.6rem;
+  }
+
+  .message-modal-container {
+    background: #ffffff;
+    border-radius: 0.8rem;
+    box-shadow: 0 0.4rem 1.6rem rgba(0, 0, 0, 0.15),
+                0 0.2rem 0.4rem rgba(0, 0, 0, 0.1);
+    max-width: 40rem;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .message-modal-content {
+    padding: 2.4rem;
+  }
+
+  .message-modal-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 1.2rem 0;
+    text-align: center;
+  }
+
+  .message-modal-message {
+    font-size: 1.1rem;
+    color: #64748b;
+    margin: 0 0 2rem 0;
+    text-align: center;
+  }
+
+  .message-form-group {
+    margin-bottom: 2rem;
+  }
+
+  .message-form-label {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.8rem;
+  }
+
+  .message-textarea-input {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #333;
+    transition: border-color 0.2s;
+    resize: vertical;
+  }
+
+  .message-textarea-input:focus {
+    outline: none;
+    border-color: #0E3995;
+    box-shadow: 0 0 0 0.3rem rgba(14, 57, 149, 0.1);
+  }
+
+  .message-modal-actions {
+    display: flex;
+    gap: 1.2rem;
+    justify-content: flex-end;
+  }
+
+  .message-modal-actions .btn {
+    padding: 0.8rem 1.6rem;
+    font-size: 1.1rem;
+    border-radius: 0.6rem;
+    min-width: 10rem;
+  }
+
+  /* Assign Doctor Modal Styles */
+  .assign-doctor-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+    padding: 1.6rem;
+  }
+
+  .assign-doctor-modal-container {
+    background: #ffffff;
+    border-radius: 0.8rem;
+    box-shadow: 0 0.4rem 1.6rem rgba(0, 0, 0, 0.15),
+                0 0.2rem 0.4rem rgba(0, 0, 0, 0.1);
+    max-width: 40rem;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .assign-doctor-modal-content {
+    padding: 2.4rem;
+  }
+
+  .assign-doctor-modal-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 1.2rem 0;
+    text-align: center;
+  }
+
+  .assign-doctor-modal-message {
+    font-size: 1.1rem;
+    color: #64748b;
+    margin: 0 0 2rem 0;
+    text-align: center;
+  }
+
+  .assign-doctor-form-group {
+    margin-bottom: 2rem;
+  }
+
+  .assign-doctor-form-label {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.8rem;
+  }
+
+  .assign-doctor-select {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #333;
+    transition: border-color 0.2s;
+    background: #fff;
+  }
+
+  .assign-doctor-select:focus {
+    outline: none;
+    border-color: #0E3995;
+    box-shadow: 0 0 0 0.3rem rgba(14, 57, 149, 0.1);
+  }
+
+  .assign-doctor-modal-actions {
+    display: flex;
+    gap: 1.2rem;
+    justify-content: flex-end;
+  }
+
+  .assign-doctor-modal-actions .btn {
+    padding: 0.8rem 1.6rem;
+    font-size: 1.1rem;
+    border-radius: 0.6rem;
+    min-width: 10rem;
   }
 </style>
