@@ -10,6 +10,8 @@ lerna-debug.log*
 .DS_Store
 **/.DS_Store
 .cursor/rules/coding-guidelines.mdc
+.cursor/rules/architecture-principles.mdc
+.cursor/rules/no-alert-popups.mdc
 
 
 # Diagnostic reports (https://nodejs.org/api/report.html)

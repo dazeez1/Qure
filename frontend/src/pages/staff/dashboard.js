@@ -619,7 +619,26 @@ async function createAnnouncement(payload) {
       throw new Error(result.message || 'Failed to create announcement');
     }
 
-    toast.success('Announcement created');
+    // Show success message with recipient count if available
+    const emailResult = result.data?.emailResult;
+    if (emailResult && emailResult.totalRecipients > 0) {
+      const audienceLabel = payload.audience === 'STAFF' 
+        ? 'staff members' 
+        : payload.audience === 'PATIENT' 
+        ? 'patients' 
+        : 'recipients';
+      
+      const successMessage = `Announcement sent to ${emailResult.successCount} ${audienceLabel}`;
+      toast.success(successMessage);
+      
+      // Log if some emails failed
+      if (emailResult.failedCount > 0) {
+        console.warn(`[Announcement] ${emailResult.failedCount} email(s) failed to send`);
+      }
+    } else {
+      // Fallback message if email result not available
+      toast.success('Announcement created successfully');
+    }
   } catch (error) {
     console.error('Create announcement error:', error);
     toast.error(error.message || 'Failed to create announcement');

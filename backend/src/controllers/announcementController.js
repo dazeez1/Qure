@@ -89,8 +89,9 @@ export const createAnnouncement = async (req, res, next) => {
     });
 
     // Send announcement emails (non-blocking - don't fail announcement creation if email fails)
+    let emailResult = null;
     try {
-      const emailResult = await sendAnnouncementEmail({
+      emailResult = await sendAnnouncementEmail({
         hospitalId: user.hospitalId,
         audience,
         title: title.trim(),
@@ -118,6 +119,7 @@ export const createAnnouncement = async (req, res, next) => {
       message: 'Announcement created successfully.',
       data: {
         announcement,
+        emailResult: emailResult || null, // Include email result if available
       },
     });
   } catch (error) {
