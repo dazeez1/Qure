@@ -547,6 +547,7 @@ export const getStaffQueue = async (req, res, next) => {
       search,
       dateFrom,
       dateTo,
+      waitingAreaId,
       page = '1',
       limit = '20',
     } = req.query;
@@ -617,6 +618,27 @@ export const getStaffQueue = async (req, res, next) => {
         where.priority = upperPriority;
       }
       // If invalid, silently ignore (don't filter by priority)
+    }
+
+    // Waiting area filter
+    if (waitingAreaId) {
+      // Validate waiting area belongs to hospital
+      const waitingArea = await prisma.waitingArea.findFirst({
+        where: {
+          id: waitingAreaId,
+          hospitalId: user.hospitalId,
+        },
+        select: { id: true },
+      });
+
+      if (!waitingArea) {
+        return res.status(404).json({
+          success: false,
+          message: 'Waiting area not found or does not belong to your hospital.',
+        });
+      }
+
+      where.waitingAreaId = waitingAreaId;
     }
 
     // Search filter (patient fullName or ticketNumber)
@@ -731,6 +753,12 @@ export const getStaffQueue = async (req, res, next) => {
               id: true,
               firstName: true,
               lastName: true,
+            },
+          },
+          waitingArea: {
+            select: {
+              id: true,
+              name: true,
             },
           },
         },
@@ -1858,6 +1886,198 @@ export const bulkReassignQueueEntries = async (req, res, next) => {
       data: {
         updatedCount: result.updatedCount,
         newDoctorName: result.newDoctorName,
+      },
+    });
+  } catch (error) {
+    // Handle validation errors
+    if (error.message) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Bulk assign queue entries to waiting area
+ * PATCH /api/queue/bulk-waiting-area
+ * 
+ * Admin or Primary Staff only endpoint for bulk waiting area assignment
+ * 
+ * Body: {
+ *   queueEntryIds: string[] (required, array of queue entry IDs)
+ *   waitingAreaId: string (required, waiting area ID)
+ * }
+ * 
+ * Rules:
+ * - Only allows assignment for entries in WAITING, TRIAGE, CALLED status
+ * - Validates hospital ownership for all entries
+ * - Validates waiting area exists, is active, and belongs to hospital
+ * - Checks capacity before assignment (excludes entries being moved)
+ * - Clears room assignment when assigning waiting area
+ * - Wraps entire operation in transaction
+ * 
+ * Returns: { updatedCount: number, waitingAreaName: string }
+ */
+export const bulkAssignWaitingArea = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { queueEntryIds, waitingAreaId } = req.body;
+
+    // Validate user is ADMIN or Primary
+    const isAdmin = user && user.role === 'ADMIN';
+    const isPrimary = user && user.isPrimary === true;
+    
+    if (!isAdmin && !isPrimary) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role or Primary staff required.',
+      });
+    }
+
+    // Validate hospital association
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hospital association required.',
+      });
+    }
+
+    // Validate required fields
+    if (!queueEntryIds || !Array.isArray(queueEntryIds) || queueEntryIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'queueEntryIds array is required and must not be empty.',
+      });
+    }
+
+    if (!waitingAreaId) {
+      return res.status(400).json({
+        success: false,
+        message: 'waitingAreaId is required.',
+      });
+    }
+
+    // Wrap entire operation in transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Validate waiting area
+      const waitingArea = await tx.waitingArea.findUnique({
+        where: { id: waitingAreaId },
+      });
+
+      if (!waitingArea) {
+        throw new Error('Waiting area not found.');
+      }
+
+      // Validate waiting area is active
+      if (!waitingArea.isActive) {
+        throw new Error('Waiting area is not active. Cannot assign inactive waiting area.');
+      }
+
+      // Validate waiting area belongs to same hospital
+      if (waitingArea.hospitalId !== user.hospitalId) {
+        throw new Error('Waiting area does not belong to your hospital.');
+      }
+
+      // Find all queue entries
+      const queueEntries = await tx.queueEntry.findMany({
+        where: {
+          id: { in: queueEntryIds },
+        },
+        include: {
+          hospital: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      // Validate all entries exist
+      if (queueEntries.length !== queueEntryIds.length) {
+        const foundIds = queueEntries.map(e => e.id);
+        const missingIds = queueEntryIds.filter(id => !foundIds.includes(id));
+        throw new Error(`Queue entries not found: ${missingIds.join(', ')}`);
+      }
+
+      // Validate hospital ownership for all entries
+      const invalidHospitalEntries = queueEntries.filter(
+        entry => entry.hospitalId !== user.hospitalId
+      );
+
+      if (invalidHospitalEntries.length > 0) {
+        throw new Error(
+          `Access denied. ${invalidHospitalEntries.length} queue entry(ies) do not belong to your hospital.`
+        );
+      }
+
+      // Only allow assignment for WAITING, TRIAGE, CALLED statuses
+      const allowedStatuses = ['WAITING', 'TRIAGE', 'CALLED'];
+      const invalidStatusEntries = queueEntries.filter(
+        entry => !allowedStatuses.includes(entry.status)
+      );
+
+      if (invalidStatusEntries.length > 0) {
+        const invalidStatuses = invalidStatusEntries.map(e => `${e.id} (${e.status})`).join(', ');
+        throw new Error(
+          `Cannot assign waiting area to entries in invalid statuses. Invalid entries: ${invalidStatuses}`
+        );
+      }
+
+      // Filter entries that need assignment (exclude if already assigned to this waiting area)
+      const entriesToAssign = queueEntries.filter(
+        entry => entry.waitingAreaId !== waitingAreaId
+      );
+
+      if (entriesToAssign.length === 0) {
+        throw new Error('All queue entries are already assigned to this waiting area.');
+      }
+
+      // Check capacity: Count current occupancy + entries being moved
+      const currentOccupancy = await tx.queueEntry.count({
+        where: {
+          waitingAreaId: waitingAreaId,
+          status: {
+            in: ['WAITING', 'TRIAGE', 'CALLED'],
+          },
+          id: { notIn: entriesToAssign.map(e => e.id) }, // Exclude entries being moved
+        },
+      });
+
+      const newOccupancy = currentOccupancy + entriesToAssign.length;
+
+      if (newOccupancy > waitingArea.capacity) {
+        throw new Error(
+          `Waiting area capacity exceeded. Current: ${currentOccupancy}/${waitingArea.capacity}, ` +
+          `would become: ${newOccupancy}/${waitingArea.capacity} after assigning ${entriesToAssign.length} entry(ies).`
+        );
+      }
+
+      // Update all queue entries (assign waiting area and clear room)
+      const updateResult = await tx.queueEntry.updateMany({
+        where: {
+          id: { in: entriesToAssign.map(e => e.id) },
+        },
+        data: {
+          waitingAreaId: waitingAreaId,
+          assignedRoomId: null, // Clear room when assigning waiting area
+        },
+      });
+
+      return {
+        updatedCount: updateResult.count,
+        waitingAreaName: waitingArea.name,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk waiting area assignment completed. ${result.updatedCount} queue entry(ies) assigned to ${result.waitingAreaName}.`,
+      data: {
+        updatedCount: result.updatedCount,
+        waitingAreaName: result.waitingAreaName,
       },
     });
   } catch (error) {

@@ -13,6 +13,13 @@ import { toast } from '../../utils/toast.js';
 let waitingAreas = [];
 let waitingAreasState = [];
 let selectedAreaId = null;
+let selectedArea = null;
+let selectedPatientIds = new Set();
+let isMyPatientsView = false; // Toggle between waiting area view and my patients view
+let pollingInterval = null; // Auto-refresh polling interval
+let currentPage = 1; // Current page for pagination
+let totalPatients = 0; // Total patient count for pagination
+const PATIENTS_PER_PAGE = 10; // Pagination limit
 
 /**
  * Fetch waiting areas from API
@@ -93,9 +100,33 @@ function createWaitingAreaCard(area) {
   
   // Add click handler
   card.addEventListener('click', () => {
+    // If in My Patients view, switch back to waiting area view
+    if (isMyPatientsView) {
+      isMyPatientsView = false;
+      updateMyPatientsToggle();
+    }
+
+    // Toggle selection: if clicking the same card, unselect it
+    if (selectedAreaId === area.id) {
+      selectedAreaId = null;
+      selectedArea = null;
+      selectedPatientIds.clear();
+      highlightSelectedCard();
+      // Hide sidebar when unselecting
+      const sidebar = document.getElementById('waiting-area-details-sidebar');
+      if (sidebar) {
+        sidebar.style.display = 'none';
+      }
+      return;
+    }
+
+    // Select new area
     selectedAreaId = area.id;
+    selectedArea = area;
+    selectedPatientIds.clear(); // Clear selections when switching areas
+    currentPage = 1; // Reset to first page
     highlightSelectedCard();
-    fetchAreaPatients(area.id);
+    fetchAreaPatients(area.id, 1, true);
   });
 
   // Safely get values with defaults
@@ -277,10 +308,13 @@ function highlightSelectedCard() {
 /**
  * Fetch patients in a waiting area
  * @param {string} waitingAreaId - Waiting area ID
+ * @param {number} page - Page number (default: 1)
+ * @param {boolean} showSpinner - Whether to show loading spinner (default: false)
  */
-async function fetchAreaPatients(waitingAreaId) {
+async function fetchAreaPatients(waitingAreaId, page = 1, showSpinner = false) {
   try {
-    const response = await apiGet(`/staff/queue?waitingAreaId=${waitingAreaId}`);
+    currentPage = page;
+    const response = await apiGet(`/staff/queue?waitingAreaId=${waitingAreaId}&page=${page}&limit=${PATIENTS_PER_PAGE}`);
     const result = await response.json();
     
     if (!response.ok || !result.success) {
@@ -288,15 +322,54 @@ async function fetchAreaPatients(waitingAreaId) {
     }
 
     const entries = result.data.queueEntries || [];
-    renderAreaPatients(entries);
+    totalPatients = result.data.pagination?.totalCount || entries.length;
+    renderAreaPatients(entries, result.data.pagination);
   } catch (error) {
     console.error('Error fetching area patients:', error);
-    toast.error(error.message || 'Failed to load patients');
-    // Clear patient list on error
-    const container = document.getElementById('waiting-area-patient-list');
-    if (container) {
-      container.innerHTML = '<div class="empty-state"><p>Failed to load patients</p></div>';
+    if (showSpinner) {
+      toast.error(error.message || 'Failed to load patients');
     }
+    // Hide sidebar on error
+    const sidebar = document.getElementById('waiting-area-details-sidebar');
+    if (sidebar) {
+      sidebar.style.display = 'none';
+    }
+    selectedAreaId = null;
+    selectedArea = null;
+    highlightSelectedCard(); // Remove highlight
+  }
+}
+
+/**
+ * Fetch all doctor's assigned patients (My Patients view)
+ * @param {number} page - Page number (default: 1)
+ * @param {boolean} showSpinner - Whether to show loading spinner (default: false)
+ */
+async function fetchMyPatients(page = 1, showSpinner = false) {
+  try {
+    currentPage = page;
+    // Filter by status to only get moveable patients
+    const response = await apiGet(`/staff/queue?status=WAITING,TRIAGE,CALLED&page=${page}&limit=${PATIENTS_PER_PAGE}`);
+    const result = await response.json();
+    
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to fetch patients');
+    }
+
+    const entries = result.data.queueEntries || [];
+    totalPatients = result.data.pagination?.totalCount || entries.length;
+    renderAreaPatients(entries, result.data.pagination);
+  } catch (error) {
+    console.error('Error fetching my patients:', error);
+    if (showSpinner) {
+      toast.error(error.message || 'Failed to load patients');
+    }
+    // Hide sidebar on error
+    const sidebar = document.getElementById('waiting-area-details-sidebar');
+    if (sidebar) {
+      sidebar.style.display = 'none';
+    }
+    isMyPatientsView = false;
   }
 }
 
@@ -304,11 +377,62 @@ async function fetchAreaPatients(waitingAreaId) {
 let currentPatientEntries = [];
 
 /**
+ * Show waiting area details in sidebar
+ * @param {Object} area - Waiting area object
+ */
+function showWaitingAreaDetails(area) {
+  const sidebar = document.getElementById('waiting-area-details-sidebar');
+  const titleEl = document.getElementById('waiting-area-details-title');
+  const occupancyInfoEl = document.getElementById('waiting-area-occupancy-info');
+  const occupancyTextEl = document.getElementById('occupancy-text');
+  const criticalBadgeEl = document.getElementById('critical-badge');
+
+  if (!sidebar || !titleEl) return;
+
+  // Show sidebar
+  sidebar.style.display = 'flex';
+
+  // Update title based on view mode
+  if (isMyPatientsView) {
+    titleEl.textContent = 'My Patients';
+    if (occupancyInfoEl) {
+      occupancyInfoEl.style.display = 'none';
+    }
+  } else {
+    titleEl.textContent = area.name || 'Unnamed Area';
+
+    // Update occupancy
+    const capacity = area.capacity ?? 0;
+    const currentOccupancy = area.currentOccupancy ?? 0;
+    const occupancyPercentage = capacity > 0 ? Math.round((currentOccupancy / capacity) * 100) : 0;
+    const isCritical = occupancyPercentage >= 90;
+
+    if (occupancyTextEl) {
+      occupancyTextEl.textContent = `${currentOccupancy}/${capacity}`;
+    }
+
+    if (occupancyInfoEl) {
+      occupancyInfoEl.style.display = 'flex';
+    }
+
+    if (criticalBadgeEl) {
+      if (isCritical) {
+        criticalBadgeEl.style.display = 'inline-block';
+      } else {
+        criticalBadgeEl.style.display = 'none';
+      }
+    }
+  }
+}
+
+/**
  * Render patients in the waiting area
  * @param {Array} entries - Array of queue entry objects
+ * @param {Object} pagination - Pagination info object
  */
-function renderAreaPatients(entries) {
+function renderAreaPatients(entries, pagination = null) {
   const container = document.getElementById('waiting-area-patient-list');
+  const sidebar = document.getElementById('waiting-area-details-sidebar');
   
   if (!container) {
     console.error('Patient list container not found');
@@ -321,13 +445,28 @@ function renderAreaPatients(entries) {
   // Clear container
   container.innerHTML = '';
 
-  // Handle empty state
+  // Always show sidebar when an area is selected (even if empty)
+  if (sidebar && (selectedArea || isMyPatientsView)) {
+    sidebar.style.display = 'flex';
+    if (isMyPatientsView) {
+      showWaitingAreaDetails({ name: 'My Patients' });
+    } else if (selectedArea) {
+      showWaitingAreaDetails(selectedArea);
+    }
+  }
+
+  // Handle empty state - show empty message
   if (!entries || entries.length === 0) {
+    const emptyMessage = isMyPatientsView 
+      ? 'No assigned patients' 
+      : 'No patients in this waiting area';
     container.innerHTML = `
       <div class="empty-state">
-        <p>No patients in this area</p>
+        <p>${emptyMessage}</p>
       </div>
     `;
+    updateMoveButton();
+    renderPagination(null); // Clear pagination
     return;
   }
 
@@ -337,8 +476,17 @@ function renderAreaPatients(entries) {
     container.appendChild(patientItem);
   });
 
-  // Setup event delegation for move buttons
+  // Setup event delegation for move buttons and checkboxes
   setupMoveHandlers();
+  setupCheckboxHandlers();
+  updateMoveButton();
+
+  // Render pagination if needed
+  if (pagination && totalPatients > PATIENTS_PER_PAGE) {
+    renderPagination(pagination);
+  } else {
+    renderPagination(null);
+  }
 }
 
 /**
@@ -351,7 +499,6 @@ function createPatientItem(entry) {
   item.className = 'patient-item';
 
   const patientName = entry.patient?.fullName || 'Unknown Patient';
-  const status = entry.status || 'UNKNOWN';
   const checkInTime = entry.checkInTime;
 
   // Calculate wait time in minutes
@@ -367,24 +514,25 @@ function createPatientItem(entry) {
     ? 'Just now' 
     : `${waitTimeMinutes} ${waitTimeMinutes === 1 ? 'min' : 'mins'}`;
 
-  // Format status
-  const statusText = formatStatus(status);
-  const statusClass = status.toLowerCase().replace(/_/g, '-');
+  const isSelected = selectedPatientIds.has(entry.id);
 
-  // Populate dropdown with waiting areas
-  const dropdownOptions = populateMoveDropdown(entry);
+  // Show waiting area name in My Patients view
+  let waitingAreaInfo = '';
+  if (isMyPatientsView && entry.waitingArea) {
+    waitingAreaInfo = `<div class="patient-item-area">${escapeHtml(entry.waitingArea.name)}</div>`;
+  } else if (isMyPatientsView && !entry.waitingArea) {
+    waitingAreaInfo = '<div class="patient-item-area" style="color: #9ca3af;">No area assigned</div>';
+  }
 
+  item.setAttribute('data-entry-id', entry.id);
   item.innerHTML = `
+    <input type="checkbox" class="patient-item-checkbox" data-entry-id="${entry.id}" ${isSelected ? 'checked' : ''}>
     <div class="patient-item-info">
       <div class="patient-item-name">${escapeHtml(patientName)}</div>
-      <div class="patient-item-wait">${waitTimeText}</div>
-      <span class="status-badge ${statusClass}">${escapeHtml(statusText)}</span>
+      <div class="patient-item-wait">- ${waitTimeText}</div>
+      ${waitingAreaInfo}
     </div>
     <div class="patient-item-actions">
-      <select class="move-area-select" data-entry-id="${entry.id}">
-        <option value="">Select area...</option>
-        ${dropdownOptions}
-      </select>
       <button class="move-area-btn" data-entry-id="${entry.id}">
         Move
       </button>
@@ -437,22 +585,145 @@ function setupMoveHandlers() {
   const container = document.getElementById('waiting-area-patient-list');
   if (!container) return;
 
+  // Remove old listener if exists
+  container.removeEventListener('click', handleMoveButtonClick);
+
   // Use event delegation to handle move button clicks
-  container.addEventListener('click', async (e) => {
-    if (e.target.classList.contains('move-area-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const entryId = e.target.getAttribute('data-entry-id');
-      if (!entryId) return;
-
-      await handleMovePatient(entryId);
-    }
-  });
+  container.addEventListener('click', handleMoveButtonClick);
 }
 
 /**
- * Handle moving a patient to a different waiting area
+ * Handle move button click
+ */
+async function handleMoveButtonClick(e) {
+  if (e.target.classList.contains('move-area-btn')) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const entryId = e.target.getAttribute('data-entry-id');
+    if (!entryId) return;
+
+    await handleMovePatient(entryId);
+  }
+}
+
+/**
+ * Setup checkbox handlers for patient selection
+ */
+function setupCheckboxHandlers() {
+  const container = document.getElementById('waiting-area-patient-list');
+  if (!container) return;
+
+  // Remove old listener if exists
+  container.removeEventListener('change', handleCheckboxChange);
+
+  // Use event delegation to handle checkbox changes
+  container.addEventListener('change', handleCheckboxChange);
+}
+
+/**
+ * Handle checkbox change
+ */
+function handleCheckboxChange(e) {
+  if (e.target.classList.contains('patient-item-checkbox')) {
+    const entryId = e.target.getAttribute('data-entry-id');
+    if (!entryId) return;
+
+    if (e.target.checked) {
+      selectedPatientIds.add(entryId);
+    } else {
+      selectedPatientIds.delete(entryId);
+    }
+
+    updateMoveButton();
+  }
+}
+
+/**
+ * Update move button visibility and text
+ */
+function updateMoveButton() {
+  const moveBtn = document.getElementById('btn-move-selected');
+  const selectedCount = document.getElementById('selected-count');
+  
+  if (!moveBtn || !selectedCount) return;
+
+  const count = selectedPatientIds.size;
+  if (count > 0) {
+    moveBtn.style.display = 'block';
+    selectedCount.textContent = count;
+  } else {
+    moveBtn.style.display = 'none';
+  }
+}
+
+/**
+ * Render pagination controls
+ * @param {Object} pagination - Pagination info object
+ */
+function renderPagination(pagination) {
+  const paginationContainer = document.getElementById('patient-pagination');
+  if (!paginationContainer) return;
+
+  if (!pagination || totalPatients <= PATIENTS_PER_PAGE) {
+    paginationContainer.style.display = 'none';
+    return;
+  }
+
+  paginationContainer.style.display = 'flex';
+
+  const currentPageNum = pagination.page || currentPage;
+  const totalPages = pagination.totalPages || Math.ceil(totalPatients / PATIENTS_PER_PAGE);
+  const hasNextPage = pagination.hasNextPage || false;
+  const hasPreviousPage = pagination.hasPreviousPage || false;
+
+  const startItem = ((currentPageNum - 1) * PATIENTS_PER_PAGE) + 1;
+  const endItem = Math.min(currentPageNum * PATIENTS_PER_PAGE, totalPatients);
+
+  paginationContainer.innerHTML = `
+    <button class="pagination-btn" id="pagination-prev" ${!hasPreviousPage ? 'disabled' : ''}>
+      Previous
+    </button>
+    <span class="pagination-info">${startItem}-${endItem} of ${totalPatients}</span>
+    <button class="pagination-btn" id="pagination-next" ${!hasNextPage ? 'disabled' : ''}>
+      Next
+    </button>
+  `;
+
+  // Add event listeners
+  const prevBtn = paginationContainer.querySelector('#pagination-prev');
+  const nextBtn = paginationContainer.querySelector('#pagination-next');
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (hasPreviousPage) {
+        selectedPatientIds.clear(); // Clear selections when changing page
+        if (isMyPatientsView) {
+          fetchMyPatients(currentPageNum - 1, false);
+        } else if (selectedAreaId) {
+          fetchAreaPatients(selectedAreaId, currentPageNum - 1, false);
+        }
+      }
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (hasNextPage) {
+        selectedPatientIds.clear(); // Clear selections when changing page
+        if (isMyPatientsView) {
+          fetchMyPatients(currentPageNum + 1, false);
+        } else if (selectedAreaId) {
+          fetchAreaPatients(selectedAreaId, currentPageNum + 1, false);
+        }
+      }
+    });
+  }
+}
+
+
+/**
+ * Handle moving a patient to a different waiting area (single)
  * @param {string} entryId - Queue entry ID
  */
 async function handleMovePatient(entryId) {
@@ -463,27 +734,16 @@ async function handleMovePatient(entryId) {
     return;
   }
 
-  // Get the select dropdown for this entry
-  const container = document.getElementById('waiting-area-patient-list');
-  if (!container) return;
-
-  const select = container.querySelector(`.move-area-select[data-entry-id="${entryId}"]`);
-  if (!select) return;
-
-  const destinationAreaId = select.value;
+  // Show modal to select destination area
+  const destinationAreaId = await showMoveAreaModal();
   if (!destinationAreaId) {
-    toast.error('Please select a waiting area');
-    return;
+    return; // User cancelled
   }
 
-  // Get status from entry
-  const status = entry.status || 'WAITING';
-  
-  // Store source area ID (where patient is currently)
-  const sourceAreaId = entry.waitingAreaId;
-
   // Disable button during request
-  const entryElement = select.closest('.patient-item');
+  const container = document.getElementById('waiting-area-patient-list');
+  const entryElement = container?.querySelector(`.patient-item[data-entry-id="${entryId}"]`) || 
+                       container?.querySelector(`[data-entry-id="${entryId}"]`)?.closest('.patient-item');
   const moveBtn = entryElement?.querySelector('.move-area-btn');
   if (moveBtn) {
     moveBtn.disabled = true;
@@ -491,29 +751,50 @@ async function handleMovePatient(entryId) {
   }
 
   try {
-    const response = await apiPatch(`/queue/${entryId}/status`, {
-      status: status,
-      waitingAreaId: destinationAreaId,
-    });
+    // Check if user is ADMIN or Primary Staff
+    const user = getAuthUser();
+    const isAdmin = user?.role === 'ADMIN';
+    const isPrimary = user?.isPrimary === true;
+    const canUseBulkEndpoint = isAdmin || isPrimary;
 
-    const result = await response.json();
+    let response;
+    let result;
 
-    if (!response.ok || !result.success) {
-      throw new Error(result.message || 'Failed to move patient');
+    if (canUseBulkEndpoint) {
+      // Use bulk endpoint for admins/primary staff (can move any patient)
+      response = await apiPatch('/queue/bulk-waiting-area', {
+        queueEntryIds: [entryId],
+        waitingAreaId: destinationAreaId,
+      });
+      result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to move patient');
+      }
+
+      toast.success('Patient moved successfully');
+    } else {
+      // Use individual endpoint for regular staff (requires assigned doctor)
+      const status = entry.status || 'WAITING';
+      response = await apiPatch(`/queue/${entryId}/status`, {
+        status: status,
+        waitingAreaId: destinationAreaId,
+      });
+      result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to move patient');
+      }
+
+      toast.success('Patient moved successfully');
     }
 
-    toast.success('Patient moved successfully');
-
-    // Refresh waiting areas (updates occupancy for both source and destination)
-    // This recalculates occupancy counts for all areas
+    // Refresh waiting areas and patient list
     await fetchWaitingAreas();
-    
-    // Refresh patient list for the currently viewed area (if any)
-    // selectedAreaId is the area currently being viewed (global state)
-    // If patient was moved from this area, it will be removed from the list
-    // If patient was moved to this area, it will be added to the list
     if (selectedAreaId) {
-      await fetchAreaPatients(selectedAreaId);
+      await fetchAreaPatients(selectedAreaId, currentPage, false);
+    } else if (isMyPatientsView) {
+      await fetchMyPatients(currentPage, false);
     }
 
   } catch (error) {
@@ -527,6 +808,157 @@ async function handleMovePatient(entryId) {
     }
   }
 }
+
+/**
+ * Handle bulk move of selected patients
+ */
+async function handleBulkMovePatients() {
+  const selectedIds = Array.from(selectedPatientIds);
+  if (selectedIds.length === 0) {
+    toast.error('Please select at least one patient');
+    return;
+  }
+
+  // Show modal to select destination area
+  const destinationAreaId = await showMoveAreaModal();
+  if (!destinationAreaId) {
+    return; // User cancelled
+  }
+
+  const moveBtn = document.getElementById('btn-move-selected');
+  if (moveBtn) {
+    moveBtn.disabled = true;
+    moveBtn.textContent = 'Moving...';
+  }
+
+  try {
+    const response = await apiPatch('/queue/bulk-waiting-area', {
+      queueEntryIds: selectedIds,
+      waitingAreaId: destinationAreaId,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to move patients');
+    }
+
+    toast.success(`Successfully moved ${result.data.updatedCount} patient(s)`);
+
+    // Clear selections
+    selectedPatientIds.clear();
+    updateMoveButton();
+
+    // Refresh waiting areas and patient list
+    await fetchWaitingAreas();
+    if (selectedAreaId) {
+      await fetchAreaPatients(selectedAreaId, currentPage, false);
+    } else if (isMyPatientsView) {
+      await fetchMyPatients(currentPage, false);
+    }
+
+  } catch (error) {
+    console.error('Error moving patients:', error);
+    toast.error(error.message || 'Failed to move patients');
+  } finally {
+    // Re-enable button
+    if (moveBtn) {
+      moveBtn.disabled = false;
+      moveBtn.textContent = `Move (${selectedIds.length})`;
+    }
+  }
+}
+
+/**
+ * Show modal to select destination waiting area
+ * @returns {Promise<string|null>} Selected area ID or null if cancelled
+ */
+async function showMoveAreaModal() {
+  return new Promise((resolve) => {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '2000';
+
+    // Get available areas (exclude current)
+    const availableAreas = waitingAreasState.filter(
+      area => area.id !== selectedAreaId && area.isActive
+    );
+
+    if (availableAreas.length === 0) {
+      toast.error('No other waiting areas available');
+      resolve(null);
+      return;
+    }
+
+    overlay.innerHTML = `
+      <div class="modal-card" style="max-width: 400px;">
+        <div class="modal-header">
+          <h2>Select Waiting Area</h2>
+          <button class="modal-close" id="move-modal-close">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="move-area-select">Waiting Area</label>
+            <select id="move-area-select" class="move-modal-select">
+              <option value="">Select Area</option>
+              ${availableAreas.map(area => {
+                const isFull = (area.currentOccupancy ?? 0) >= (area.capacity ?? 0);
+                const label = isFull ? `${area.name} (Full)` : area.name;
+                return `<option value="${area.id}" ${isFull ? 'disabled' : ''}>${label}</option>`;
+              }).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="move-modal-cancel">Cancel</button>
+          <button type="button" class="btn btn-primary" id="move-modal-confirm">Move</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeModal = () => {
+      document.body.removeChild(overlay);
+    };
+
+    const confirmBtn = overlay.querySelector('#move-modal-confirm');
+    const cancelBtn = overlay.querySelector('#move-modal-cancel');
+    const closeBtn = overlay.querySelector('#move-modal-close');
+    const select = overlay.querySelector('#move-area-select');
+
+    confirmBtn.addEventListener('click', () => {
+      const selectedAreaId = select.value;
+      if (!selectedAreaId) {
+        toast.error('Please select a waiting area');
+        return;
+      }
+      closeModal();
+      resolve(selectedAreaId);
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      closeModal();
+      resolve(null);
+    });
+
+    closeBtn.addEventListener('click', () => {
+      closeModal();
+      resolve(null);
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeModal();
+        resolve(null);
+      }
+    });
+  });
+}
+
 
 /**
  * Format status text for display
@@ -738,6 +1170,106 @@ async function handleCreateWaitingArea(form) {
 }
 
 /**
+ * Setup My Patients toggle (doctors only)
+ */
+function setupMyPatientsToggle() {
+  const toggleBtn = document.getElementById('btn-my-patients-toggle');
+  if (!toggleBtn) return;
+
+  // Check if user is a doctor (not admin or primary)
+  const user = getAuthUser();
+  const isAdmin = user?.role === 'ADMIN';
+  const isPrimary = user?.isPrimary === true;
+  const isDoctor = user?.role === 'STAFF' && user?.staffRole === 'DOCTOR' && !isPrimary;
+
+  // Only show toggle for doctors
+  if (!isDoctor) {
+    toggleBtn.style.display = 'none';
+    return;
+  }
+
+  // Show toggle button
+  toggleBtn.style.display = 'block';
+  updateMyPatientsToggle();
+
+  // Add click handler
+  toggleBtn.addEventListener('click', () => {
+    isMyPatientsView = !isMyPatientsView;
+    updateMyPatientsToggle();
+
+    if (isMyPatientsView) {
+      // Switch to My Patients view
+      selectedAreaId = null;
+      selectedArea = null;
+      selectedPatientIds.clear();
+      currentPage = 1; // Reset to first page
+      highlightSelectedCard(); // Remove card selection
+      fetchMyPatients(1, true);
+    } else {
+      // Switch back to waiting area view
+      const sidebar = document.getElementById('waiting-area-details-sidebar');
+      if (sidebar) {
+        sidebar.style.display = 'none';
+      }
+      selectedAreaId = null;
+      selectedArea = null;
+      currentPage = 1;
+    }
+  });
+}
+
+/**
+ * Update My Patients toggle button state
+ */
+function updateMyPatientsToggle() {
+  const toggleBtn = document.getElementById('btn-my-patients-toggle');
+  const toggleText = document.getElementById('my-patients-toggle-text');
+  
+  if (!toggleBtn || !toggleText) return;
+
+  if (isMyPatientsView) {
+    toggleBtn.classList.add('active');
+    toggleText.textContent = 'Waiting Areas';
+  } else {
+    toggleBtn.classList.remove('active');
+    toggleText.textContent = 'My Patients';
+  }
+}
+
+/**
+ * Start polling for auto-refresh
+ */
+function startPolling() {
+  // Clear existing interval
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+  }
+
+  // Poll every 15 seconds (without showing spinner)
+  pollingInterval = setInterval(() => {
+    // Refresh waiting areas
+    fetchWaitingAreas();
+    
+    // Refresh current view (waiting area or my patients)
+    if (isMyPatientsView) {
+      fetchMyPatients(currentPage, false);
+    } else if (selectedAreaId) {
+      fetchAreaPatients(selectedAreaId, currentPage, false);
+    }
+  }, 15000); // 15 seconds
+}
+
+/**
+ * Stop polling
+ */
+function stopPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+}
+
+/**
  * Initialize waiting area page
  */
 function initializeWaitingArea() {
@@ -757,8 +1289,26 @@ function initializeWaitingArea() {
   // Setup filter dropdowns
   setupFilters();
 
+  // Setup bulk move button
+  const bulkMoveBtn = document.getElementById('btn-move-selected');
+  if (bulkMoveBtn) {
+    bulkMoveBtn.addEventListener('click', handleBulkMovePatients);
+  }
+
+  // Setup My Patients toggle (doctors only)
+  setupMyPatientsToggle();
+
+  // Hide sidebar initially
+  const sidebar = document.getElementById('waiting-area-details-sidebar');
+  if (sidebar) {
+    sidebar.style.display = 'none';
+  }
+
   // Fetch waiting areas on page load
   fetchWaitingAreas();
+
+  // Start polling for auto-refresh
+  startPolling();
 }
 
 // Store filter handlers for cleanup
@@ -934,6 +1484,12 @@ async function confirmDeleteWaitingArea() {
     // Clear patient list if this area was selected
     if (selectedAreaId === area.id) {
       selectedAreaId = null;
+      selectedArea = null;
+      selectedPatientIds.clear();
+      const sidebar = document.getElementById('waiting-area-details-sidebar');
+      if (sidebar) {
+        sidebar.style.display = 'none';
+      }
       const container = document.getElementById('waiting-area-patient-list');
       if (container) {
         container.innerHTML = '<div class="empty-state"><p>Select a waiting area to view patients</p></div>';

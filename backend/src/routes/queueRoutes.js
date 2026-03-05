@@ -2,7 +2,7 @@ import express from 'express';
 import { authenticatePatient } from '../middleware/patientAuthMiddleware.js';
 import { authenticate, requireRole, requireStaffVerified } from '../middleware/authMiddleware.js';
 import { requireAdminOrPrimary } from '../middleware/permissionMiddleware.js';
-import { getQueuePreview, checkInToQueue, updateQueueEntryStatus, bulkUpdateQueueEntryStatus, bulkReassignQueueEntries } from '../controllers/queueController.js';
+import { getQueuePreview, checkInToQueue, updateQueueEntryStatus, bulkUpdateQueueEntryStatus, bulkReassignQueueEntries, bulkAssignWaitingArea } from '../controllers/queueController.js';
 
 const router = express.Router();
 
@@ -44,5 +44,13 @@ router.patch('/bulk-status', authenticate, requireAdminOrPrimary, bulkUpdateQueu
  * Body: { queueEntryIds: string[], newDoctorId: string }
  */
 router.patch('/reassign', authenticate, requireAdminOrPrimary, bulkReassignQueueEntries);
+
+/**
+ * PATCH /api/queue/bulk-waiting-area
+ * Bulk assign queue entries to a waiting area (Admin or Primary only)
+ * Requires: ADMIN role OR isPrimary === true
+ * Body: { queueEntryIds: string[], waitingAreaId: string }
+ */
+router.patch('/bulk-waiting-area', authenticate, requireAdminOrPrimary, bulkAssignWaitingArea);
 
 export default router;
