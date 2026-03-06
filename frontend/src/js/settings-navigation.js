@@ -8,6 +8,7 @@
 const SETTINGS_TABS = {
   'organization': '/partials/settings-organization.html',
   'departments': '/partials/settings-departments.html',
+  'rooms': '/partials/settings-rooms.html',
   'staff-roles': '/partials/settings-staff-roles.html',
   'notifications': '/partials/settings-notifications.html',
   'security': '/partials/settings-security.html'
@@ -62,6 +63,8 @@ async function loadSettingsTab(tabName) {
       initializeOrganizationTab();
     } else if (tabName === 'departments') {
       initializeDepartmentsTab();
+    } else if (tabName === 'rooms') {
+      initializeRoomsTab();
     } else if (tabName === 'staff-roles') {
       initializeStaffRolesTab();
     } else if (tabName === 'notifications') {
@@ -281,6 +284,15 @@ async function initializeDepartmentsTab() {
   // Import and initialize departments handler
   const { initDepartmentsUI } = await import('../pages/settings/departments.js');
   initDepartmentsUI();
+}
+
+/**
+ * Initialize Rooms tab functionality
+ */
+async function initializeRoomsTab() {
+  // Import and initialize rooms handler
+  const { initRoomsUI } = await import('../pages/settings/rooms.js');
+  initRoomsUI();
 }
 
 /**

@@ -536,6 +536,7 @@ async function handleCreate(e) {
   const departmentName = formData.get('departmentName')?.trim() || '';
   const shortCode = formData.get('shortCode')?.trim().toUpperCase() || '';
   const status = formData.get('status') || 'ACTIVE';
+  const defaultConsultationTimeMinutes = formData.get('defaultConsultationTimeMinutes') || '15';
 
   // Clear previous errors first
   clearAllErrors('add');
@@ -561,6 +562,7 @@ async function handleCreate(e) {
       name: departmentName,
       shortCode: shortCode,
       status: status,
+      defaultConsultationTimeMinutes: parseInt(defaultConsultationTimeMinutes, 10) || 15,
     });
 
     const result = await response.json();
@@ -614,6 +616,7 @@ export function openEditModal(departmentId) {
   const nameInput = document.getElementById('edit-department-name');
   const shortCodeInput = document.getElementById('edit-department-short-code');
   const statusSelect = document.getElementById('edit-department-status');
+  const consultationTimeInput = document.getElementById('edit-department-consultation-time');
 
   if (modal && form && idInput && nameInput && shortCodeInput && statusSelect) {
     // Populate form
@@ -621,6 +624,9 @@ export function openEditModal(departmentId) {
     nameInput.value = department.name;
     shortCodeInput.value = department.shortCode;
     statusSelect.value = department.status;
+    if (consultationTimeInput) {
+      consultationTimeInput.value = department.defaultConsultationTimeMinutes || 15;
+    }
 
     // Clear errors
     clearAllErrors('edit');
@@ -671,6 +677,7 @@ async function handleUpdate(e) {
   const departmentName = formData.get('departmentName')?.trim() || '';
   const shortCode = formData.get('shortCode')?.trim().toUpperCase() || '';
   const status = formData.get('status') || 'ACTIVE';
+  const defaultConsultationTimeMinutes = formData.get('defaultConsultationTimeMinutes') || null;
 
   if (!departmentId) {
     toast.error('Department ID is missing');
@@ -697,11 +704,18 @@ async function handleUpdate(e) {
 
   try {
     // Call API
-    const response = await apiPut(`/settings/departments/${departmentId}`, {
+    const updateData = {
       name: departmentName,
       shortCode: shortCode,
       status: status,
-    });
+    };
+    
+    // Only include consultation time if it was provided
+    if (defaultConsultationTimeMinutes !== null && defaultConsultationTimeMinutes !== '') {
+      updateData.defaultConsultationTimeMinutes = parseInt(defaultConsultationTimeMinutes, 10);
+    }
+    
+    const response = await apiPut(`/settings/departments/${departmentId}`, updateData);
 
     const result = await response.json();
 

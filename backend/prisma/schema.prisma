@@ -155,17 +155,20 @@ model PasswordResetToken {
 }
 
 model Department {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  name       String
-  shortCode  String
-  status     String   @default("ACTIVE")
-  hospitalId String   @db.ObjectId
+  id                           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name                         String
+  shortCode                    String
+  status                       String   @default("ACTIVE")
+  hospitalId                    String   @db.ObjectId
+  defaultConsultationTimeMinutes Int     @default(15) // Admin-configurable default
+  avgConsultationTimeMinutes   Float?   // Calculated from historical data
 
   hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   staff      User[]
   appointments Appointment[]
   queueEntries QueueEntry[]
   rooms      Room[]
+  waitTimeMetrics WaitTimeMetric[]
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -290,4 +293,23 @@ model Announcement {
   updatedAt   DateTime            @updatedAt
 
   @@map("announcements")
+}
+
+model WaitTimeMetric {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  departmentId      String   @db.ObjectId
+  department        Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  hospitalId        String   @db.ObjectId
+  date              DateTime // Date only (time set to 00:00:00)
+  avgWaitTimeMinutes Float   // Average wait time for the day
+  totalCompleted    Int      @default(0) // Number of completed consultations
+  totalNoShows      Int      @default(0) // Number of no-shows
+  totalCancelled    Int      @default(0) // Number of cancelled
+  avgConsultationTimeMinutes Float? // Average consultation time for the day
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([departmentId, date])
+  @@index([hospitalId, date])
+  @@map("wait_time_metrics")
 }

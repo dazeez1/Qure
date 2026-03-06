@@ -5,9 +5,10 @@
 
 'use strict';
 
-import { apiGet, apiPatch } from '../../utils/apiClient.js';
+import { apiGet, apiPatch, apiPost } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { showConfirmModal } from '../../utils/modal.js';
 
 // State
 let queueData = [];
@@ -15,9 +16,12 @@ let selectedQueueEntries = new Set();
 let currentPage = 1;
 let totalPages = 1;
 let pollingInterval = null;
+let waitTimePollingInterval = null; // Separate interval for wait time updates
 let currentQueueEntryId = null; // For room assignment
 let availableRooms = [];
 let waitingAreas = []; // Store waiting areas with occupancy
+let waitTimeCache = new Map(); // Cache wait times by entry ID
+let waitTimeSSEConnections = new Map(); // Map of active SSE connections by entry ID
 
 // DOM Elements
 let queueTableBody;
@@ -33,6 +37,8 @@ let queueStartDateInput;
 let queueEndDateInput;
 let queueApplyDateBtn;
 let queueClearDateBtn;
+let queueStatusBtn;
+let queueStatusPanel;
 let patientDetailsCard;
 let roomModalOverlay;
 let roomList;
@@ -52,10 +58,31 @@ let isAdmin = false;
 let isPrimary = false;
 
 /**
+ * Load modal CSS for queue page only
+ */
+function loadModalCSS() {
+  // Check if modal CSS is already loaded for this page
+  const existingLink = document.getElementById('queue-modal-css');
+  if (existingLink) {
+    return; // Already loaded
+  }
+
+  // Create and append link element
+  const link = document.createElement('link');
+  link.id = 'queue-modal-css';
+  link.rel = 'stylesheet';
+  link.href = '/src/styles/modal.css';
+  document.head.appendChild(link);
+}
+
+/**
  * Initialize queue page
  */
 async function initQueuePage() {
   console.log('initQueuePage called');
+  
+  // Load modal CSS for this page only
+  loadModalCSS();
   
   // Check authentication
   if (!isAuthenticated()) {
@@ -88,6 +115,8 @@ async function initQueuePage() {
   queueEndDateInput = document.getElementById('queue-end-date-input');
   queueApplyDateBtn = document.getElementById('queue-apply-date-btn');
   queueClearDateBtn = document.getElementById('queue-clear-date-btn');
+  queueStatusBtn = document.getElementById('queue-status-btn');
+  queueStatusPanel = document.getElementById('queue-status-panel');
   patientDetailsCard = document.getElementById('patient-details-card');
   roomModalOverlay = document.getElementById('room-modal-overlay');
   roomList = document.getElementById('room-list');
@@ -107,6 +136,11 @@ async function initQueuePage() {
     return;
   }
   
+  // Verify room modal elements exist
+  if (!roomModalOverlay) {
+    toast.error('Room modal not found. Please refresh the page.');
+  }
+  
   // Sidebar close button
   const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
   if (sidebarCloseBtn) {
@@ -116,6 +150,9 @@ async function initQueuePage() {
   // Setup date range filter
   setupDateRangeFilter();
 
+  // Setup status filter
+  setupStatusFilter();
+
   // Setup event listeners
   setupEventListeners();
 
@@ -123,10 +160,8 @@ async function initQueuePage() {
   setupRoleAwareButtons();
 
   // Initial load - ensure it completes
-  console.log('Starting initial queue fetch...');
   try {
     await fetchQueue();
-    console.log('Initial queue fetch completed');
     
     // Fetch waiting areas
     await fetchWaitingAreas();
@@ -196,30 +231,7 @@ function setupEventListeners() {
   }
 
   // Move dropdown toggle
-  document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('move-btn')) {
-      e.stopPropagation();
-      const wrapper = e.target.closest('.move-wrapper');
-      if (wrapper) {
-        const dropdown = wrapper.querySelector('.move-dropdown');
-
-        // Close all other dropdowns
-        document.querySelectorAll('.move-dropdown').forEach(d => {
-          if (d !== dropdown) d.classList.add('hidden');
-        });
-
-        // Toggle current dropdown
-        if (dropdown) {
-          dropdown.classList.toggle('hidden');
-        }
-      }
-    } else if (!e.target.closest('.move-dropdown') && !e.target.closest('.move-btn')) {
-      // Close all dropdowns when clicking outside
-      document.querySelectorAll('.move-dropdown').forEach(d => {
-        d.classList.add('hidden');
-      });
-    }
-  });
+  // Move dropdown functionality removed - use Waiting Area page instead
 }
 
 /**
@@ -229,14 +241,36 @@ function setupRoleAwareButtons() {
   // Only doctors can call next and update status
   if (!isDoctor) {
     if (callNextBtn) {
-      callNextBtn.style.display = 'none';
+      callNextBtn.disabled = true;
+      callNextBtn.style.cursor = 'not-allowed';
+      callNextBtn.title = 'Only doctors can call next patient';
     }
   }
 
-  // Only admins can reassign
-  if (!isAdmin) {
+  // Only admins/primary can reassign
+  if (!isAdmin && !isPrimary) {
     if (reassignBtn) {
-      reassignBtn.style.display = 'none';
+      reassignBtn.disabled = true;
+      reassignBtn.style.cursor = 'not-allowed';
+      reassignBtn.title = 'Only admins and primary staff can reassign patients';
+    }
+  }
+
+  // Only admins/primary can mark no-show
+  if (!isAdmin && !isPrimary) {
+    if (noShowBtn) {
+      noShowBtn.disabled = true;
+      noShowBtn.style.cursor = 'not-allowed';
+      noShowBtn.title = 'Only admins and primary staff can mark no-show';
+    }
+  }
+
+  // Only admins/primary can notify
+  if (!isAdmin && !isPrimary) {
+    if (notifyBtn) {
+      notifyBtn.disabled = true;
+      notifyBtn.style.cursor = 'not-allowed';
+      notifyBtn.title = 'Only admins and primary staff can notify patients';
     }
   }
 }
@@ -291,6 +325,12 @@ async function fetchQueue(showLoading = true) {
       params.append('dateTo', queueEndDateInput.value);
     }
 
+    // Status filter
+    const statusRadio = document.querySelector('input[name="queue-status"]:checked');
+    if (statusRadio && statusRadio.value) {
+      params.append('status', statusRadio.value);
+    }
+
     const endpoint = `/staff/queue?${params.toString()}`;
     console.log('Fetching queue from:', endpoint);
     
@@ -320,6 +360,11 @@ async function fetchQueue(showLoading = true) {
 
       // Refresh waiting areas after queue data is loaded
       await fetchWaitingAreas();
+      
+      // Restart SSE connections with updated queue data
+      if (pollingInterval) {
+        startWaitTimeSSE();
+      }
     } else {
       toast.error(result.message || 'Failed to load queue');
       queueData = [];
@@ -330,6 +375,11 @@ async function fetchQueue(showLoading = true) {
     toast.error('Failed to load queue data');
     queueData = [];
     await renderQueueTable();
+    
+    // Restart SSE connections with updated queue data
+    if (pollingInterval) {
+      startWaitTimeSSE();
+    }
   } finally {
     if (showLoading) {
       showSpinner(false);
@@ -383,6 +433,14 @@ async function renderQueueTable() {
     const status = entry.status || 'WAITING';
     const statusClass = status.toLowerCase().replace('_', '_');
     const assignedRoom = entry.assignedRoom ? entry.assignedRoom.name : '-';
+    const priority = entry.priority || 'NORMAL';
+    const priorityColors = {
+      URGENT: '#ef4444',
+      HIGH: '#f97316',
+      NORMAL: '#3b82f6',
+      LOW: '#6b7280',
+    };
+    const priorityColor = priorityColors[priority] || priorityColors.NORMAL;
 
     const isSelected = selectedQueueEntries.has(entry.id);
     return `
@@ -405,43 +463,104 @@ async function renderQueueTable() {
         <td>
           <span class="status-badge ${statusClass}">${formatStatus(status)}</span>
         </td>
-        <td>In</td>
+        <td>
+          ${(isAdmin || isPrimary) ? `
+            <select class="priority-select" data-entry-id="${entry.id}" style="padding: 0.4rem 0.6rem; border: 1px solid #e0e0e0; border-radius: 0.4rem; font-size: 1rem; background: white; color: ${priorityColor}; font-weight: 500;">
+              <option value="URGENT" ${priority === 'URGENT' ? 'selected' : ''} style="color: #ef4444;">Urgent</option>
+              <option value="HIGH" ${priority === 'HIGH' ? 'selected' : ''} style="color: #f97316;">High</option>
+              <option value="NORMAL" ${priority === 'NORMAL' ? 'selected' : ''} style="color: #3b82f6;">Normal</option>
+              <option value="LOW" ${priority === 'LOW' ? 'selected' : ''} style="color: #6b7280;">Low</option>
+            </select>
+          ` : `
+            <span style="color: ${priorityColor}; font-weight: 500;">${priority}</span>
+          `}
+        </td>
         <td>${assignedRoom}</td>
         <td class="actions-cell">
-          <button class="action-btn" title="Call" onclick="handleCall('${entry.id}')" data-entry-id="${entry.id}">
+          <button class="action-btn call-btn" title="Call" onclick="handleCall('${entry.id}')" data-entry-id="${entry.id}" style="color: #10b981; pointer-events: auto; cursor: pointer;">
             <span class="material-symbols-outlined">phone</span>
           </button>
-          <button class="action-btn" title="Email" onclick="handleEmail('${entry.id}')" data-entry-id="${entry.id}">
+          <button class="action-btn email-btn" title="Email" onclick="handleEmail('${entry.id}')" data-entry-id="${entry.id}" style="color: #3b82f6; pointer-events: auto; cursor: pointer;">
             <span class="material-symbols-outlined">email</span>
           </button>
           ${isDoctor && canUpdateStatus(entry) ? `
-            <button class="action-btn status-update-btn" title="Complete/Update Status" data-entry-id="${entry.id}" data-status="${status}">
+            <button class="action-btn status-update-btn check-btn" title="${status === 'WAITING' ? 'Move to TRIAGE' : status === 'TRIAGE' ? 'Move to CALLED' : status === 'CALLED' ? 'Start Consultation (Select Room)' : status === 'IN_CONSULTATION' ? 'Complete Consultation' : 'Update Status'}" data-entry-id="${entry.id}" data-status="${status}" style="color: #6366f1; pointer-events: auto; cursor: pointer; position: relative; z-index: 10;">
               <span class="material-symbols-outlined">check_circle</span>
             </button>
           ` : ''}
-          <div class="move-wrapper">
-            <button class="move-btn" data-entry-id="${entry.id}">Move ▾</button>
-            <div class="move-dropdown hidden" data-queue-id="${entry.id}">
-              <!-- populated dynamically -->
-            </div>
-          </div>
         </td>
       </tr>
     `;
   }).join('');
 
-  // Attach status update button listeners
+  // Attach status update button listeners (use event delegation for better reliability)
+  // Remove old listeners first
   queueTableBody.querySelectorAll('.status-update-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
+    // Remove any existing event listeners by cloning
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+  });
+  
+  // Use event delegation on the table body for better reliability
+  queueTableBody.addEventListener('click', async (e) => {
+    const checkBtn = e.target.closest('.status-update-btn');
+    if (!checkBtn) return;
+    
       e.stopPropagation();
-      const entryId = btn.dataset.entryId;
-      const currentStatus = btn.dataset.status;
-      await handleStatusUpdate(entryId, currentStatus, null, btn);
-    });
+    e.preventDefault();
+    
+    const entryId = checkBtn.dataset.entryId;
+    const currentStatus = checkBtn.dataset.status;
+    
+    // Find the actual entry to get the most current status
+    const entry = queueData.find(e => e.id === entryId);
+    if (!entry) {
+      toast.error('Queue entry not found');
+      return;
+    }
+    
+    // Use actual entry status
+    const actualStatus = entry.status || currentStatus;
+    
+    // Verify button is not disabled
+    if (checkBtn.disabled) {
+      return;
+    }
+    
+    await handleStatusUpdate(entryId, actualStatus, null, checkBtn);
   });
 
-  // Populate move dropdowns after rendering
-  await populateMoveDropdowns();
+  // Move dropdown functionality removed - use Waiting Area page instead
+
+  // Attach priority change listeners (Admin/Primary only)
+  if (isAdmin || isPrimary) {
+    queueTableBody.querySelectorAll('.priority-select').forEach(select => {
+      select.addEventListener('change', async (e) => {
+        e.stopPropagation();
+        const entryId = select.dataset.entryId;
+        const newPriority = select.value;
+        
+        try {
+          const response = await apiPatch(`/queue/${entryId}/priority`, { priority: newPriority });
+          const result = await response.json();
+
+          if (result.success) {
+            toast.success('Priority updated');
+            await fetchQueue(false);
+          } else {
+            toast.error(result.message || 'Failed to update priority');
+            // Revert selection
+            await fetchQueue(false);
+          }
+        } catch (error) {
+          console.error('Error updating priority:', error);
+          toast.error('Failed to update priority');
+          // Revert selection
+          await fetchQueue(false);
+        }
+      });
+    });
+  }
 
   // Attach checkbox listeners
   queueTableBody.querySelectorAll('.queue-checkbox').forEach(checkbox => {
@@ -468,8 +587,8 @@ async function renderQueueTable() {
   // Attach row click for patient details (but not on checkbox or action buttons)
   queueTableBody.querySelectorAll('tr[data-entry-id]').forEach(row => {
     row.addEventListener('click', (e) => {
-      // Don't trigger row selection if clicking on checkbox, action buttons, or move dropdown
-      if (!e.target.closest('.queue-checkbox') && !e.target.closest('.action-btn') && !e.target.closest('.move-wrapper')) {
+      // Don't trigger row selection if clicking on checkbox or action buttons
+      if (!e.target.closest('.queue-checkbox') && !e.target.closest('.action-btn')) {
         const entryId = row.dataset.entryId;
         const isSelected = row.classList.contains('selected-row');
         
@@ -566,14 +685,64 @@ function updateActionButtons() {
   const hasSelection = selectedQueueEntries.size > 0;
   const canManage = isAdmin || isPrimary;
   
+  // Check if any selected entries are CALLED or IN_CONSULTATION
+  let hasCalledOrInConsultation = false;
+  if (hasSelection) {
+    hasCalledOrInConsultation = Array.from(selectedQueueEntries).some(entryId => {
+      const entry = queueData.find(e => e.id === entryId);
+      return entry && (entry.status === 'CALLED' || entry.status === 'IN_CONSULTATION');
+    });
+  }
+  
   if (notifyBtn) {
-    notifyBtn.disabled = !hasSelection;
+    // Disable if no selection, no permission, or selected patients are called/in consultation
+    const shouldDisable = !hasSelection || !canManage || hasCalledOrInConsultation;
+    notifyBtn.disabled = shouldDisable;
+    
+    if (!canManage) {
+      notifyBtn.style.cursor = 'not-allowed';
+      notifyBtn.title = 'Only admins and primary staff can notify patients';
+    } else if (hasCalledOrInConsultation) {
+      notifyBtn.style.cursor = 'not-allowed';
+      notifyBtn.title = 'Cannot notify patients who are called or in consultation';
+    } else {
+      notifyBtn.style.cursor = 'pointer';
+      notifyBtn.title = hasSelection ? 'Notify selected patients' : 'Select patients to notify';
+    }
   }
+  
   if (reassignBtn) {
-    reassignBtn.disabled = !hasSelection || !canManage;
+    // Disable if no selection, no permission, or selected patients are called/in consultation
+    const shouldDisable = !hasSelection || !canManage || hasCalledOrInConsultation;
+    reassignBtn.disabled = shouldDisable;
+    
+    if (!canManage) {
+      reassignBtn.style.cursor = 'not-allowed';
+      reassignBtn.title = 'Only admins and primary staff can reassign patients';
+    } else if (hasCalledOrInConsultation) {
+      reassignBtn.style.cursor = 'not-allowed';
+      reassignBtn.title = 'Cannot reassign patients who are called or in consultation';
+    } else {
+      reassignBtn.style.cursor = 'pointer';
+      reassignBtn.title = hasSelection ? 'Reassign selected patients' : 'Select patients to reassign';
+    }
   }
+  
   if (noShowBtn) {
-    noShowBtn.disabled = !hasSelection || !canManage;
+    // Disable if no selection, no permission, or selected patients are called/in consultation
+    const shouldDisable = !hasSelection || !canManage || hasCalledOrInConsultation;
+    noShowBtn.disabled = shouldDisable;
+    
+    if (!canManage) {
+      noShowBtn.style.cursor = 'not-allowed';
+      noShowBtn.title = 'Only admins and primary staff can mark patients as no-show';
+    } else if (hasCalledOrInConsultation) {
+      noShowBtn.style.cursor = 'not-allowed';
+      noShowBtn.title = 'Cannot mark patients as no-show if they are called or in consultation';
+    } else {
+      noShowBtn.style.cursor = 'pointer';
+      noShowBtn.title = hasSelection ? 'Mark selected patients as no-show' : 'Select patients to mark as no-show';
+    }
   }
 }
 
@@ -626,20 +795,29 @@ async function handleStatusUpdate(entryId, currentStatus, roomId = null, buttonE
   }
 
   const entry = queueData.find(e => e.id === entryId);
-  if (!entry) return;
+  if (!entry) {
+    toast.error('Queue entry not found');
+    return;
+  }
+
+  // Use actual entry status instead of passed currentStatus to ensure accuracy
+  const actualStatus = entry.status || currentStatus;
 
   // Determine next status
   let nextStatus;
-  if (currentStatus === 'WAITING') {
+  if (actualStatus === 'WAITING') {
     nextStatus = 'TRIAGE';
-  } else if (currentStatus === 'TRIAGE') {
+  } else if (actualStatus === 'TRIAGE') {
     nextStatus = 'CALLED';
-  } else if (currentStatus === 'CALLED') {
+  } else if (actualStatus === 'CALLED') {
     // Show room modal for IN_CONSULTATION
     await openRoomModal(entryId);
     return;
+  } else if (actualStatus === 'IN_CONSULTATION') {
+    // Complete the consultation
+    nextStatus = 'COMPLETED';
   } else {
-    toast.info('Invalid status transition');
+    toast.info(`Invalid status transition from ${formatStatus(actualStatus)}`);
     return;
   }
 
@@ -647,15 +825,22 @@ async function handleStatusUpdate(entryId, currentStatus, roomId = null, buttonE
 }
 
 /**
- * Update queue entry status
+ * Update queue entry status with retry logic
  */
-async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null) {
+async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null, retryCount = 0) {
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY = 1000; // 1 second
+
   try {
-    // Disable button during API call
+    // Disable button during API call and show loading state
     if (buttonEl) {
       buttonEl.disabled = true;
       buttonEl.style.opacity = '0.6';
       buttonEl.style.cursor = 'not-allowed';
+      const icon = buttonEl.querySelector('.material-symbols-outlined');
+      if (icon && retryCount === 0) {
+        icon.style.opacity = '0.5';
+      }
     }
 
     const body = { status };
@@ -668,17 +853,27 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
 
     if (result.success) {
       toast.success(`Status updated to ${formatStatus(status)}`);
-      await fetchQueue();
+      await fetchQueue(false); // Don't show spinner on manual updates
       
-      // Update doctor load badge after status change
+      // Update doctor load badge after status change (force refresh)
       if (isDoctor) {
-        await fetchDoctorLoad();
+        await fetchDoctorLoad(true);
       }
     } else {
+      // Retry on failure if retries remaining
+      if (retryCount < MAX_RETRIES && response.status >= 500) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+        return updateQueueStatus(entryId, status, roomId, buttonEl, retryCount + 1);
+      }
       toast.error(result.message || 'Failed to update status');
     }
   } catch (error) {
     console.error('Error updating status:', error);
+    // Retry on network errors
+    if (retryCount < MAX_RETRIES) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+      return updateQueueStatus(entryId, status, roomId, buttonEl, retryCount + 1);
+    }
     toast.error('Failed to update status');
   } finally {
     // Re-enable button after API call
@@ -686,6 +881,10 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
       buttonEl.disabled = false;
       buttonEl.style.opacity = '1';
       buttonEl.style.cursor = 'pointer';
+      const icon = buttonEl.querySelector('.material-symbols-outlined');
+      if (icon) {
+        icon.style.opacity = '1';
+      }
     }
   }
 }
@@ -697,13 +896,72 @@ async function openRoomModal(entryId) {
   currentQueueEntryId = entryId;
   
   const entry = queueData.find(e => e.id === entryId);
-  if (!entry) return;
+  if (!entry) {
+    toast.error('Queue entry not found');
+    return;
+  }
+
+  // Check for department ID in multiple possible locations
+  let departmentId = null;
+  if (entry.department && entry.department.id) {
+    departmentId = entry.department.id;
+  } else if (entry.departmentId) {
+    departmentId = entry.departmentId;
+  }
+
+  if (!departmentId) {
+    console.error('Department ID not found in entry:', entry);
+    toast.error('Department information not available for this patient');
+    return;
+  }
+
+  console.log(`Using department ID: ${departmentId}`);
+
+  // Show loading state
+  if (roomList) {
+    roomList.innerHTML = '<div class="loading-message">Loading rooms...</div>';
+  }
 
   // Fetch available rooms for the department
-  await fetchRooms(entry.department.id);
+  await fetchRooms(departmentId);
 
+  // Ensure modal is visible
   if (roomModalOverlay) {
+    // Check if modal card exists
+    const modalCard = roomModalOverlay.querySelector('.modal-card');
+    if (!modalCard) {
+      toast.error('Room modal structure is missing. Please refresh the page.');
+      return;
+    }
+    
+    // Force show the modal - use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      roomModalOverlay.style.display = 'flex';
+      roomModalOverlay.style.zIndex = '10000';
+      
+      // Small delay to ensure display is set before adding active class
+      setTimeout(() => {
     roomModalOverlay.classList.add('active');
+      }, 10);
+      
+      // Ensure modal card is visible and clickable
+      modalCard.style.position = 'relative';
+      modalCard.style.zIndex = '10001';
+      modalCard.style.display = 'block';
+      modalCard.style.visibility = 'visible';
+      modalCard.style.opacity = '1';
+      modalCard.style.pointerEvents = 'auto';
+      
+      // Ensure buttons are clickable
+      const buttons = modalCard.querySelectorAll('button');
+      buttons.forEach(btn => {
+        btn.style.pointerEvents = 'auto';
+        btn.style.zIndex = '10002';
+        btn.style.position = 'relative';
+      });
+    });
+  } else {
+    toast.error('Room selection modal not available');
   }
 }
 
@@ -712,28 +970,51 @@ async function openRoomModal(entryId) {
  */
 async function fetchRooms(departmentId) {
   try {
+    // Fetch rooms for the specific department
     const response = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=false`);
     const result = await response.json();
 
     if (result.success && result.data) {
       availableRooms = result.data.rooms || [];
-      renderRoomList();
+      
+      // If no rooms found, try including inactive rooms
+      if (availableRooms.length === 0) {
+        const inactiveResponse = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=true`);
+        const inactiveResult = await inactiveResponse.json();
+        
+        if (inactiveResult.success && inactiveResult.data) {
+          availableRooms = inactiveResult.data.rooms || [];
+          
+          if (availableRooms.length > 0) {
+            toast.warning('Only inactive rooms available for this department. Please activate them in Settings.');
+          }
+        }
+      }
+      
+      await renderRoomList();
     } else {
       availableRooms = [];
-      renderRoomList();
+      await renderRoomList();
+      if (result.message) {
+        toast.error(result.message);
+      } else {
+        toast.error('No rooms found for this department. Please create rooms in Settings.');
+      }
     }
   } catch (error) {
-    console.error('Error fetching rooms:', error);
     availableRooms = [];
-    renderRoomList();
+    await renderRoomList();
+    toast.error('Failed to load rooms. Please try again.');
   }
 }
 
 /**
  * Render room list
  */
-function renderRoomList() {
-  if (!roomList) return;
+async function renderRoomList() {
+  if (!roomList) {
+    return;
+  }
 
   if (availableRooms.length === 0) {
     roomList.innerHTML = '<div class="loading-message">No rooms available</div>';
@@ -743,14 +1024,59 @@ function renderRoomList() {
     return;
   }
 
-  roomList.innerHTML = availableRooms.map(room => `
+  // Fetch all occupied rooms (queue entries with IN_CONSULTATION status)
+  // This ensures we check all entries, not just the current page
+  let occupiedRoomIds = new Set();
+  try {
+    const occupiedResponse = await apiGet('/staff/queue?status=IN_CONSULTATION&limit=1000');
+    const occupiedResult = await occupiedResponse.json();
+    
+    if (occupiedResult.success && occupiedResult.data?.queueEntries) {
+      occupiedRoomIds = new Set(
+        occupiedResult.data.queueEntries
+          .filter(entry => 
+            entry.assignedRoom && 
+            entry.assignedRoom.id
+          )
+          .map(entry => entry.assignedRoom.id)
+      );
+    }
+  } catch (error) {
+    // If API call fails, fall back to checking current page data
+    occupiedRoomIds = new Set(
+      queueData
+        .filter(entry => 
+          entry.assignedRoom && 
+          entry.assignedRoom.id && 
+          entry.status === 'IN_CONSULTATION'
+        )
+        .map(entry => entry.assignedRoom.id)
+    );
+  }
+
+  // Filter out occupied rooms
+  const availableRoomsFiltered = availableRooms.filter(room => !occupiedRoomIds.has(room.id));
+
+  if (availableRoomsFiltered.length === 0) {
+    roomList.innerHTML = '<div class="loading-message">No available rooms. All rooms are currently occupied.</div>';
+    if (roomModalConfirm) {
+      roomModalConfirm.disabled = true;
+    }
+    return;
+  }
+
+  const roomsHTML = availableRoomsFiltered.map(room => `
     <div class="room-item" data-room-id="${room.id}">
       <div class="room-item-name">${room.name}</div>
     </div>
   `).join('');
 
+  roomList.innerHTML = roomsHTML;
+
   // Attach room selection listeners
-  roomList.querySelectorAll('.room-item').forEach(item => {
+  const roomItems = roomList.querySelectorAll('.room-item');
+  
+  roomItems.forEach(item => {
     item.addEventListener('click', () => {
       if (item.classList.contains('inactive')) return;
       
@@ -790,14 +1116,27 @@ async function handleRoomAssign() {
     roomModalConfirm.textContent = 'Assigning...';
   }
 
+  try {
   const roomId = selectedRoom.dataset.roomId;
-  await updateQueueStatus(currentQueueEntryId, 'IN_CONSULTATION', roomId);
+    const entryId = currentQueueEntryId;
+    
+    // Close modal first to avoid UI issues
   closeRoomModal();
   
+    // Update status with room assignment
+    await updateQueueStatus(entryId, 'IN_CONSULTATION', roomId);
+    
+    // Force refresh queue to ensure button appears for IN_CONSULTATION status
+    await fetchQueue(false);
+  } catch (error) {
+    console.error('Error assigning room:', error);
+    toast.error('Failed to assign room');
+  } finally {
   // Re-enable button
   if (roomModalConfirm) {
     roomModalConfirm.disabled = false;
     roomModalConfirm.textContent = 'Assign Room';
+    }
   }
 }
 
@@ -807,6 +1146,7 @@ async function handleRoomAssign() {
 function closeRoomModal() {
   if (roomModalOverlay) {
     roomModalOverlay.classList.remove('active');
+    roomModalOverlay.style.display = 'none';
   }
   currentQueueEntryId = null;
   if (roomList) {
@@ -814,29 +1154,66 @@ function closeRoomModal() {
   }
   if (roomModalConfirm) {
     roomModalConfirm.disabled = true;
+    roomModalConfirm.textContent = 'Assign Room';
   }
 }
 
 /**
  * Handle notify
  */
-function handleNotify() {
+async function handleNotify() {
   if (selectedQueueEntries.size === 0) {
     toast.info('Please select patients to notify');
     return;
   }
-  toast.info('Notify feature coming soon');
+
+  if (!isAdmin && !isPrimary) {
+    toast.error('Only admins or primary staff can notify patients');
+    return;
+  }
+
+  // Check if any selected entries are CALLED or IN_CONSULTATION
+  const invalidEntries = Array.from(selectedQueueEntries).filter(entryId => {
+    const entry = queueData.find(e => e.id === entryId);
+    return entry && (entry.status === 'CALLED' || entry.status === 'IN_CONSULTATION');
+  });
+
+  if (invalidEntries.length > 0) {
+    toast.error('Cannot notify patients who are called or in consultation');
+    return;
+  }
+
+  // Open message modal for bulk notification
+  openBulkNotifyModal();
 }
 
 /**
  * Handle reassign
  */
-function handleReassign() {
+async function handleReassign() {
   if (selectedQueueEntries.size === 0) {
     toast.info('Please select patients to reassign');
     return;
   }
-  toast.info('Reassign feature coming soon');
+
+  if (!isAdmin && !isPrimary) {
+    toast.error('Only admins or primary staff can reassign patients');
+    return;
+  }
+
+  // Check if any selected entries are CALLED or IN_CONSULTATION
+  const invalidEntries = Array.from(selectedQueueEntries).filter(entryId => {
+    const entry = queueData.find(e => e.id === entryId);
+    return entry && (entry.status === 'CALLED' || entry.status === 'IN_CONSULTATION');
+  });
+
+  if (invalidEntries.length > 0) {
+    toast.error('Cannot reassign patients who are called or in consultation');
+    return;
+  }
+
+  // Open doctor selection modal for reassignment
+  openReassignModal();
 }
 
 /**
@@ -848,27 +1225,106 @@ async function handleNoShow() {
     return;
   }
 
-  if (!isAdmin) {
-    toast.error('Only admins can mark patients as no-show');
+  if (!isAdmin && !isPrimary) {
+    toast.error('Only admins or primary staff can mark patients as no-show');
     return;
   }
 
-  // TODO: Implement bulk no-show
-  toast.info('Bulk no-show feature coming soon');
+  // Check if any selected entries are CALLED or IN_CONSULTATION
+  const invalidEntries = Array.from(selectedQueueEntries).filter(entryId => {
+    const entry = queueData.find(e => e.id === entryId);
+    return entry && (entry.status === 'CALLED' || entry.status === 'IN_CONSULTATION');
+  });
+
+  if (invalidEntries.length > 0) {
+    toast.error('Cannot mark patients as no-show if they are called or in consultation');
+    return;
+  }
+
+  const confirmed = await showConfirmModal({
+    title: 'Mark as No-Show',
+    message: `Are you sure you want to mark ${selectedQueueEntries.size} patient(s) as no-show? This action cannot be undone.`,
+    confirmText: 'Yes, Mark as No-Show',
+    cancelText: 'Cancel',
+    confirmColor: 'red',
+  });
+
+  if (!confirmed) return;
+
+  try {
+    const response = await apiPatch('/queue/bulk-status', {
+      queueEntryIds: Array.from(selectedQueueEntries),
+      status: 'NO_SHOW',
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      toast.success(result.message || `Successfully marked ${result.data?.updatedCount || selectedQueueEntries.size} patient(s) as no-show`);
+      selectedQueueEntries.clear();
+      await fetchQueue(false);
+    } else {
+      toast.error(result.message || 'Failed to mark patients as no-show');
+    }
+  } catch (error) {
+    console.error('Error marking as no-show:', error);
+    toast.error('Failed to mark patients as no-show');
+  }
 }
 
 /**
- * Handle call
+ * Handle call (individual)
  */
-window.handleCall = function(entryId) {
-  toast.info('Call feature coming soon');
+window.handleCall = async function(entryId) {
+  const entry = queueData.find(e => e.id === entryId);
+  if (!entry) {
+    toast.error('Queue entry not found');
+    return;
+  }
+
+  // Find button element for loading state
+  const buttonEl = document.querySelector(`.call-btn[data-entry-id="${entryId}"]`);
+
+  // Transition to CALLED status
+  if (entry.status === 'WAITING' || entry.status === 'TRIAGE') {
+    await updateQueueStatus(entryId, 'CALLED', null, buttonEl);
+  } else {
+    toast.info(`Patient is already ${formatStatus(entry.status)}`);
+  }
 };
 
 /**
- * Handle email
+ * Handle email (individual)
  */
 window.handleEmail = function(entryId) {
-  toast.info('Email feature coming soon');
+  const entry = queueData.find(e => e.id === entryId);
+  if (!entry) {
+    toast.error('Queue entry not found');
+    return;
+  }
+
+  if (!entry.patient?.email) {
+    toast.error('Patient email not found');
+    return;
+  }
+
+  // Show loading state on email button
+  const buttonEl = document.querySelector(`.email-btn[data-entry-id="${entryId}"]`);
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.style.opacity = '0.6';
+  }
+
+  // Open email modal
+  openEmailModal(entryId, entry.patient.fullName || 'Patient');
+  
+  // Re-enable button after modal opens (modal handles its own loading)
+  if (buttonEl) {
+    setTimeout(() => {
+      buttonEl.disabled = false;
+      buttonEl.style.opacity = '1';
+    }, 100);
+  }
 };
 
 /**
@@ -884,11 +1340,25 @@ function showPatientDetails(entryId) {
   const isSelected = selectedQueueEntries.has(entryId);
 
   // Show sidebar and adjust main content
-  const sidebar = document.getElementById('queue-sidebar');
-  const queueView = document.querySelector('.queue-view');
+  const queueContent = document.querySelector('.queue-content');
   
-  if (sidebar) {
-    sidebar.classList.add('visible');
+  if (queueContent) {
+    queueContent.classList.add('sidebar-visible');
+  }
+
+  // Get wait time from cache or entry
+  const cachedWaitTime = waitTimeCache.get(entryId);
+  const estimatedWaitMinutes = cachedWaitTime?.estimatedWaitMinutes ?? entry.estimatedWaitMinutes ?? null;
+  const minWaitMinutes = cachedWaitTime?.minWaitMinutes ?? entry.minWaitMinutes ?? null;
+  const maxWaitMinutes = cachedWaitTime?.maxWaitMinutes ?? entry.maxWaitMinutes ?? null;
+  
+  let waitTimeDisplay = 'Estimated Wait: Calculating...';
+  if (estimatedWaitMinutes !== null) {
+    if (minWaitMinutes !== null && maxWaitMinutes !== null && minWaitMinutes !== maxWaitMinutes) {
+      waitTimeDisplay = `Estimated Wait: ${minWaitMinutes}-${maxWaitMinutes} mins`;
+    } else {
+      waitTimeDisplay = `Estimated Wait: ${Math.round(estimatedWaitMinutes)} mins`;
+    }
   }
 
   patientDetailsCard.innerHTML = `
@@ -896,6 +1366,12 @@ function showPatientDetails(entryId) {
       <div class="patient-details-avatar">${patientInitials}</div>
       <div class="patient-details-name">${patientName}</div>
       <div class="patient-details-info">${patient.age || 'N/A'}/${patient.gender || 'N/A'}</div>
+    </div>
+    <div class="patient-details-section">
+      <div class="patient-details-section-title">Wait Time</div>
+      <div class="patient-details-section-content wait-time-display">
+        ${waitTimeDisplay}
+      </div>
     </div>
     <div class="patient-details-section">
       <div class="patient-details-section-title">Queue History</div>
@@ -910,16 +1386,38 @@ function showPatientDetails(entryId) {
       </div>
     </div>
   `;
+
+  // Fetch wait time if not cached or cache is stale (older than 1 minute)
+  if (!cachedWaitTime || (cachedWaitTime.lastUpdated && 
+      (Date.now() - new Date(cachedWaitTime.lastUpdated).getTime()) > 60000)) {
+    // Fetch wait time asynchronously
+    apiGet(`/queue/${entryId}/wait-time`)
+      .then(response => response.json())
+      .then(result => {
+        if (result.success && result.data) {
+          waitTimeCache.set(entryId, {
+            estimatedWaitMinutes: result.data.estimatedWaitMinutes,
+            minWaitMinutes: result.data.minWaitMinutes,
+            maxWaitMinutes: result.data.maxWaitMinutes,
+            lastUpdated: new Date().toISOString(),
+          });
+          updateSidebarWaitTime(entryId, result.data.estimatedWaitMinutes, result.data.minWaitMinutes, result.data.maxWaitMinutes);
+        }
+      })
+      .catch(error => {
+        console.debug(`Failed to fetch wait time for entry ${entryId}:`, error);
+      });
+  }
 }
 
 /**
  * Hide patient details
  */
 function hidePatientDetails() {
-  const sidebar = document.getElementById('queue-sidebar');
+  const queueContent = document.querySelector('.queue-content');
   
-  if (sidebar) {
-    sidebar.classList.remove('visible');
+  if (queueContent) {
+    queueContent.classList.remove('sidebar-visible');
   }
   
   if (patientDetailsCard) {
@@ -937,6 +1435,35 @@ function hidePatientDetails() {
 function handleSearch() {
   currentPage = 1;
   fetchQueue();
+}
+
+/**
+ * Setup status filter
+ */
+function setupStatusFilter() {
+  if (!queueStatusBtn || !queueStatusPanel) return;
+
+  // Toggle panel visibility
+  queueStatusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    queueStatusPanel.classList.toggle('visible');
+  });
+
+  // Close panel when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!queueStatusPanel.contains(e.target) && !queueStatusBtn.contains(e.target)) {
+      queueStatusPanel.classList.remove('visible');
+    }
+  });
+
+  // Status change handler
+  document.querySelectorAll('input[name="queue-status"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      queueStatusPanel.classList.remove('visible');
+      currentPage = 1;
+      fetchQueue();
+    });
+  });
 }
 
 /**
@@ -1016,17 +1543,39 @@ function updatePaginationButtons() {
   }
 }
 
+// Cache for doctor load to reduce API calls
+let doctorLoadCache = {
+  data: null,
+  timestamp: null,
+  CACHE_DURATION: 5000 // 5 seconds
+};
+
 /**
- * Fetch doctor load information
+ * Fetch doctor load information (with caching)
  */
-async function fetchDoctorLoad() {
+async function fetchDoctorLoad(forceRefresh = false) {
   if (!isDoctor || !doctorLoadBadge) return;
 
   try {
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && doctorLoadCache.data && doctorLoadCache.timestamp) {
+      const cacheAge = Date.now() - doctorLoadCache.timestamp;
+      if (cacheAge < doctorLoadCache.CACHE_DURATION) {
+        const { current, max } = doctorLoadCache.data;
+        doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
+        doctorLoadBadge.classList.remove('hidden');
+        return;
+      }
+    }
+
     // Get doctor load from user object (from auth middleware)
     if (user && user.currentActivePatients !== undefined && user.maxConcurrentPatients !== undefined) {
       const current = user.currentActivePatients || 0;
       const max = user.maxConcurrentPatients || 3;
+      
+      // Update cache
+      doctorLoadCache.data = { current, max };
+      doctorLoadCache.timestamp = Date.now();
       
       doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
       doctorLoadBadge.classList.remove('hidden');
@@ -1039,6 +1588,10 @@ async function fetchDoctorLoad() {
         const current = result.data.user.currentActivePatients || 0;
         const max = result.data.user.maxConcurrentPatients || 3;
         
+        // Update cache
+        doctorLoadCache.data = { current, max };
+        doctorLoadCache.timestamp = Date.now();
+        
         doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
         doctorLoadBadge.classList.remove('hidden');
         
@@ -1050,6 +1603,12 @@ async function fetchDoctorLoad() {
   } catch (error) {
     console.error('Error fetching doctor load:', error);
     // Silently fail - load badge is optional
+    // Use cached data if available
+    if (doctorLoadCache.data) {
+      const { current, max } = doctorLoadCache.data;
+      doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
+      doctorLoadBadge.classList.remove('hidden');
+    }
   }
 }
 
@@ -1057,15 +1616,26 @@ async function fetchDoctorLoad() {
  * Start polling
  */
 function startPolling() {
-  // Clear existing interval
+  // Clear existing intervals
   if (pollingInterval) {
     clearInterval(pollingInterval);
   }
+  if (waitTimePollingInterval) {
+    clearInterval(waitTimePollingInterval);
+  }
 
-  // Poll every 10 seconds (without showing spinner)
+  // Poll queue data every 30 seconds (without showing spinner)
   pollingInterval = setInterval(() => {
     fetchQueue(false); // Don't show spinner during automatic polling
-  }, 10000);
+  }, 30000);
+
+  // Use SSE for real-time wait time updates (preferred) or fallback to polling
+  startWaitTimeSSE();
+  
+  // Fallback polling every 30 seconds if SSE is not available
+  waitTimePollingInterval = setInterval(() => {
+    updateWaitTimes(); // Update wait times without full refresh
+  }, 30000);
 }
 
 /**
@@ -1075,6 +1645,167 @@ function stopPolling() {
   if (pollingInterval) {
     clearInterval(pollingInterval);
     pollingInterval = null;
+  }
+  if (waitTimePollingInterval) {
+    clearInterval(waitTimePollingInterval);
+    waitTimePollingInterval = null;
+  }
+  // Close all SSE connections
+  stopWaitTimeSSE();
+}
+
+/**
+ * Start SSE connections for real-time wait time updates
+ * Connects to SSE endpoint for each active queue entry
+ */
+function startWaitTimeSSE() {
+  // Close existing connections
+  stopWaitTimeSSE();
+
+  // Get active queue entries
+  const activeEntries = queueData.filter(entry =>
+    ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'].includes(entry.status)
+  );
+
+  activeEntries.forEach(entry => {
+    try {
+      // Create SSE connection
+      const eventSource = new EventSource(`/api/queue/${entry.id}/wait-time/stream`);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          
+          if (message.type === 'update' && message.data) {
+            const { estimatedWaitMinutes, minWaitMinutes, maxWaitMinutes } = message.data;
+            
+            // Update cache
+            waitTimeCache.set(entry.id, {
+              estimatedWaitMinutes,
+              minWaitMinutes,
+              maxWaitMinutes,
+              lastUpdated: new Date().toISOString(),
+            });
+
+            // Update entry in queueData
+            entry.estimatedWaitMinutes = estimatedWaitMinutes;
+            entry.minWaitMinutes = minWaitMinutes;
+            entry.maxWaitMinutes = maxWaitMinutes;
+            
+            // Update sidebar if this entry is selected
+            if (selectedQueueEntries.has(entry.id)) {
+              updateSidebarWaitTime(entry.id, estimatedWaitMinutes, minWaitMinutes, maxWaitMinutes);
+            }
+          } else if (message.type === 'error') {
+            console.error(`SSE error for entry ${entry.id}:`, message.message);
+          }
+        } catch (error) {
+          console.error(`Error parsing SSE message for entry ${entry.id}:`, error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error(`SSE connection error for entry ${entry.id}:`, error);
+        // Close and remove from map
+        eventSource.close();
+        waitTimeSSEConnections.delete(entry.id);
+      };
+
+      waitTimeSSEConnections.set(entry.id, eventSource);
+    } catch (error) {
+      console.error(`Failed to create SSE connection for entry ${entry.id}:`, error);
+    }
+  });
+}
+
+/**
+ * Stop all SSE connections
+ */
+function stopWaitTimeSSE() {
+  waitTimeSSEConnections.forEach((eventSource, entryId) => {
+    try {
+      eventSource.close();
+    } catch (error) {
+      console.error(`Error closing SSE connection for entry ${entryId}:`, error);
+    }
+  });
+  waitTimeSSEConnections.clear();
+}
+
+/**
+ * Update wait times for active queue entries
+ * Polls wait-time endpoint for entries in WAITING, TRIAGE, CALLED, IN_CONSULTATION status
+ * This is a fallback if SSE is not available
+ */
+async function updateWaitTimes() {
+  if (!queueData || queueData.length === 0) return;
+
+  // Filter to only active entries
+  const activeEntries = queueData.filter(entry => 
+    ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'].includes(entry.status)
+  );
+
+  if (activeEntries.length === 0) return;
+
+  // Poll wait times for all active entries in parallel
+  const waitTimePromises = activeEntries.map(async (entry) => {
+    try {
+      const response = await apiGet(`/queue/${entry.id}/wait-time`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Update cache with confidence intervals
+        waitTimeCache.set(entry.id, {
+          estimatedWaitMinutes: result.data.estimatedWaitMinutes,
+          minWaitMinutes: result.data.minWaitMinutes,
+          maxWaitMinutes: result.data.maxWaitMinutes,
+          lastUpdated: new Date().toISOString(),
+        });
+
+        // Update entry in queueData
+        entry.estimatedWaitMinutes = result.data.estimatedWaitMinutes;
+        entry.minWaitMinutes = result.data.minWaitMinutes;
+        entry.maxWaitMinutes = result.data.maxWaitMinutes;
+        
+        // Update sidebar if this entry is selected
+        if (selectedQueueEntries.has(entry.id)) {
+          updateSidebarWaitTime(entry.id, result.data.estimatedWaitMinutes, result.data.minWaitMinutes, result.data.maxWaitMinutes);
+        }
+      }
+    } catch (error) {
+      // Silently fail for individual entries - don't spam errors
+      console.debug(`Failed to fetch wait time for entry ${entry.id}:`, error);
+    }
+  });
+
+  // Wait for all requests to complete (use Promise.allSettled to not fail on individual errors)
+  await Promise.allSettled(waitTimePromises);
+  
+  // Restart SSE connections if they were closed
+  if (waitTimeSSEConnections.size === 0) {
+    startWaitTimeSSE();
+  }
+}
+
+/**
+ * Update wait time display in sidebar with confidence intervals
+ */
+function updateSidebarWaitTime(entryId, estimatedWaitMinutes, minWaitMinutes = null, maxWaitMinutes = null) {
+  if (!patientDetailsCard) return;
+
+  // Find wait time element in sidebar
+  const waitTimeElement = patientDetailsCard.querySelector('.wait-time-display');
+  if (waitTimeElement) {
+    if (estimatedWaitMinutes !== null && estimatedWaitMinutes !== undefined) {
+      if (minWaitMinutes !== null && maxWaitMinutes !== null && minWaitMinutes !== maxWaitMinutes) {
+        waitTimeElement.textContent = `Estimated Wait: ${minWaitMinutes}-${maxWaitMinutes} mins`;
+      } else {
+        waitTimeElement.textContent = `Estimated Wait: ${Math.round(estimatedWaitMinutes)} mins`;
+      }
+      waitTimeElement.style.display = 'block';
+    } else {
+      waitTimeElement.textContent = 'Estimated Wait: Calculating...';
+    }
   }
 }
 
@@ -1105,92 +1836,398 @@ async function fetchWaitingAreas() {
   }
 }
 
+// Move dropdown functionality removed - use Waiting Area page instead
+
 /**
- * Populate move dropdowns with waiting areas
+ * Open reassign modal
  */
-async function populateMoveDropdowns() {
-  // Refresh waiting areas with current queue data
-  await fetchWaitingAreas();
+async function openReassignModal() {
+  try {
+    // Fetch available doctors
+    const response = await apiGet('/queue/doctors');
+    const result = await response.json();
 
-  document.querySelectorAll('.move-dropdown').forEach(dropdown => {
-    dropdown.innerHTML = '';
-
-    if (waitingAreas.length === 0) {
-      const emptyMsg = document.createElement('div');
-      emptyMsg.className = 'move-dropdown-empty';
-      emptyMsg.textContent = 'No waiting areas available';
-      emptyMsg.style.padding = '8px 10px';
-      emptyMsg.style.fontSize = '13px';
-      emptyMsg.style.color = '#aaa';
-      dropdown.appendChild(emptyMsg);
+    if (!result.success || !result.data?.doctors) {
+      toast.error('Failed to load doctors');
       return;
     }
 
-    waitingAreas.forEach(area => {
-      const btn = document.createElement('button');
-      const occupancy = area.currentOccupancy || 0;
-      const isFull = occupancy >= area.capacity;
+    const doctors = result.data.doctors;
+
+    // Count assigned patients for each doctor (with caching and error recovery)
+    const doctorsWithPatientCount = await Promise.all(doctors.map(async (doctor) => {
+      let retryCount = 0;
+      const MAX_RETRIES = 2;
       
-      btn.textContent = `${area.name} (${occupancy}/${area.capacity})`;
-      btn.disabled = isFull;
-      
-      if (isFull) {
-        btn.style.cursor = 'not-allowed';
+      while (retryCount <= MAX_RETRIES) {
+        try {
+          const queueResponse = await apiGet(`/staff/queue?assignedDoctorId=${doctor.id}&limit=1000`);
+          const queueResult = await queueResponse.json();
+          const assignedCount = queueResult.success && queueResult.data?.queueEntries 
+            ? queueResult.data.queueEntries.filter(e => 
+                e.status !== 'COMPLETED' && 
+                e.status !== 'CANCELLED' && 
+                e.status !== 'NO_SHOW'
+              ).length 
+            : 0;
+          return { ...doctor, assignedPatientCount: assignedCount };
+        } catch (error) {
+          retryCount++;
+          if (retryCount > MAX_RETRIES) {
+            console.error(`Error counting patients for doctor ${doctor.id} after ${MAX_RETRIES} retries:`, error);
+            // Use currentActivePatients as fallback if available
+            const fallbackCount = doctor.currentActivePatients !== undefined 
+              ? doctor.currentActivePatients 
+              : 0;
+            return { ...doctor, assignedPatientCount: fallbackCount };
+          }
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+        }
       }
+    }));
 
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const queueId = dropdown.dataset.queueId;
-        assignWaitingArea(queueId, area.id);
-      };
+    // Filter to only show doctors that have patients assigned
+    const doctorsWithPatients = doctorsWithPatientCount.filter(doctor => 
+      (doctor.assignedPatientCount || 0) > 0
+    );
 
-      dropdown.appendChild(btn);
+    if (doctorsWithPatients.length === 0) {
+      toast.error('No doctors with assigned patients available');
+      return;
+    }
+
+    // Create modal
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modalContainer = document.createElement('div');
+    modalContainer.className = 'modal-container';
+    modalContainer.style.cssText = 'max-width: 36rem; width: 90%; max-height: 80vh; overflow-y: auto;';
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.cssText = 'padding: 1.5rem; text-align: left; align-items: flex-start;';
+
+    modalContent.innerHTML = `
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid #e0e0e0; width: 100%;">
+        <h2 style="font-size: 1.2rem; font-weight: 600; margin: 0;">Reassign Patients</h2>
+        <button class="modal-close" style="background: none; border: none; cursor: pointer; font-size: 1.8rem; color: #666;">&times;</button>
+      </div>
+      <div class="modal-body" style="width: 100%;">
+        <p style="font-size: 1rem; color: #666; margin-bottom: 1rem;">Select a doctor to reassign ${selectedQueueEntries.size} patient(s) to:</p>
+        <select id="reassign-doctor-select" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid #e0e0e0; border-radius: 0.4rem; font-size: 1rem; margin-bottom: 1rem;">
+          <option value="">-- Select Doctor --</option>
+          ${doctorsWithPatients.map(doctor => {
+            const assignedCount = doctor.assignedPatientCount || 0;
+            const maxCapacity = doctor.maxConcurrentPatients || 3;
+            const loadDisplay = `${assignedCount}/${maxCapacity}`;
+            return `
+            <option value="${doctor.id}">
+              Dr. ${doctor.firstName} ${doctor.lastName} 
+              (${doctor.department?.name || 'N/A'}) 
+              - ${loadDisplay}
+              ${!doctor.isAvailable ? ' [Unavailable]' : ''}
+            </option>
+          `;
+          }).join('')}
+        </select>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.8rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; width: 100%;">
+        <button class="btn btn-secondary" id="reassign-modal-cancel" style="padding: 0.6rem 1.2rem; border: none; border-radius: 0.4rem; font-size: 1rem; cursor: pointer; background: #f5f5f5; color: #333;">Cancel</button>
+        <button class="btn btn-primary" id="reassign-modal-confirm" disabled style="padding: 0.6rem 1.2rem; border: none; border-radius: 0.4rem; font-size: 1rem; cursor: pointer; background: #0e3995; color: white;">Reassign</button>
+      </div>
+    `;
+
+    modalContainer.appendChild(modalContent);
+    overlay.appendChild(modalContainer);
+    document.body.appendChild(overlay);
+
+    // Trigger animation by adding modal-show class after a brief delay
+    setTimeout(() => {
+      overlay.classList.add('modal-show');
+    }, 10);
+
+    const selectEl = modalContent.querySelector('#reassign-doctor-select');
+    const confirmBtn = modalContent.querySelector('#reassign-modal-confirm');
+    const cancelBtn = modalContent.querySelector('#reassign-modal-cancel');
+    const closeBtn = modalContent.querySelector('.modal-close');
+
+    // Enable/disable confirm button based on selection
+    selectEl.addEventListener('change', () => {
+      confirmBtn.disabled = !selectEl.value;
     });
+
+    // Close handlers
+    const closeModal = () => {
+      overlay.classList.remove('modal-show');
+      overlay.classList.add('modal-hide');
+      setTimeout(() => {
+        if (overlay.parentNode) {
+          document.body.removeChild(overlay);
+        }
+      }, 300);
+    };
+
+    cancelBtn.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+
+    // Confirm handler
+    confirmBtn.addEventListener('click', async () => {
+      const doctorId = selectEl.value;
+      if (!doctorId) return;
+
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Reassigning...';
+
+      try {
+        const response = await apiPatch('/queue/reassign', {
+          queueEntryIds: Array.from(selectedQueueEntries),
+          newDoctorId: doctorId,
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          toast.success(result.message || `Successfully reassigned ${result.data?.updatedCount || selectedQueueEntries.size} patient(s)`);
+          selectedQueueEntries.clear();
+          closeModal();
+          // Invalidate doctor load cache after reassignment
+          doctorLoadCache.data = null;
+          doctorLoadCache.timestamp = null;
+          await fetchQueue(false);
+        } else {
+          toast.error(result.message || 'Failed to reassign patients');
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Reassign';
+        }
+      } catch (error) {
+        console.error('Error reassigning:', error);
+        toast.error('Failed to reassign patients');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Reassign';
+      }
+    });
+  } catch (error) {
+    console.error('Error opening reassign modal:', error);
+    toast.error('Failed to open reassign modal');
+  }
+}
+
+/**
+ * Open email modal (individual)
+ */
+function openEmailModal(entryId, patientName) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+
+  const modalContainer = document.createElement('div');
+  modalContainer.className = 'modal-container';
+  modalContainer.style.cssText = 'max-width: 40rem; width: 90%; max-height: 90vh; overflow-y: auto;';
+
+  const modalContent = document.createElement('div');
+  modalContent.className = 'modal-content';
+  modalContent.style.cssText = 'padding: 1.2rem; text-align: left; align-items: flex-start;';
+
+  modalContent.innerHTML = `
+    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid #e0e0e0; width: 100%;">
+      <h2 style="font-size: 1.2rem; font-weight: 600; margin: 0;">Send Email to ${patientName}</h2>
+      <button class="modal-close" style="background: none; border: none; cursor: pointer; font-size: 1.8rem; color: #666;">&times;</button>
+    </div>
+    <div class="modal-body" style="padding: 0.8rem 0; width: 100%;">
+      <label style="display: block; font-size: 1rem; font-weight: 500; margin-bottom: 0.6rem; color: #333;">Message</label>
+      <textarea id="email-message-input" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid #e0e0e0; border-radius: 0.4rem; font-size: 1rem; min-height: 10rem; font-family: inherit; resize: vertical;" placeholder="Enter your message..."></textarea>
+    </div>
+    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.8rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; width: 100%;">
+      <button class="btn btn-secondary" id="email-modal-cancel" style="padding: 0.6rem 1.2rem; border: none; border-radius: 0.4rem; font-size: 1rem; cursor: pointer; background: #f5f5f5; color: #333;">Cancel</button>
+      <button class="btn btn-primary" id="email-modal-confirm" style="padding: 0.6rem 1.2rem; border: none; border-radius: 0.4rem; font-size: 1rem; cursor: pointer; background: #0e3995; color: white;">Send Email</button>
+    </div>
+  `;
+
+  modalContainer.appendChild(modalContent);
+  overlay.appendChild(modalContainer);
+  document.body.appendChild(overlay);
+
+  // Trigger animation by adding modal-show class after a brief delay
+  setTimeout(() => {
+    overlay.classList.add('modal-show');
+  }, 10);
+
+  const messageInput = modalContent.querySelector('#email-message-input');
+  const confirmBtn = modalContent.querySelector('#email-modal-confirm');
+  const cancelBtn = modalContent.querySelector('#email-modal-cancel');
+  const closeBtn = modalContent.querySelector('.modal-close');
+
+  // Close handlers
+  const closeModal = () => {
+    overlay.classList.remove('modal-show');
+    overlay.classList.add('modal-hide');
+    setTimeout(() => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    }, 300);
+  };
+
+  cancelBtn.addEventListener('click', closeModal);
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+
+  // Confirm handler with retry logic
+  confirmBtn.addEventListener('click', async () => {
+    const message = messageInput.value.trim();
+    if (!message) {
+      toast.error('Please enter a message');
+      return;
+    }
+
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
+    const sendEmail = async () => {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = retryCount > 0 ? `Retrying... (${retryCount}/${MAX_RETRIES})` : 'Sending...';
+
+      try {
+        const response = await apiPost(`/queue/${entryId}/email`, { message });
+        const result = await response.json();
+
+        if (result.success) {
+          toast.success('Email sent successfully');
+          closeModal();
+        } else {
+          // Retry on server errors
+          if (retryCount < MAX_RETRIES && response.status >= 500) {
+            retryCount++;
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            return sendEmail();
+          }
+          toast.error(result.message || 'Failed to send email');
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Send Email';
+        }
+      } catch (error) {
+        console.error('Error sending email:', error);
+        // Retry on network errors
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          return sendEmail();
+        }
+        toast.error('Failed to send email');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Send Email';
+      }
+    };
+
+    await sendEmail();
   });
 }
 
 /**
- * Assign waiting area to queue entry
+ * Open bulk notify modal
  */
-async function assignWaitingArea(queueId, waitingAreaId) {
-  try {
-    // Close all dropdowns
-    document.querySelectorAll('.move-dropdown').forEach(d => {
-      d.classList.add('hidden');
-    });
+function openBulkNotifyModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
 
-    // Find the entry to get current status
-    const entry = queueData.find(e => e.id === queueId);
-    if (!entry) {
-      toast.error('Queue entry not found');
+    const modalContainer = document.createElement('div');
+    modalContainer.className = 'modal-container';
+    modalContainer.style.cssText = 'max-width: 36rem; width: 90%; max-height: 80vh; overflow-y: auto;';
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.cssText = 'padding: 1.5rem; text-align: left; align-items: flex-start;';
+
+    modalContent.innerHTML = `
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid #e0e0e0; width: 100%;">
+        <h2 style="font-size: 1.2rem; font-weight: 600; margin: 0;">Notify Patients</h2>
+        <button class="modal-close" style="background: none; border: none; cursor: pointer; font-size: 1.8rem; color: #666;">&times;</button>
+      </div>
+      <div class="modal-body" style="width: 100%;">
+        <p style="font-size: 1rem; color: #666; margin-bottom: 1rem;">Send notification to ${selectedQueueEntries.size} selected patient(s):</p>
+        <label style="display: block; font-size: 1rem; font-weight: 500; margin-bottom: 0.6rem; color: #333;">Message</label>
+        <textarea id="bulk-notify-message-input" style="width: 100%; padding: 0.6rem 0.8rem; border: 1px solid #e0e0e0; border-radius: 0.4rem; font-size: 1rem; min-height: 12rem; font-family: inherit; resize: vertical;" placeholder="Enter your message..."></textarea>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.8rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; width: 100%;">
+        <button class="btn btn-secondary" id="bulk-notify-modal-cancel" style="padding: 0.6rem 1.2rem; border: none; border-radius: 0.4rem; font-size: 1rem; cursor: pointer; background: #f5f5f5; color: #333;">Cancel</button>
+        <button class="btn btn-primary" id="bulk-notify-modal-confirm" style="padding: 0.6rem 1.2rem; border: none; border-radius: 0.4rem; font-size: 1rem; cursor: pointer; background: #0e3995; color: white;">Send Notifications</button>
+      </div>
+    `;
+
+  modalContainer.appendChild(modalContent);
+  overlay.appendChild(modalContainer);
+  document.body.appendChild(overlay);
+
+  // Trigger animation by adding modal-show class after a brief delay
+  setTimeout(() => {
+    overlay.classList.add('modal-show');
+  }, 10);
+
+  const messageInput = modalContent.querySelector('#bulk-notify-message-input');
+  const confirmBtn = modalContent.querySelector('#bulk-notify-modal-confirm');
+  const cancelBtn = modalContent.querySelector('#bulk-notify-modal-cancel');
+  const closeBtn = modalContent.querySelector('.modal-close');
+
+  // Close handlers
+  const closeModal = () => {
+    overlay.classList.remove('modal-show');
+    overlay.classList.add('modal-hide');
+    setTimeout(() => {
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
+    }, 300);
+  };
+
+  cancelBtn.addEventListener('click', closeModal);
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeModal();
+  });
+
+  // Confirm handler
+  confirmBtn.addEventListener('click', async () => {
+    const message = messageInput.value.trim();
+    if (!message) {
+      toast.error('Please enter a message');
       return;
     }
 
-    // Determine target status (must be WAITING, TRIAGE, or CALLED)
-    let targetStatus = entry.status;
-    if (!['WAITING', 'TRIAGE', 'CALLED'].includes(targetStatus)) {
-      // If current status doesn't allow waiting area, transition to WAITING first
-      targetStatus = 'WAITING';
-    }
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Sending...';
 
-    const response = await apiPatch(`/queue/${queueId}/status`, {
-      status: targetStatus,
-      waitingAreaId: waitingAreaId,
+    try {
+      const response = await apiPost('/queue/bulk-notify', {
+        queueEntryIds: Array.from(selectedQueueEntries),
+        message,
     });
 
     const result = await response.json();
 
     if (result.success) {
-      toast.success(`Patient moved to ${waitingAreas.find(a => a.id === waitingAreaId)?.name || 'waiting area'}`);
-      await fetchQueue(false); // Refresh queue without spinner
+        toast.success(result.message || `Successfully sent ${result.data?.sentCount || selectedQueueEntries.size} notification(s)`);
+        selectedQueueEntries.clear();
+        closeModal();
+        await fetchQueue(false);
     } else {
-      toast.error(result.message || 'Failed to assign waiting area');
+        toast.error(result.message || 'Failed to send notifications');
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Send Notifications';
     }
   } catch (error) {
-    console.error('Error assigning waiting area:', error);
-    toast.error('Failed to assign waiting area');
-  }
+      console.error('Error sending notifications:', error);
+      toast.error('Failed to send notifications');
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Send Notifications';
+    }
+  });
 }
+
 
 /**
  * Debounce helper

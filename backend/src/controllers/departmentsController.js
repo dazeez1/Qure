@@ -26,6 +26,8 @@ export const getDepartments = async (req, res, next) => {
         name: true,
         shortCode: true,
         status: true,
+        defaultConsultationTimeMinutes: true,
+        avgConsultationTimeMinutes: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -57,7 +59,7 @@ export const getDepartments = async (req, res, next) => {
 export const createDepartment = async (req, res, next) => {
   try {
     const user = req.user;
-    const { name, shortCode, status } = req.body;
+    const { name, shortCode, status, defaultConsultationTimeMinutes } = req.body;
 
     // Ensure user has a hospital linked
     if (!user.hospitalId) {
@@ -108,6 +110,19 @@ export const createDepartment = async (req, res, next) => {
       });
     }
 
+    // Validate defaultConsultationTimeMinutes if provided
+    let validDefaultConsultationTime = 15; // Default value
+    if (defaultConsultationTimeMinutes !== undefined && defaultConsultationTimeMinutes !== null) {
+      const consultationTime = parseInt(defaultConsultationTimeMinutes, 10);
+      if (isNaN(consultationTime) || consultationTime < 1 || consultationTime > 120) {
+        return res.status(400).json({
+          success: false,
+          message: 'Default consultation time must be between 1 and 120 minutes.',
+        });
+      }
+      validDefaultConsultationTime = consultationTime;
+    }
+
     // Check for duplicate shortCode within the same hospital
     const existingDepartment = await prisma.department.findUnique({
       where: {
@@ -131,6 +146,7 @@ export const createDepartment = async (req, res, next) => {
         name: name.trim(),
         shortCode: trimmedShortCode,
         status: validStatus,
+        defaultConsultationTimeMinutes: validDefaultConsultationTime,
         hospitalId: user.hospitalId,
       },
       select: {
@@ -138,6 +154,8 @@ export const createDepartment = async (req, res, next) => {
         name: true,
         shortCode: true,
         status: true,
+        defaultConsultationTimeMinutes: true,
+        avgConsultationTimeMinutes: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -175,7 +193,7 @@ export const updateDepartment = async (req, res, next) => {
   try {
     const user = req.user;
     const { id } = req.params;
-    const { name, shortCode, status } = req.body;
+    const { name, shortCode, status, defaultConsultationTimeMinutes } = req.body;
 
     // Ensure user has a hospital linked
     if (!user.hospitalId) {
@@ -272,6 +290,17 @@ export const updateDepartment = async (req, res, next) => {
       updateData.status = status;
     }
 
+    if (defaultConsultationTimeMinutes !== undefined && defaultConsultationTimeMinutes !== null) {
+      const consultationTime = parseInt(defaultConsultationTimeMinutes, 10);
+      if (isNaN(consultationTime) || consultationTime < 1 || consultationTime > 120) {
+        return res.status(400).json({
+          success: false,
+          message: 'Default consultation time must be between 1 and 120 minutes.',
+        });
+      }
+      updateData.defaultConsultationTimeMinutes = consultationTime;
+    }
+
     // Check if there's anything to update
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({
@@ -289,6 +318,8 @@ export const updateDepartment = async (req, res, next) => {
         name: true,
         shortCode: true,
         status: true,
+        defaultConsultationTimeMinutes: true,
+        avgConsultationTimeMinutes: true,
         createdAt: true,
         updatedAt: true,
       },

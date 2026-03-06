@@ -1,4 +1,15 @@
 import prisma from '../config/database.js';
+import { 
+  getConsultationTimeForDepartment, 
+  updateDepartmentAvgConsultationTime,
+  storeDailyWaitTimeMetrics,
+  getHistoricalWaitTimeAnalytics,
+  getHospitalHistoricalWaitTimeAnalytics
+} from '../services/waitTime.service.js';
+import { 
+  monitorWaitTimeForEntry,
+  cleanupWaitTimeCache 
+} from '../services/waitTimeNotification.service.js';
 
 /**
  * Get queue preview (read-only)
@@ -125,8 +136,8 @@ export const getQueuePreview = async (req, res, next) => {
 
     const activeDoctors = doctorsWithCapacity.length;
 
-    // Fixed average consultation time = 15 minutes
-    const AVG_CONSULTATION_TIME_MINUTES = 15;
+    // Get department-specific consultation time (dynamic or default)
+    const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(departmentId);
 
     // Compute estimated wait time
     // Formula: ceil(waitingCount / activeDoctors) × avgConsultationTime
@@ -135,7 +146,7 @@ export const getQueuePreview = async (req, res, next) => {
     
     if (activeDoctors > 0) {
       const batches = Math.ceil(waitingCount / activeDoctors);
-      estimatedWaitMinutes = batches * AVG_CONSULTATION_TIME_MINUTES;
+      estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
     }
     // If activeDoctors = 0, estimatedWaitMinutes remains null
 
@@ -157,7 +168,7 @@ export const getQueuePreview = async (req, res, next) => {
           waitingCount: waitingCount,
           activeDoctors: activeDoctors,
           estimatedWaitMinutes: estimatedWaitMinutes,
-          avgConsultationTimeMinutes: AVG_CONSULTATION_TIME_MINUTES,
+          avgConsultationTimeMinutes: avgConsultationTimeMinutes,
         },
       },
     });
@@ -405,7 +416,8 @@ export const checkInToQueue = async (req, res, next) => {
       });
 
       // Calculate estimated wait time (same logic as preview)
-      const AVG_CONSULTATION_TIME_MINUTES = 15;
+      // Get department-specific consultation time (dynamic or default)
+      const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(appointment.departmentId);
       let estimatedWaitMinutes = null;
 
       // Count active available doctors with capacity (same criteria as preview)
@@ -451,7 +463,7 @@ export const checkInToQueue = async (req, res, next) => {
         });
 
         const batches = Math.ceil(waitingCount / activeDoctorsCount);
-        estimatedWaitMinutes = batches * AVG_CONSULTATION_TIME_MINUTES;
+        estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
       }
       // If activeDoctorsCount = 0, estimatedWaitMinutes remains null
 
@@ -461,7 +473,40 @@ export const checkInToQueue = async (req, res, next) => {
         assignedDoctor: assignedDoctorName,
         estimatedWaitMinutes: estimatedWaitMinutes,
         waitingArea: assignedWaitingArea,
+        queueEntryId: queueEntry.id,
+        hospitalId: appointment.hospitalId,
+        departmentId: appointment.departmentId,
       };
+    });
+
+    // Monitor wait time changes for all active entries in the department
+    // This will trigger notifications if wait times have changed significantly
+    // Do this asynchronously after the response is sent
+    setImmediate(async () => {
+      try {
+        // Get all active queue entries in the same department
+        const activeEntries = await prisma.queueEntry.findMany({
+          where: {
+            hospitalId: result.hospitalId,
+            departmentId: result.departmentId,
+            status: {
+              in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        // Monitor wait time for each active entry (this will create notifications if needed)
+        // Use Promise.allSettled to avoid blocking if one fails
+        await Promise.allSettled(
+          activeEntries.map(entry => monitorWaitTimeForEntry(entry.id))
+        );
+      } catch (error) {
+        console.error('Error monitoring wait time changes after check-in:', error);
+        // Don't throw - this is a background operation
+      }
     });
 
     // Return success response
@@ -766,7 +811,40 @@ export const checkInToQueueStaff = async (req, res, next) => {
         ticketNumber: ticketNumber,
         assignedDoctor: assignedDoctorName,
         waitingArea: assignedWaitingArea,
+        queueEntryId: queueEntry.id,
+        hospitalId: appointment.hospitalId,
+        departmentId: appointment.departmentId,
       };
+    });
+
+    // Monitor wait time changes for all active entries in the department
+    // This will trigger notifications if wait times have changed significantly
+    // Do this asynchronously after the response is sent
+    setImmediate(async () => {
+      try {
+        // Get all active queue entries in the same department
+        const activeEntries = await prisma.queueEntry.findMany({
+          where: {
+            hospitalId: result.hospitalId,
+            departmentId: result.departmentId,
+            status: {
+              in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        // Monitor wait time for each active entry (this will create notifications if needed)
+        // Use Promise.allSettled to avoid blocking if one fails
+        await Promise.allSettled(
+          activeEntries.map(entry => monitorWaitTimeForEntry(entry.id))
+        );
+      } catch (error) {
+        console.error('Error monitoring wait time changes after staff check-in:', error);
+        // Don't throw - this is a background operation
+      }
     });
 
     // Return success response
@@ -1056,6 +1134,12 @@ export const getStaffQueue = async (req, res, next) => {
               id: true,
               firstName: true,
               lastName: true,
+            },
+          },
+          assignedRoom: {
+            select: {
+              id: true,
+              name: true,
             },
           },
           waitingArea: {
@@ -1450,6 +1534,16 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         },
       });
 
+      // Update appointment status to COMPLETED when queue entry is completed
+      if (newStatus === 'COMPLETED' && queueEntry.appointmentId) {
+        await tx.appointment.update({
+          where: { id: queueEntry.appointmentId },
+          data: {
+            status: 'COMPLETED',
+          },
+        });
+      }
+
       // Update doctor load if it changed
       if (updatedCurrentActivePatients !== doctor.currentActivePatients) {
         await tx.user.update({
@@ -1457,6 +1551,17 @@ export const updateQueueEntryStatus = async (req, res, next) => {
           data: {
             currentActivePatients: updatedCurrentActivePatients,
           },
+        });
+      }
+
+      // Update department average consultation time when consultation completes
+      // Do this asynchronously after transaction to avoid blocking
+      if (newStatus === 'COMPLETED' && queueEntry.departmentId) {
+        // Schedule update after transaction completes
+        setImmediate(() => {
+          updateDepartmentAvgConsultationTime(queueEntry.departmentId).catch(err => {
+            console.error('Error updating department average consultation time:', err);
+          });
         });
       }
 
@@ -1485,6 +1590,36 @@ export const updateQueueEntryStatus = async (req, res, next) => {
           updated: false,
         },
       },
+    });
+
+    // Monitor wait time changes for all active entries in the same department
+    // This will trigger notifications if wait times have changed significantly
+    // Do this asynchronously after the response is sent
+    setImmediate(async () => {
+      try {
+        // Get all active queue entries in the same department
+        const activeEntries = await prisma.queueEntry.findMany({
+          where: {
+            hospitalId: result.queueEntry.hospitalId,
+            departmentId: result.queueEntry.departmentId,
+            status: {
+              in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        // Monitor wait time for each active entry (this will create notifications if needed)
+        // Use Promise.allSettled to avoid blocking if one fails
+        await Promise.allSettled(
+          activeEntries.map(entry => monitorWaitTimeForEntry(entry.id))
+        );
+      } catch (error) {
+        console.error('Error monitoring wait time changes:', error);
+        // Don't throw - this is a background operation
+      }
     });
   } catch (error) {
     // Handle validation errors
@@ -1871,7 +2006,8 @@ export const getPatientQueueStatus = async (req, res, next) => {
       const positionInQueue = entriesAhead + 1; // Position is 1-indexed
 
       // Calculate estimatedWaitMinutes (same formula as preview)
-      const AVG_CONSULTATION_TIME_MINUTES = 15;
+      // Get department-specific consultation time (dynamic or default)
+      const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(queueEntry.departmentId);
 
       // Count active available doctors with capacity (same logic as preview)
       const availableDoctors = await tx.user.findMany({
@@ -1915,15 +2051,45 @@ export const getPatientQueueStatus = async (req, res, next) => {
         });
 
         const batches = Math.ceil(waitingCount / activeDoctors);
-        estimatedWaitMinutes = batches * AVG_CONSULTATION_TIME_MINUTES;
+        estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
+        
+        // Calculate confidence interval for patient queue status
+        const varianceFactor = Math.max(0.15, Math.min(0.30, (waitingCount / Math.max(activeDoctors, 1)) * 0.05));
+        const confidenceInterval = estimatedWaitMinutes * varianceFactor;
+        const minWaitMinutes = Math.max(0, Math.round(estimatedWaitMinutes - confidenceInterval));
+        const maxWaitMinutes = Math.round(estimatedWaitMinutes + confidenceInterval);
+        
+        return {
+          queueEntry: queueEntry,
+          positionInQueue: positionInQueue,
+          estimatedWaitMinutes: estimatedWaitMinutes,
+          minWaitMinutes: minWaitMinutes,
+          maxWaitMinutes: maxWaitMinutes,
+        };
       }
-
+      
       return {
         queueEntry: queueEntry,
         positionInQueue: positionInQueue,
-        estimatedWaitMinutes: estimatedWaitMinutes,
+        estimatedWaitMinutes: null,
+        minWaitMinutes: null,
+        maxWaitMinutes: null,
       };
     });
+
+    // Monitor wait time changes for patient's queue entry
+    // This will create notifications if significant changes are detected
+    // Do this asynchronously after the response is sent
+    if (result.queueEntry !== null) {
+      setImmediate(async () => {
+        try {
+          await monitorWaitTimeForEntry(result.queueEntry.id);
+        } catch (error) {
+          console.error('Error monitoring wait time for patient queue entry:', error);
+          // Don't throw - this is a background operation
+        }
+      });
+    }
 
     // Return response
     if (result.queueEntry === null) {
@@ -1950,6 +2116,8 @@ export const getPatientQueueStatus = async (req, res, next) => {
           },
           positionInQueue: result.positionInQueue,
           estimatedWaitMinutes: result.estimatedWaitMinutes,
+          minWaitMinutes: result.minWaitMinutes,
+          maxWaitMinutes: result.maxWaitMinutes,
         },
       });
     }
@@ -2648,6 +2816,662 @@ export const getDashboardSummary = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get available doctors for queue reassignment
+ * GET /api/queue/doctors
+ * 
+ * Returns list of available doctors in the hospital for reassignment
+ * 
+ * Rules:
+ * - Only ADMIN or Primary Staff allowed
+ * - Returns doctors: STAFF, DOCTOR, isActive, same hospital
+ * - Includes capacity information
+ * 
+ * Returns: {
+ *   success: true,
+ *   data: { doctors: [{ id, firstName, lastName, currentActivePatients, maxConcurrentPatients, isAvailable, department }] }
+ * }
+ */
+export const getQueueDoctors = async (req, res, next) => {
+  try {
+    const user = req.user;
+
+    // Only ADMIN or Primary Staff can get doctors list
+    const isAdmin = user && user.role === 'ADMIN';
+    const isPrimary = user && user.isPrimary === true;
+
+    if (!isAdmin && !isPrimary) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role or Primary staff required.',
+      });
+    }
+
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hospital ID is required.',
+      });
+    }
+
+    const doctors = await prisma.user.findMany({
+      where: {
+        hospitalId: user.hospitalId,
+        role: 'STAFF',
+        staffRole: 'DOCTOR',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        currentActivePatients: true,
+        maxConcurrentPatients: true,
+        isAvailable: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [
+        { currentActivePatients: 'asc' },
+        { firstName: 'asc' },
+      ],
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: { doctors },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Send email notification to patient for queue entry
+ * POST /api/queue/:id/email
+ * 
+ * Sends email notification to patient about their queue status
+ * 
+ * Rules:
+ * - Only STAFF or ADMIN allowed
+ * - Queue entry must exist and belong to user's hospital
+ * - Patient must have email
+ * 
+ * Body: { message: string (required) }
+ * 
+ * Returns: { success: true, message: 'Email sent successfully' }
+ */
+export const sendQueueEmail = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    const { message } = req.body;
+
+    if (!user || (user.role !== 'STAFF' && user.role !== 'ADMIN')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Staff or Admin role required.',
+      });
+    }
+
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hospital ID is required.',
+      });
+    }
+
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message content is required.',
+      });
+    }
+
+    const queueEntry = await prisma.queueEntry.findUnique({
+      where: { id },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+        hospital: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        department: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!queueEntry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Queue entry not found.',
+      });
+    }
+
+    if (queueEntry.hospitalId !== user.hospitalId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Queue entry does not belong to your hospital.',
+      });
+    }
+
+    if (!queueEntry.patient?.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Patient email not found for this queue entry.',
+      });
+    }
+
+    // Import email service
+    const { sendAnnouncement } = await import('../services/emailService.js');
+
+    // Send email notification
+    const emailSubject = `Queue Update - ${queueEntry.ticketNumber}`;
+    const emailResult = await sendAnnouncement(
+      queueEntry.patient.email,
+      emailSubject,
+      message.trim(),
+      queueEntry.hospital.name
+    );
+
+    if (!emailResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send email notification.',
+      });
+    }
+
+    // Audit log
+    console.log(`[AUDIT] User ${user.id} (${user.email}) sent email to patient ${queueEntry.patient.id} for queue entry ${id}.`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Email sent successfully.',
+    });
+  } catch (error) {
+    if (error.message) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Bulk notify patients in queue
+ * POST /api/queue/bulk-notify
+ * 
+ * Sends email notifications to multiple patients
+ * 
+ * Rules:
+ * - Only ADMIN or Primary Staff allowed
+ * - All queue entries must belong to user's hospital
+ * - Patients must have email
+ * 
+ * Body: {
+ *   queueEntryIds: string[] (required),
+ *   message: string (required)
+ * }
+ * 
+ * Returns: {
+ *   success: true,
+ *   data: { sentCount: number, failedCount: number, failedEntries: [] }
+ * }
+ */
+export const bulkNotifyQueue = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { queueEntryIds, message } = req.body;
+
+    // Only ADMIN or Primary Staff can bulk notify
+    const isAdmin = user && user.role === 'ADMIN';
+    const isPrimary = user && user.isPrimary === true;
+
+    if (!isAdmin && !isPrimary) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role or Primary staff required.',
+      });
+    }
+
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hospital ID is required.',
+      });
+    }
+
+    if (!queueEntryIds || !Array.isArray(queueEntryIds) || queueEntryIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'queueEntryIds array is required and must not be empty.',
+      });
+    }
+
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message content is required.',
+      });
+    }
+
+    // Import email service
+    const { sendAnnouncement } = await import('../services/emailService.js');
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Find all queue entries
+      const queueEntries = await tx.queueEntry.findMany({
+        where: {
+          id: { in: queueEntryIds },
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+          hospital: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Validate all entries exist
+      if (queueEntries.length !== queueEntryIds.length) {
+        const foundIds = queueEntries.map(e => e.id);
+        const missingIds = queueEntryIds.filter(id => !foundIds.includes(id));
+        throw new Error(`Queue entries not found: ${missingIds.join(', ')}`);
+      }
+
+      // Validate hospital ownership
+      const invalidHospitalEntries = queueEntries.filter(
+        entry => entry.hospitalId !== user.hospitalId
+      );
+
+      if (invalidHospitalEntries.length > 0) {
+        throw new Error(
+          `Access denied. ${invalidHospitalEntries.length} queue entry(ies) do not belong to your hospital.`
+        );
+      }
+
+      // Send emails
+      let sentCount = 0;
+      let failedCount = 0;
+      const failedEntries = [];
+
+      for (const entry of queueEntries) {
+        try {
+          if (!entry.patient?.email) {
+            failedEntries.push({
+              queueEntryId: entry.id,
+              ticketNumber: entry.ticketNumber,
+              reason: 'Patient email not found',
+            });
+            failedCount++;
+            continue;
+          }
+
+          const emailSubject = `Queue Update - ${entry.ticketNumber}`;
+          const emailResult = await sendAnnouncement(
+            entry.patient.email,
+            emailSubject,
+            message.trim(),
+            entry.hospital.name
+          );
+
+          if (emailResult.success) {
+            sentCount++;
+          } else {
+            failedEntries.push({
+              queueEntryId: entry.id,
+              ticketNumber: entry.ticketNumber,
+              reason: emailResult.error || 'Failed to send email',
+            });
+            failedCount++;
+          }
+        } catch (error) {
+          failedEntries.push({
+            queueEntryId: entry.id,
+            ticketNumber: entry.ticketNumber,
+            reason: error.message || 'Unknown error',
+          });
+          failedCount++;
+        }
+      }
+
+      return {
+        sentCount,
+        failedCount,
+        failedEntries,
+      };
+    });
+
+    // Audit log
+    console.log(`[AUDIT] User ${user.id} (${user.email}) bulk notified ${result.sentCount} patients. Failed: ${result.failedCount}`);
+
+    if (result.failedCount > 0) {
+      return res.status(200).json({
+        success: false,
+        message: `Sent ${result.sentCount} notifications. Failed to send ${result.failedCount} notifications.`,
+        data: result,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully sent ${result.sentCount} notification(s).`,
+      data: result,
+    });
+  } catch (error) {
+    if (error.message) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Update queue entry priority
+ * PATCH /api/queue/:id/priority
+ * 
+ * Updates the priority of a queue entry
+ * 
+ * Rules:
+ * - Only ADMIN or Primary Staff allowed
+ * - Queue entry must exist and belong to user's hospital
+ * - Priority must be valid: URGENT, HIGH, NORMAL, LOW
+ * 
+ * Body: { priority: string (required) }
+ * 
+ * Returns: { success: true, data: { queueEntry } }
+ */
+export const updateQueuePriority = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    const { priority } = req.body;
+
+    // Only ADMIN or Primary Staff can update priority
+    const isAdmin = user && user.role === 'ADMIN';
+    const isPrimary = user && user.isPrimary === true;
+
+    if (!isAdmin && !isPrimary) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin role or Primary staff required.',
+      });
+    }
+
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Hospital ID is required.',
+      });
+    }
+
+    if (!priority) {
+      return res.status(400).json({
+        success: false,
+        message: 'Priority is required.',
+      });
+    }
+
+    const validPriorities = ['URGENT', 'HIGH', 'NORMAL', 'LOW'];
+    const upperPriority = priority.toUpperCase();
+
+    if (!validPriorities.includes(upperPriority)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid priority. Must be one of: ${validPriorities.join(', ')}`,
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Find queue entry
+      const queueEntry = await tx.queueEntry.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          hospitalId: true,
+          priority: true,
+        },
+      });
+
+      if (!queueEntry) {
+        throw new Error('Queue entry not found.');
+      }
+
+      if (queueEntry.hospitalId !== user.hospitalId) {
+        throw new Error('Access denied. Queue entry does not belong to your hospital.');
+      }
+
+      // Update priority
+      const updated = await tx.queueEntry.update({
+        where: { id },
+        data: { priority: upperPriority },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+            },
+          },
+          department: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      return updated;
+    });
+
+    // Audit log
+    console.log(`[AUDIT] User ${user.id} (${user.email}) updated priority of queue entry ${id} to ${upperPriority}.`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Priority updated successfully.',
+      data: { queueEntry: result },
+    });
+  } catch (error) {
+    if (error.message) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Get real-time wait time for a queue entry
+ * GET /api/queue/:id/wait-time
+ * 
+ * Returns current estimated wait time for the queue entry
+ * Requires: STAFF or ADMIN role, or patient owns the entry
+ */
+export const getQueueEntryWaitTime = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const patient = req.patient;
+    const { id } = req.params;
+
+    // Allow both staff and patient access
+    if (!user && !patient) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
+
+    const queueEntry = await prisma.queueEntry.findUnique({
+      where: { id },
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        patient: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!queueEntry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Queue entry not found.',
+      });
+    }
+
+    // Validate access
+    if (user) {
+      // Staff/Admin: must belong to same hospital
+      if (user.hospitalId !== queueEntry.hospitalId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Queue entry does not belong to your hospital.',
+        });
+      }
+    } else if (patient) {
+      // Patient: must own the entry
+      if (patient.id !== queueEntry.patientId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. This queue entry does not belong to you.',
+        });
+      }
+    }
+
+    // Only calculate for active entries
+    if (!['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'].includes(queueEntry.status)) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          estimatedWaitMinutes: null,
+          message: 'Queue entry is not in an active status.',
+        },
+      });
+    }
+
+    // Get department-specific consultation time
+    const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(queueEntry.departmentId);
+
+    // Count active available doctors with capacity
+    const availableDoctors = await prisma.user.findMany({
+      where: {
+        hospitalId: queueEntry.hospitalId,
+        departmentId: queueEntry.departmentId,
+        role: 'STAFF',
+        staffRole: 'DOCTOR',
+        isActive: true,
+        isAvailable: true,
+      },
+      select: {
+        id: true,
+        currentActivePatients: true,
+        maxConcurrentPatients: true,
+      },
+    });
+
+    const doctorsWithCapacity = availableDoctors.filter(
+      (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
+    );
+
+    const activeDoctors = doctorsWithCapacity.length;
+
+    let estimatedWaitMinutes = null;
+
+    if (activeDoctors > 0) {
+      // Count waiting queue entries (WAITING, TRIAGE, CALLED)
+      const waitingCount = await prisma.queueEntry.count({
+        where: {
+          hospitalId: queueEntry.hospitalId,
+          departmentId: queueEntry.departmentId,
+          status: {
+            in: ['WAITING', 'TRIAGE', 'CALLED'],
+          },
+        },
+      });
+
+      const batches = Math.ceil(waitingCount / activeDoctors);
+      estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
+    }
+
+    // Monitor wait time changes for this queue entry
+    // This will create notifications if significant changes are detected
+    // Do this asynchronously after the response is sent
+    setImmediate(async () => {
+      try {
+        await monitorWaitTimeForEntry(id);
+      } catch (error) {
+        console.error('Error monitoring wait time for queue entry:', error);
+        // Don't throw - this is a background operation
+      }
+    });
+
+    // Calculate confidence interval
+    let minWaitMinutes = null;
+    let maxWaitMinutes = null;
+    if (estimatedWaitMinutes !== null) {
+      // Variance factor: ±20% base, increases with queue size and decreases with doctor count
+      const varianceFactor = Math.max(0.15, Math.min(0.30, (waitingCount / Math.max(activeDoctors, 1)) * 0.05));
+      const confidenceInterval = estimatedWaitMinutes * varianceFactor;
+      minWaitMinutes = Math.max(0, Math.round(estimatedWaitMinutes - confidenceInterval));
+      maxWaitMinutes = Math.round(estimatedWaitMinutes + confidenceInterval);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        queueEntryId: id,
+        estimatedWaitMinutes,
+        minWaitMinutes,
+        maxWaitMinutes,
+        avgConsultationTimeMinutes,
+        activeDoctors,
+        waitingCount: waitingCount || 0,
+        lastUpdated: new Date().toISOString(),
+      },
     });
   } catch (error) {
     next(error);

@@ -775,9 +775,30 @@ async function handleMovePatient(entryId) {
       toast.success('Patient moved successfully');
     } else {
       // Use individual endpoint for regular staff (requires assigned doctor)
-      const status = entry.status || 'WAITING';
+      // Backend requires a valid status transition, so we need to work around same-status limitation
+      const currentStatus = entry.status || 'WAITING';
+      const waitingAreaAllowedStatuses = ['WAITING', 'TRIAGE', 'CALLED'];
+      
+      if (!waitingAreaAllowedStatuses.includes(currentStatus)) {
+        throw new Error(`Cannot move patient. Status must be WAITING, TRIAGE, or CALLED to assign waiting area. Current status: ${currentStatus}`);
+      }
+
+      // Backend doesn't allow same-status transitions (e.g., WAITING → WAITING)
+      // So we need to use a valid transition while assigning the waiting area
+      // Strategy: Toggle between WAITING ↔ TRIAGE to allow the move
+      let targetStatus = currentStatus;
+      if (currentStatus === 'WAITING') {
+        targetStatus = 'TRIAGE'; // Valid transition: WAITING → TRIAGE
+      } else if (currentStatus === 'TRIAGE') {
+        targetStatus = 'WAITING'; // Valid transition: TRIAGE → WAITING
+      } else if (currentStatus === 'CALLED') {
+        // CALLED can only transition to IN_CONSULTATION or CANCELLED
+        // Neither allows waiting area assignment, so we can't move CALLED patients
+        throw new Error('Cannot move patient. Patients in CALLED status cannot be moved to different waiting areas.');
+      }
+      
       response = await apiPatch(`/queue/${entryId}/status`, {
-        status: status,
+        status: targetStatus,
         waitingAreaId: destinationAreaId,
       });
       result = await response.json();
@@ -1003,8 +1024,10 @@ function setupAddWaitingAreaButton() {
   const isPrimary = user?.isPrimary === true;
 
   if (!isAdmin && !isPrimary) {
-    // Hide button if user doesn't have permission
-    addBtn.style.display = 'none';
+    // Disable button if user doesn't have permission
+    addBtn.disabled = true;
+    addBtn.style.cursor = 'not-allowed';
+    addBtn.title = 'Only admins and primary staff can create waiting areas';
     return;
   }
 

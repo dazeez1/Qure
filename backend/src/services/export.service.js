@@ -1,5 +1,6 @@
 import { getDashboardOverview } from './dashboard.service.js';
 import { getDailyTrends, getPeakHours } from './analytics.service.js';
+import prisma from '../config/database.js';
 
 /**
  * Escape CSV field - handles commas, quotes, and newlines
@@ -40,11 +41,65 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
     throw new Error('days must be a number between 1 and 365');
   }
 
+  // Calculate date range for queue data
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - (days - 1));
+  startDate.setHours(0, 0, 0, 0);
+
   // Fetch all data in parallel
-  const [dashboard, dailyTrends, peakHours] = await Promise.all([
+  const [dashboard, dailyTrends, peakHours, queueEntries] = await Promise.all([
     getDashboardOverview({ hospitalId }),
     getDailyTrends({ hospitalId, days }),
     getPeakHours({ hospitalId, days }),
+    // Fetch all queue entries within date range
+    prisma.queueEntry.findMany({
+      where: {
+        hospitalId,
+        checkInTime: {
+          gte: startDate,
+          lte: today,
+        },
+      },
+      select: {
+        id: true,
+        ticketNumber: true,
+        status: true,
+        priority: true,
+        checkInTime: true,
+        patient: {
+          select: {
+            fullName: true,
+            email: true,
+          },
+        },
+        department: {
+          select: {
+            name: true,
+          },
+        },
+        assignedDoctor: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+        waitingArea: {
+          select: {
+            name: true,
+          },
+        },
+        assignedRoom: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        checkInTime: 'desc',
+      },
+    }),
   ]);
 
   // Build CSV string
@@ -119,6 +174,36 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
     });
   } else {
     csvLines.push('No waiting areas found');
+  }
+  
+  csvLines.push('');
+  csvLines.push('');
+
+  // Queue Data Section (all entries within date range)
+  csvLines.push('--- Queue Data (All Entries) ---');
+  csvLines.push('Ticket, Patient, Email, Department, Status, Priority, Doctor, Waiting Area, Room, Check-In Time');
+  
+  if (queueEntries && queueEntries.length > 0) {
+    queueEntries.forEach((entry) => {
+      const ticket = escapeCsvField(entry.ticketNumber || '');
+      const patient = escapeCsvField(entry.patient?.fullName || 'Unknown');
+      const email = escapeCsvField(entry.patient?.email || '');
+      const department = escapeCsvField(entry.department?.name || 'Unknown');
+      const status = escapeCsvField(entry.status || '');
+      const priority = escapeCsvField(entry.priority || '');
+      const doctor = entry.assignedDoctor 
+        ? escapeCsvField(`Dr. ${entry.assignedDoctor.firstName} ${entry.assignedDoctor.lastName}`)
+        : '';
+      const waitingArea = escapeCsvField(entry.waitingArea?.name || '');
+      const room = escapeCsvField(entry.assignedRoom?.name || '');
+      const checkInTime = entry.checkInTime 
+        ? escapeCsvField(new Date(entry.checkInTime).toLocaleString())
+        : '';
+      
+      csvLines.push(`${ticket}, ${patient}, ${email}, ${department}, ${status}, ${priority}, ${doctor}, ${waitingArea}, ${room}, ${checkInTime}`);
+    });
+  } else {
+    csvLines.push('No queue entries found');
   }
   
   csvLines.push('');
