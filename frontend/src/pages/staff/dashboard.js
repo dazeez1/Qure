@@ -418,7 +418,7 @@ function renderQueueTable(data) {
   if (!entries || entries.length === 0) {
     tbody.innerHTML = `
       <tr class="empty-queue-row">
-        <td colspan="6" class="empty-queue-message">No queue entries</td>
+        <td colspan="5" class="empty-queue-message">No queue entries</td>
       </tr>
     `;
     return;
@@ -446,11 +446,6 @@ function renderQueueTable(data) {
         <td>${escapeHtml(departmentName)}</td>
         <td><span class="status-badge status-${statusClass}">${escapeHtml(statusLabel)}</span></td>
         <td>${waitTime} mins</td>
-        <td>
-          <button class="action-btn" title="View Details">
-            <span class="material-symbols-outlined">more_vert</span>
-          </button>
-        </td>
       </tr>
     `;
   }).join('');

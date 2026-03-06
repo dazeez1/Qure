@@ -206,8 +206,8 @@ if (acceptForm) {
 
     try {
       const response = await apiPost('/auth/accept-invite', {
-        token: token,
-        password: password,
+          token: token,
+          password: password,
       });
 
       const result = await response.json();
