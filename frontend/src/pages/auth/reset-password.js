@@ -24,7 +24,7 @@ const token = urlParams.get('token');
 
 // Check if token exists
 if (!token) {
-  toast.error('Invalid reset link. Please request a new password reset.');
+  toast.error('Invalid reset link');
   setTimeout(() => {
     window.location.href = '/forgot-password.html';
   }, 2000);

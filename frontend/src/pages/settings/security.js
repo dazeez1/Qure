@@ -73,7 +73,7 @@ async function fetchSecuritySettings() {
     }
   } catch (error) {
     console.error('Error fetching security settings:', error);
-    toast.error('Failed to load security settings. Please try again.');
+    toast.error('Failed to load settings');
   } finally {
     isLoading = false;
   }
@@ -412,7 +412,7 @@ async function handleRegenerateConfirm() {
     }
   } catch (error) {
     console.error('Error regenerating access code:', error);
-    toast.error('Failed to regenerate access code. Please try again.');
+    toast.error('Failed to regenerate code');
   } finally {
     // Re-enable button
     confirmBtn.disabled = false;

@@ -21,7 +21,7 @@ const token = urlParams.get('token');
 
 // Check if token exists
 if (!token) {
-  toast.error('Invalid invitation link. Please check your email for the correct link.');
+  toast.error('Invalid invitation link');
   setTimeout(() => {
     window.location.href = '/login.html';
   }, 2000);
@@ -195,7 +195,7 @@ if (acceptForm) {
 
     // Check if token exists
     if (!token) {
-      toast.error('Invalid invitation link. Please check your email.');
+      toast.error('Invalid invitation link');
       return;
     }
 

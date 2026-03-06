@@ -46,7 +46,7 @@ export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
   toast.className = `toast toast-${type}`;
   toast.setAttribute('role', 'alert');
   toast.setAttribute('aria-live', 'assertive');
-  
+
   // Store as active toast
   activeToast = toast;
 
@@ -77,8 +77,8 @@ export const showToast = (message, type = ToastType.INFO, duration = 5000) => {
 
   // Trigger animation after a brief delay to ensure content is rendered
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      toast.classList.add('toast-show');
+  requestAnimationFrame(() => {
+    toast.classList.add('toast-show');
     });
   });
 

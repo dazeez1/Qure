@@ -969,7 +969,7 @@ export async function toggleStatus(staffId) {
     }
   } catch (error) {
     console.error('Error toggling staff status:', error);
-    toast.error('Failed to update staff status. Please try again.');
+    toast.error('Failed to update status');
   }
 }
 
@@ -1064,7 +1064,7 @@ async function confirmDeactivateStaff(staffId) {
     }
   } catch (error) {
     console.error('Error deactivating staff:', error);
-    toast.error('Failed to deactivate staff. Please try again.');
+    toast.error('Failed to deactivate staff');
   }
 }
 

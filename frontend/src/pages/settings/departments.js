@@ -89,7 +89,7 @@ async function fetchDepartments() {
     }
   } catch (error) {
     console.error('Error fetching departments:', error);
-    toast.error('Failed to load departments. Please try again.');
+    toast.error('Failed to load departments');
     
     // Show error state
     if (tableBody) {
@@ -590,7 +590,7 @@ async function handleCreate(e) {
     }
   } catch (error) {
     console.error('Error creating department:', error);
-    toast.error('Failed to create department. Please try again.');
+    toast.error('Failed to create department');
   } finally {
     // Re-enable button
     if (saveButton) {
@@ -742,7 +742,7 @@ async function handleUpdate(e) {
     }
   } catch (error) {
     console.error('Error updating department:', error);
-    toast.error('Failed to update department. Please try again.');
+    toast.error('Failed to update department');
   } finally {
     // Re-enable button
     if (saveButton) {
@@ -821,7 +821,7 @@ async function handleDelete(departmentId) {
     }
   } catch (error) {
     console.error('Error deleting department:', error);
-    toast.error('Failed to delete department. Please try again.');
+    toast.error('Failed to delete department');
   } finally {
     // Re-enable button
     if (confirmBtn) {
@@ -877,7 +877,7 @@ export async function handleToggle(departmentId) {
     }
   } catch (error) {
     console.error('Error toggling department status:', error);
-    toast.error('Failed to update department status. Please try again.');
+    toast.error('Failed to update status');
   }
 }
 

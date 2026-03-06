@@ -13,6 +13,9 @@ lerna-debug.log*
 .cursor/rules/architecture-principles.mdc
 .cursor/rules/no-alert-popups.mdc
 .cursor/rules/development-workflow.mdc
+IMPLEMENTATION_AUDIT.md
+OPTIMIZATIONS_IMPLEMENTED.md
+PERFORMANCE_OPTIMIZATIONS.md
 
 
 # Diagnostic reports (https://nodejs.org/api/report.html)

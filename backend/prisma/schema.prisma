@@ -230,6 +230,9 @@ model Appointment {
 
   queueEntry   QueueEntry?
 
+  @@index([hospitalId, status])
+  @@index([hospitalId, appointmentDate])
+  @@index([departmentId, status])
   @@map("appointments")
 }
 
@@ -258,6 +261,11 @@ model QueueEntry {
   updatedAt         DateTime      @updatedAt
 
   @@unique([hospitalId, departmentId, ticketNumber])
+  @@index([hospitalId, status])
+  @@index([hospitalId, departmentId, status])
+  @@index([assignedDoctorId, status])
+  @@index([checkInTime])
+  @@index([status, priority])
   @@map("queue_entries")
 }
 

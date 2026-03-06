@@ -178,7 +178,7 @@ export async function loadOrganizationData() {
     }
   } catch (error) {
     console.error('Error loading organization data:', error);
-    toast.error('Network error. Please check your connection and try again.');
+    toast.error('Network error. Please try again');
 
     // Reset form
     if (hospitalNameInput) {
@@ -299,7 +299,7 @@ export async function updateOrganizationData(formData) {
     }
   } catch (error) {
     console.error('Error updating organization data:', error);
-    toast.error('Network error. Please check your connection and try again.');
+    toast.error('Network error. Please try again');
   } finally {
     // Re-enable save button (but check permissions first)
     if (saveButton) {

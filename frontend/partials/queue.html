@@ -101,54 +101,54 @@
 
   <!-- Main Content Area -->
   <div class="queue-content">
-    <!-- Queue Table -->
-    <div class="queue-table-container">
+  <!-- Queue Table -->
+  <div class="queue-table-container">
       <div class="queue-table-wrapper">
-        <table class="queue-table" id="queue-table">
-          <thead>
-            <tr>
-              <th>Select</th>
-              <th>Patient Name</th>
-              <th>Ticket #</th>
-              <th>Status</th>
+    <table class="queue-table" id="queue-table">
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>Patient Name</th>
+          <th>Ticket #</th>
+          <th>Status</th>
               <th>Priority</th>
-              <th>Assigned Room</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="queue-table-body">
-            <tr>
-              <td colspan="7" class="loading-message">Loading queue data...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          <th>Assigned Room</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="queue-table-body">
+        <tr>
+          <td colspan="7" class="loading-message">Loading queue data...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 
-      <!-- Queue Summary -->
-      <div class="queue-summary">
-        <span id="queue-summary-text">Loading...</span>
-        <div class="queue-pagination">
-          <button class="pagination-btn" id="prev-page-btn" disabled>
-            <span class="material-symbols-outlined">chevron_left</span>
-          </button>
-          <button class="pagination-btn" id="next-page-btn" disabled>
-            <span class="material-symbols-outlined">chevron_right</span>
-          </button>
-        </div>
-      </div>
+  <!-- Queue Summary -->
+  <div class="queue-summary">
+    <span id="queue-summary-text">Loading...</span>
+    <div class="queue-pagination">
+      <button class="pagination-btn" id="prev-page-btn" disabled>
+        <span class="material-symbols-outlined">chevron_left</span>
+      </button>
+      <button class="pagination-btn" id="next-page-btn" disabled>
+        <span class="material-symbols-outlined">chevron_right</span>
+      </button>
     </div>
+  </div>
+</div>
 
-    <!-- Right Sidebar - Patient Details -->
-    <div class="queue-sidebar" id="queue-sidebar">
-      <div class="sidebar-header-controls">
-        <h3>Patient Details</h3>
-        <button class="sidebar-close-btn" id="sidebar-close-btn">
-          <span class="material-symbols-outlined">close</span>
-        </button>
-      </div>
-      <div class="patient-details-card" id="patient-details-card">
-        <div class="patient-details-placeholder">
-          <p>Select a patient to view details</p>
+<!-- Right Sidebar - Patient Details -->
+<div class="queue-sidebar" id="queue-sidebar">
+  <div class="sidebar-header-controls">
+    <h3>Patient Details</h3>
+    <button class="sidebar-close-btn" id="sidebar-close-btn">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+  <div class="patient-details-card" id="patient-details-card">
+    <div class="patient-details-placeholder">
+      <p>Select a patient to view details</p>
         </div>
       </div>
     </div>
@@ -964,12 +964,12 @@
     z-index: 10003;
     pointer-events: auto;
     cursor: pointer;
-  }
-
+    }
+    
   .modal-footer .btn:disabled {
     cursor: not-allowed;
     opacity: 0.5;
-  }
+    }
 
 
   @media (max-width: 768px) {

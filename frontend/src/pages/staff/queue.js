@@ -132,13 +132,13 @@ async function initQueuePage() {
   // Verify critical DOM elements exist
   if (!queueTableBody) {
     console.error('queue-table-body not found!');
-    toast.error('Queue table not found. Please refresh the page.');
+    toast.error('Queue table not found');
     return;
   }
   
   // Verify room modal elements exist
   if (!roomModalOverlay) {
-    toast.error('Room modal not found. Please refresh the page.');
+    toast.error('Room modal not found');
   }
   
   // Sidebar close button
@@ -172,11 +172,22 @@ async function initQueuePage() {
     }
   } catch (error) {
     console.error('Error during initial load:', error);
-    toast.error('Failed to load queue data. Please refresh the page.');
+    toast.error('Failed to load queue data');
   }
 
   // Start polling after initial load completes
   startPolling();
+  
+  // Pause polling when page becomes hidden, resume when visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Page is hidden - pause polling and close SSE connections
+      stopPolling();
+    } else {
+      // Page is visible - resume polling
+      startPolling();
+    }
+  });
 }
 
 /**
@@ -362,7 +373,8 @@ async function fetchQueue(showLoading = true) {
       await fetchWaitingAreas();
       
       // Restart SSE connections with updated queue data
-      if (pollingInterval) {
+      // Only restart if page is visible
+      if (pollingInterval && !document.hidden) {
         startWaitTimeSSE();
       }
     } else {
@@ -377,7 +389,8 @@ async function fetchQueue(showLoading = true) {
     await renderQueueTable();
     
     // Restart SSE connections with updated queue data
-    if (pollingInterval) {
+    // Only restart if page is visible
+    if (pollingInterval && !document.hidden) {
       startWaitTimeSSE();
     }
   } finally {
@@ -817,7 +830,7 @@ async function handleStatusUpdate(entryId, currentStatus, roomId = null, buttonE
     // Complete the consultation
     nextStatus = 'COMPLETED';
   } else {
-    toast.info(`Invalid status transition from ${formatStatus(actualStatus)}`);
+    toast.info('Invalid status transition');
     return;
   }
 
@@ -911,7 +924,7 @@ async function openRoomModal(entryId) {
 
   if (!departmentId) {
     console.error('Department ID not found in entry:', entry);
-    toast.error('Department information not available for this patient');
+    toast.error('Department info unavailable');
     return;
   }
 
@@ -930,7 +943,7 @@ async function openRoomModal(entryId) {
     // Check if modal card exists
     const modalCard = roomModalOverlay.querySelector('.modal-card');
     if (!modalCard) {
-      toast.error('Room modal structure is missing. Please refresh the page.');
+      toast.error('Room modal error. Please refresh');
       return;
     }
     
@@ -986,7 +999,7 @@ async function fetchRooms(departmentId) {
           availableRooms = inactiveResult.data.rooms || [];
           
           if (availableRooms.length > 0) {
-            toast.warning('Only inactive rooms available for this department. Please activate them in Settings.');
+            toast.warning('Only inactive rooms available. Activate in Settings');
           }
         }
       }
@@ -998,7 +1011,7 @@ async function fetchRooms(departmentId) {
       if (result.message) {
         toast.error(result.message);
       } else {
-        toast.error('No rooms found for this department. Please create rooms in Settings.');
+        toast.error('No rooms found. Create in Settings');
       }
     }
   } catch (error) {
@@ -1168,7 +1181,7 @@ async function handleNotify() {
   }
 
   if (!isAdmin && !isPrimary) {
-    toast.error('Only admins or primary staff can notify patients');
+    toast.error('Only admins can notify patients');
     return;
   }
 
@@ -1179,7 +1192,7 @@ async function handleNotify() {
   });
 
   if (invalidEntries.length > 0) {
-    toast.error('Cannot notify patients who are called or in consultation');
+    toast.error('Cannot notify patients in active consultation');
     return;
   }
 
@@ -1197,7 +1210,7 @@ async function handleReassign() {
   }
 
   if (!isAdmin && !isPrimary) {
-    toast.error('Only admins or primary staff can reassign patients');
+    toast.error('Only admins can reassign patients');
     return;
   }
 
@@ -1208,7 +1221,7 @@ async function handleReassign() {
   });
 
   if (invalidEntries.length > 0) {
-    toast.error('Cannot reassign patients who are called or in consultation');
+    toast.error('Cannot reassign patients in active consultation');
     return;
   }
 
@@ -1226,7 +1239,7 @@ async function handleNoShow() {
   }
 
   if (!isAdmin && !isPrimary) {
-    toast.error('Only admins or primary staff can mark patients as no-show');
+    toast.error('Only admins can mark as no-show');
     return;
   }
 
@@ -1237,7 +1250,7 @@ async function handleNoShow() {
   });
 
   if (invalidEntries.length > 0) {
-    toast.error('Cannot mark patients as no-show if they are called or in consultation');
+    toast.error('Cannot mark active patients as no-show');
     return;
   }
 
@@ -1260,7 +1273,7 @@ async function handleNoShow() {
     const result = await response.json();
 
     if (result.success) {
-      toast.success(result.message || `Successfully marked ${result.data?.updatedCount || selectedQueueEntries.size} patient(s) as no-show`);
+      toast.success(result.message || `Marked ${result.data?.updatedCount || selectedQueueEntries.size} patient(s) as no-show`);
       selectedQueueEntries.clear();
       await fetchQueue(false);
     } else {
@@ -1352,13 +1365,28 @@ function showPatientDetails(entryId) {
   const minWaitMinutes = cachedWaitTime?.minWaitMinutes ?? entry.minWaitMinutes ?? null;
   const maxWaitMinutes = cachedWaitTime?.maxWaitMinutes ?? entry.maxWaitMinutes ?? null;
   
-  let waitTimeDisplay = 'Estimated Wait: Calculating...';
-  if (estimatedWaitMinutes !== null) {
-    if (minWaitMinutes !== null && maxWaitMinutes !== null && minWaitMinutes !== maxWaitMinutes) {
-      waitTimeDisplay = `Estimated Wait: ${minWaitMinutes}-${maxWaitMinutes} mins`;
-    } else {
-      waitTimeDisplay = `Estimated Wait: ${Math.round(estimatedWaitMinutes)} mins`;
+  // Don't show wait time if status is COMPLETED
+  const isCompleted = entry.status === 'COMPLETED';
+  
+  let waitTimeSection = '';
+  if (!isCompleted) {
+    // For non-completed entries, fetch wait time if not available
+    let waitTimeDisplay = 'Estimated Wait: Calculating...';
+    if (estimatedWaitMinutes !== null) {
+      if (minWaitMinutes !== null && maxWaitMinutes !== null && minWaitMinutes !== maxWaitMinutes) {
+        waitTimeDisplay = `Estimated Wait: ${minWaitMinutes}-${maxWaitMinutes} mins`;
+      } else {
+        waitTimeDisplay = `Estimated Wait: ${Math.round(estimatedWaitMinutes)} mins`;
+      }
     }
+    
+    waitTimeSection = `
+    <div class="patient-details-section">
+      <div class="patient-details-section-title">Wait Time</div>
+      <div class="patient-details-section-content wait-time-display">
+        ${waitTimeDisplay}
+      </div>
+    </div>`;
   }
 
   patientDetailsCard.innerHTML = `
@@ -1367,12 +1395,7 @@ function showPatientDetails(entryId) {
       <div class="patient-details-name">${patientName}</div>
       <div class="patient-details-info">${patient.age || 'N/A'}/${patient.gender || 'N/A'}</div>
     </div>
-    <div class="patient-details-section">
-      <div class="patient-details-section-title">Wait Time</div>
-      <div class="patient-details-section-content wait-time-display">
-        ${waitTimeDisplay}
-      </div>
-    </div>
+    ${waitTimeSection}
     <div class="patient-details-section">
       <div class="patient-details-section-title">Queue History</div>
       <div class="patient-details-section-content">
@@ -1387,26 +1410,31 @@ function showPatientDetails(entryId) {
     </div>
   `;
 
-  // Fetch wait time if not cached or cache is stale (older than 1 minute)
-  if (!cachedWaitTime || (cachedWaitTime.lastUpdated && 
-      (Date.now() - new Date(cachedWaitTime.lastUpdated).getTime()) > 60000)) {
-    // Fetch wait time asynchronously
-    apiGet(`/queue/${entryId}/wait-time`)
-      .then(response => response.json())
-      .then(result => {
-        if (result.success && result.data) {
-          waitTimeCache.set(entryId, {
-            estimatedWaitMinutes: result.data.estimatedWaitMinutes,
-            minWaitMinutes: result.data.minWaitMinutes,
-            maxWaitMinutes: result.data.maxWaitMinutes,
-            lastUpdated: new Date().toISOString(),
-          });
-          updateSidebarWaitTime(entryId, result.data.estimatedWaitMinutes, result.data.minWaitMinutes, result.data.maxWaitMinutes);
-        }
-      })
-      .catch(error => {
-        console.debug(`Failed to fetch wait time for entry ${entryId}:`, error);
-      });
+  // Fetch wait time if not completed
+  // Always fetch if not available or cache is stale (older than 1 minute) to ensure fresh data
+  if (!isCompleted) {
+    // If we don't have wait time data, fetch it immediately
+    if (estimatedWaitMinutes === null || !cachedWaitTime || (cachedWaitTime.lastUpdated && 
+        (Date.now() - new Date(cachedWaitTime.lastUpdated).getTime()) > 60000)) {
+      // Fetch wait time asynchronously
+      apiGet(`/queue/${entryId}/wait-time`)
+        .then(response => response.json())
+        .then(result => {
+          if (result.success && result.data) {
+            waitTimeCache.set(entryId, {
+              estimatedWaitMinutes: result.data.estimatedWaitMinutes,
+              minWaitMinutes: result.data.minWaitMinutes,
+              maxWaitMinutes: result.data.maxWaitMinutes,
+              lastUpdated: new Date().toISOString(),
+            });
+            // Update the sidebar display
+            updateSidebarWaitTime(entryId, result.data.estimatedWaitMinutes, result.data.minWaitMinutes, result.data.maxWaitMinutes);
+          }
+        })
+        .catch(error => {
+          console.debug(`Failed to fetch wait time for entry ${entryId}:`, error);
+        });
+    }
   }
 }
 
@@ -1614,6 +1642,7 @@ async function fetchDoctorLoad(forceRefresh = false) {
 
 /**
  * Start polling
+ * Optimized with Page Visibility API to pause when tab is hidden
  */
 function startPolling() {
   // Clear existing intervals
@@ -1625,16 +1654,22 @@ function startPolling() {
   }
 
   // Poll queue data every 30 seconds (without showing spinner)
+  // Only poll when page is visible
   pollingInterval = setInterval(() => {
-    fetchQueue(false); // Don't show spinner during automatic polling
+    if (!document.hidden) {
+      fetchQueue(false); // Don't show spinner during automatic polling
+    }
   }, 30000);
 
   // Use SSE for real-time wait time updates (preferred) or fallback to polling
   startWaitTimeSSE();
   
   // Fallback polling every 30 seconds if SSE is not available
+  // Only poll when page is visible
   waitTimePollingInterval = setInterval(() => {
-    updateWaitTimes(); // Update wait times without full refresh
+    if (!document.hidden) {
+      updateWaitTimes(); // Update wait times without full refresh
+    }
   }, 30000);
 }
 
@@ -1792,6 +1827,12 @@ async function updateWaitTimes() {
  */
 function updateSidebarWaitTime(entryId, estimatedWaitMinutes, minWaitMinutes = null, maxWaitMinutes = null) {
   if (!patientDetailsCard) return;
+
+  // Check if entry is completed - don't update wait time for completed entries
+  const entry = queueData.find(e => e.id === entryId);
+  if (entry && entry.status === 'COMPLETED') {
+    return; // Don't show/update wait time for completed entries
+  }
 
   // Find wait time element in sidebar
   const waitTimeElement = patientDetailsCard.querySelector('.wait-time-display');
@@ -1992,7 +2033,7 @@ async function openReassignModal() {
         const result = await response.json();
 
         if (result.success) {
-          toast.success(result.message || `Successfully reassigned ${result.data?.updatedCount || selectedQueueEntries.size} patient(s)`);
+          toast.success(result.message || `Reassigned ${result.data?.updatedCount || selectedQueueEntries.size} patient(s)`);
           selectedQueueEntries.clear();
           closeModal();
           // Invalidate doctor load cache after reassignment
@@ -2210,7 +2251,7 @@ function openBulkNotifyModal() {
     const result = await response.json();
 
     if (result.success) {
-        toast.success(result.message || `Successfully sent ${result.data?.sentCount || selectedQueueEntries.size} notification(s)`);
+        toast.success(result.message || `Sent ${result.data?.sentCount || selectedQueueEntries.size} notification(s)`);
         selectedQueueEntries.clear();
         closeModal();
         await fetchQueue(false);

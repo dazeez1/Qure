@@ -59,7 +59,7 @@ const verifyAccess = async () => {
     } else {
       // Access denied or error
       if (response.status === 403) {
-        toast.error('Access denied. You do not have permission to access this dashboard.');
+        toast.error('Access denied');
       } else if (response.status === 401) {
         toast.error('Session expired. Please log in again.');
         clearAuth();

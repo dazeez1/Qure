@@ -42,23 +42,6 @@
     </div>
   </div>
 
-  <!-- Historical Wait Time Trends -->
-  <div class="dashboard-wait-time-trends">
-    <div class="trends-header">
-      <h2 class="trends-title">Historical Wait Time Trends</h2>
-      <select id="wait-time-days-select" class="trends-select">
-        <option value="7">Last 7 days</option>
-        <option value="14">Last 14 days</option>
-        <option value="30" selected>Last 30 days</option>
-      </select>
-    </div>
-    <div class="trends-content">
-      <div id="wait-time-chart-container" class="wait-time-chart-container">
-        <div class="chart-placeholder">Loading wait time trends...</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Queue Section -->
   <div class="dashboard-queue-announcement-wrapper">
   <div class="dashboard-queue-section">
@@ -75,12 +58,11 @@
             <th>Department</th>
             <th>Status</th>
             <th>Wait time</th>
-            <th>Actions</th>
           </tr>
         </thead>
           <tbody id="dashboard-queue-body">
             <tr class="empty-queue-row">
-              <td colspan="6" class="empty-queue-message">No queue entries</td>
+              <td colspan="5" class="empty-queue-message">No queue entries</td>
           </tr>
         </tbody>
       </table>
@@ -105,179 +87,4 @@
     </div>
   </div>
 </div>
-
-<style>
-  /* Historical Wait Time Trends */
-  .dashboard-wait-time-trends {
-    background: #fff;
-    border-radius: 1.6rem;
-    padding: 2rem;
-    margin-top: 2rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  }
-
-  .trends-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.6rem;
-    padding-bottom: 1.2rem;
-    border-bottom: 1px solid var(--color-border-light);
-  }
-
-  .trends-title {
-    font-size: 1.8rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin: 0;
-  }
-
-  .trends-select {
-    padding: 0.6rem 1rem;
-    border: 1px solid var(--color-border-gray);
-    border-radius: 0.6rem;
-    font-size: 1.2rem;
-    color: var(--color-text-primary);
-    background: #fff;
-    cursor: pointer;
-  }
-
-  .trends-select:focus {
-    outline: none;
-    border-color: var(--color-primary-blue);
-  }
-
-  .trends-content {
-    min-height: 250px;
-  }
-
-  .wait-time-chart-container {
-    width: 100%;
-    min-height: 250px;
-    padding: 1.6rem 0;
-  }
-
-  .chart-placeholder {
-    text-align: center;
-    padding: 4rem 2rem;
-    color: var(--color-text-tertiary);
-    font-size: 1.4rem;
-  }
-
-  .wait-time-chart {
-    width: 100%;
-  }
-
-  .chart-bars {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 0.8rem;
-    height: 220px;
-    padding: 0 1rem;
-    border-bottom: 2px solid var(--color-border-light);
-    margin-bottom: 1.2rem;
-  }
-
-  .chart-bar-wrapper {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    height: 100%;
-    justify-content: flex-end;
-    position: relative;
-  }
-
-  .chart-bar {
-    width: 100%;
-    max-width: 4rem;
-    background: var(--color-primary-blue);
-    border-radius: 0.4rem 0.4rem 0 0;
-    position: relative;
-    transition: all 0.3s ease;
-    min-height: 4px;
-  }
-
-  .chart-bar:hover {
-    background: var(--color-primary-blue-lighter);
-    transform: scaleY(1.05);
-  }
-
-  .chart-bar-value {
-    position: absolute;
-    top: -2.4rem;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .chart-bar-wrapper:hover .chart-bar-value {
-    opacity: 1;
-  }
-
-  .chart-bar-label {
-    margin-top: 0.8rem;
-    font-size: 1rem;
-    color: var(--color-text-tertiary);
-    text-align: center;
-    transform: rotate(-45deg);
-    transform-origin: center;
-    white-space: nowrap;
-    width: 6rem;
-    margin-left: -1rem;
-  }
-
-  .chart-legend {
-    display: flex;
-    justify-content: center;
-    gap: 2rem;
-    margin-top: 1.6rem;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    font-size: 1.2rem;
-    color: var(--color-text-primary);
-  }
-
-  .legend-color {
-    width: 1.6rem;
-    height: 1.6rem;
-    border-radius: 0.4rem;
-  }
-
-  @media (max-width: 768px) {
-    .trends-header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 1.2rem;
-    }
-
-    .trends-select {
-      width: 100%;
-    }
-
-    .chart-bars {
-      gap: 0.4rem;
-      padding: 0 0.4rem;
-    }
-
-    .chart-bar {
-      max-width: 2.4rem;
-    }
-
-    .chart-bar-label {
-      font-size: 0.9rem;
-      width: 4rem;
-    }
-  }
-</style>
 

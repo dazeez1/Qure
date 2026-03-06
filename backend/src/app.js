@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import compression from 'compression';
 import authRoutes from './routes/authRoutes.js';
 import patientAuthRoutes from './routes/patientAuthRoutes.js';
 import patientRoutes from './routes/patientRoutes.js';
@@ -22,6 +23,8 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
+// Enable compression for all responses
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

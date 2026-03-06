@@ -80,7 +80,7 @@ async function fetchNotificationSettings() {
     }
   } catch (error) {
     console.error('Error fetching notification settings:', error);
-    toast.error('Failed to load notification settings. Please try again.');
+    toast.error('Failed to load settings');
   } finally {
     isLoading = false;
   }
@@ -346,7 +346,7 @@ async function handleSave() {
     }
   } catch (error) {
     console.error('Error saving notification settings:', error);
-    toast.error('Failed to save notification settings. Please try again.');
+    toast.error('Failed to save settings');
   } finally {
     // Re-enable button
     if (saveBtn) {

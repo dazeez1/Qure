@@ -2058,11 +2058,11 @@ export const getPatientQueueStatus = async (req, res, next) => {
         const confidenceInterval = estimatedWaitMinutes * varianceFactor;
         const minWaitMinutes = Math.max(0, Math.round(estimatedWaitMinutes - confidenceInterval));
         const maxWaitMinutes = Math.round(estimatedWaitMinutes + confidenceInterval);
-        
-        return {
-          queueEntry: queueEntry,
-          positionInQueue: positionInQueue,
-          estimatedWaitMinutes: estimatedWaitMinutes,
+
+      return {
+        queueEntry: queueEntry,
+        positionInQueue: positionInQueue,
+        estimatedWaitMinutes: estimatedWaitMinutes,
           minWaitMinutes: minWaitMinutes,
           maxWaitMinutes: maxWaitMinutes,
         };

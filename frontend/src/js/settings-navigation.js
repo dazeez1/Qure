@@ -171,7 +171,7 @@ async function initializeOrganizationTab() {
           logoPreviewImg.src = event.target.result;
           logoPreview.style.display = 'flex';
           logoUploadArea.querySelector('.logo-upload-content').style.display = 'none';
-          toast.info('Logo preview loaded. Note: Logo upload service not yet implemented.');
+          toast.info('Logo preview loaded');
         };
         reader.readAsDataURL(file);
       } else {

@@ -1332,7 +1332,7 @@ function setupFilters() {
       searchInput.removeEventListener('keypress', searchKeypressHandler);
     }
     
-    // Debounced search on input
+    // Debounced search on input (optimized to 300ms for better responsiveness)
     searchInputHandler = (e) => {
       clearTimeout(searchTimeout);
       const searchValue = e.target.value.trim();
@@ -1340,7 +1340,7 @@ function setupFilters() {
       searchTimeout = setTimeout(() => {
         currentFilters.search = searchValue || undefined;
         fetchAppointments(currentFilters, 1);
-      }, 400);
+      }, 300);
     };
 
     // Search on Enter key
@@ -1580,7 +1580,7 @@ async function handleBulkCancel() {
   );
 
   if (cancellableAppointments.length === 0) {
-    toast.error('No cancellable appointments selected. Only BOOKED appointments without active queue entries can be cancelled.');
+    toast.error('No cancellable appointments selected');
     return;
   }
 
@@ -1614,7 +1614,7 @@ async function handleBulkCancel() {
     const failedCount = results.length - successCount;
 
     if (successCount > 0) {
-      toast.success(`Successfully cancelled ${successCount} appointment(s).`);
+      toast.success(`Cancelled ${successCount} appointment(s)`);
     }
     if (failedCount > 0) {
       toast.error(`Failed to cancel ${failedCount} appointment(s).`);
@@ -1656,7 +1656,7 @@ async function handleBulkReschedule() {
   );
 
   if (reschedulableAppointments.length === 0) {
-    toast.error('No reschedulable appointments selected. Only BOOKED appointments can be rescheduled.');
+    toast.error('No reschedulable appointments selected');
     return;
   }
 
@@ -1771,7 +1771,7 @@ async function handleBulkRescheduleSubmit(appointments, newDateTime, closeModal)
     const failedCount = results.length - successCount;
 
     if (successCount > 0) {
-      toast.success(`Successfully rescheduled ${successCount} appointment(s).`);
+      toast.success(`Rescheduled ${successCount} appointment(s)`);
     }
     if (failedCount > 0) {
       toast.error(`Failed to reschedule ${failedCount} appointment(s).`);
