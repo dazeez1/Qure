@@ -9,6 +9,7 @@ import { apiGet, apiPatch, apiPost } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { showConfirmModal } from '../../utils/modal.js';
+import { initPage, cleanupPage, addButtonListener, addListener, addScopedDocumentListener } from '../../utils/pageLifecycle.js';
 
 // State
 let queueData = [];
@@ -57,6 +58,12 @@ let isDoctor = false;
 let isAdmin = false;
 let isPrimary = false;
 
+// Page ID for lifecycle management
+const PAGE_ID = 'queue';
+
+// Cleanup functions storage
+let cleanupFunctions = [];
+
 /**
  * Load modal CSS for queue page only
  */
@@ -76,9 +83,9 @@ function loadModalCSS() {
 }
 
 /**
- * Initialize queue page
+ * Initialize queue page (internal)
  */
-async function initQueuePage() {
+async function _initQueuePage() {
   console.log('initQueuePage called');
   
   // Load modal CSS for this page only
@@ -136,15 +143,17 @@ async function initQueuePage() {
     return;
   }
   
-  // Verify room modal elements exist
+  // Verify room modal elements exist (but don't show error, it's optional)
   if (!roomModalOverlay) {
-    toast.error('Room modal not found');
+    console.warn('Room modal overlay not found - room assignment feature may not work');
   }
   
   // Sidebar close button
   const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
   if (sidebarCloseBtn) {
-    sidebarCloseBtn.addEventListener('click', hidePatientDetails);
+    cleanupFunctions.push(
+      addButtonListener(sidebarCloseBtn, PAGE_ID, hidePatientDetails)
+    );
   }
 
   // Setup date range filter
@@ -179,67 +188,170 @@ async function initQueuePage() {
   startPolling();
   
   // Pause polling when page becomes hidden, resume when visible
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      // Page is hidden - pause polling and close SSE connections
-      stopPolling();
-    } else {
-      // Page is visible - resume polling
-      startPolling();
+  cleanupFunctions.push(
+    addListener(PAGE_ID, document, 'visibilitychange', () => {
+      if (document.hidden) {
+        // Page is hidden - pause polling and close SSE connections
+        stopPolling();
+      } else {
+        // Page is visible - resume polling
+        startPolling();
+      }
+    })
+  );
+}
+
+/**
+ * Wait for DOM element to be available
+ */
+function waitForElement(selector, timeout = 1000) {
+  return new Promise((resolve, reject) => {
+    const element = document.querySelector(selector);
+    if (element) {
+      resolve(element);
+      return;
     }
+
+    const observer = new MutationObserver(() => {
+      const element = document.querySelector(selector);
+      if (element) {
+        observer.disconnect();
+        resolve(element);
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    setTimeout(() => {
+      observer.disconnect();
+      const element = document.querySelector(selector);
+      if (element) {
+        resolve(element);
+      } else {
+        reject(new Error(`Element ${selector} not found within ${timeout}ms`));
+      }
+    }, timeout);
   });
 }
 
 /**
- * Setup event listeners
+ * Initialize queue page with lifecycle management
+ */
+async function initQueuePage() {
+  // Get page container
+  const pageContainer = document.getElementById('app-content');
+  if (!pageContainer) {
+    console.error('Page container not found');
+    return;
+  }
+
+  // Clear previous cleanup functions
+  cleanupFunctions.forEach(cleanup => cleanup());
+  cleanupFunctions = [];
+
+  // Wait for critical buttons to be available before initializing
+  try {
+    await Promise.race([
+      waitForElement('#notify-btn'),
+      waitForElement('#reassign-btn'),
+      waitForElement('#no-show-btn'),
+      new Promise(resolve => setTimeout(resolve, 200)) // Max wait 200ms
+    ]);
+  } catch (error) {
+    console.warn('Some buttons not found, continuing anyway:', error);
+  }
+
+  // Initialize with lifecycle management
+  await initPage(PAGE_ID, pageContainer, _initQueuePage);
+}
+
+/**
+ * Setup event listeners with isolated handlers
  */
 function setupEventListeners() {
-  // Action buttons
-  if (callNextBtn) {
-    callNextBtn.addEventListener('click', handleCallNext);
-  }
-  if (notifyBtn) {
-    notifyBtn.addEventListener('click', handleNotify);
-  }
-  if (reassignBtn) {
-    reassignBtn.addEventListener('click', handleReassign);
-  }
-  if (noShowBtn) {
-    noShowBtn.addEventListener('click', handleNoShow);
-  }
+  // Re-query buttons to ensure they exist (DOM might not be ready when variables were set)
+  const callNextBtnEl = document.getElementById('call-next-btn');
+  const notifyBtnEl = document.getElementById('notify-btn');
+  const reassignBtnEl = document.getElementById('reassign-btn');
+  const noShowBtnEl = document.getElementById('no-show-btn');
+  
+  // Debug: Log if buttons are found
+  if (!notifyBtnEl) console.warn('Notify button not found!');
+  if (!reassignBtnEl) console.warn('Reassign button not found!');
+  if (!noShowBtnEl) console.warn('No-show button not found!');
+  
+  // Action buttons - using isolated button listeners
+  cleanupFunctions.push(
+    addButtonListener(callNextBtnEl, PAGE_ID, handleCallNext),
+    addButtonListener(notifyBtnEl, PAGE_ID, handleNotify),
+    addButtonListener(reassignBtnEl, PAGE_ID, handleReassign),
+    addButtonListener(noShowBtnEl, PAGE_ID, handleNoShow)
+  );
+  
+  // Update global references
+  callNextBtn = callNextBtnEl;
+  notifyBtn = notifyBtnEl;
+  reassignBtn = reassignBtnEl;
+  noShowBtn = noShowBtnEl;
 
   // Search
   if (queueSearchInput) {
-    queueSearchInput.addEventListener('input', debounce(handleSearch, 300));
+    cleanupFunctions.push(
+      addListener(PAGE_ID, queueSearchInput, 'input', debounce(handleSearch, 300))
+    );
   }
 
   // Date range filter is set up in setupDateRangeFilter()
 
-  // Pagination
-  if (prevPageBtn) {
-    prevPageBtn.addEventListener('click', () => changePage(-1));
-  }
-  if (nextPageBtn) {
-    nextPageBtn.addEventListener('click', () => changePage(1));
-  }
+  // Pagination - re-query to ensure elements exist
+  const prevPageBtnEl = document.getElementById('prev-page-btn');
+  const nextPageBtnEl = document.getElementById('next-page-btn');
+  cleanupFunctions.push(
+    addButtonListener(prevPageBtnEl, PAGE_ID, () => changePage(-1)),
+    addButtonListener(nextPageBtnEl, PAGE_ID, () => changePage(1))
+  );
+  prevPageBtn = prevPageBtnEl;
+  nextPageBtn = nextPageBtnEl;
 
-  // Room modal
-  if (roomModalClose) {
-    roomModalClose.addEventListener('click', closeRoomModal);
+  // Room modal - re-query to ensure elements exist
+  const roomModalOverlayEl = document.getElementById('room-modal-overlay');
+  const roomModalCloseEl = document.getElementById('room-modal-close');
+  const roomModalCancelEl = document.getElementById('room-modal-cancel');
+  const roomModalConfirmEl = document.getElementById('room-modal-confirm');
+  
+  if (roomModalCloseEl) {
+    cleanupFunctions.push(
+      addButtonListener(roomModalCloseEl, PAGE_ID, closeRoomModal)
+    );
   }
-  if (roomModalCancel) {
-    roomModalCancel.addEventListener('click', closeRoomModal);
+  if (roomModalCancelEl) {
+    cleanupFunctions.push(
+      addButtonListener(roomModalCancelEl, PAGE_ID, closeRoomModal)
+    );
   }
-  if (roomModalConfirm) {
-    roomModalConfirm.addEventListener('click', handleRoomAssign);
+  if (roomModalConfirmEl) {
+    cleanupFunctions.push(
+      addButtonListener(roomModalConfirmEl, PAGE_ID, handleRoomAssign)
+    );
   }
-  if (roomModalOverlay) {
-    roomModalOverlay.addEventListener('click', (e) => {
-      if (e.target === roomModalOverlay) {
-        closeRoomModal();
-      }
-    });
+  if (roomModalOverlayEl) {
+    cleanupFunctions.push(
+      addListener(PAGE_ID, roomModalOverlayEl, 'click', (e) => {
+        if (e.target === roomModalOverlayEl) {
+          closeRoomModal();
+        }
+      })
+    );
   }
+  
+  // Update global references
+  roomModalOverlay = roomModalOverlayEl;
+  roomModalClose = roomModalCloseEl;
+  roomModalCancel = roomModalCancelEl;
+  roomModalConfirm = roomModalConfirmEl;
 
   // Move dropdown toggle
   // Move dropdown functionality removed - use Waiting Area page instead
@@ -492,9 +604,6 @@ async function renderQueueTable() {
         <td class="actions-cell">
           <button class="action-btn call-btn" title="Call" onclick="handleCall('${entry.id}')" data-entry-id="${entry.id}" style="color: #10b981; pointer-events: auto; cursor: pointer;">
             <span class="material-symbols-outlined">phone</span>
-          </button>
-          <button class="action-btn email-btn" title="Email" onclick="handleEmail('${entry.id}')" data-entry-id="${entry.id}" style="color: #3b82f6; pointer-events: auto; cursor: pointer;">
-            <span class="material-symbols-outlined">email</span>
           </button>
           ${isDoctor && canUpdateStatus(entry) ? `
             <button class="action-btn status-update-btn check-btn" title="${status === 'WAITING' ? 'Move to TRIAGE' : status === 'TRIAGE' ? 'Move to CALLED' : status === 'CALLED' ? 'Start Consultation (Select Room)' : status === 'IN_CONSULTATION' ? 'Complete Consultation' : 'Update Status'}" data-entry-id="${entry.id}" data-status="${status}" style="color: #6366f1; pointer-events: auto; cursor: pointer; position: relative; z-index: 10;">
@@ -907,6 +1016,15 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
  */
 async function openRoomModal(entryId) {
   currentQueueEntryId = entryId;
+  
+  // Re-query room modal in case it wasn't found during initialization
+  if (!roomModalOverlay) {
+    roomModalOverlay = document.getElementById('room-modal-overlay');
+    roomList = document.getElementById('room-list');
+    roomModalConfirm = document.getElementById('room-modal-confirm');
+    roomModalCancel = document.getElementById('room-modal-cancel');
+    roomModalClose = document.getElementById('room-modal-close');
+  }
   
   const entry = queueData.find(e => e.id === entryId);
   if (!entry) {
@@ -1466,71 +1584,115 @@ function handleSearch() {
 }
 
 /**
- * Setup status filter
+ * Setup status filter with scoped listeners
  */
 function setupStatusFilter() {
-  if (!queueStatusBtn || !queueStatusPanel) return;
+  // Re-query to ensure elements exist
+  const statusBtnEl = document.getElementById('queue-status-btn');
+  const statusPanelEl = document.getElementById('queue-status-panel');
+  
+  if (!statusBtnEl || !statusPanelEl) return;
+
+  // Update global references
+  queueStatusBtn = statusBtnEl;
+  queueStatusPanel = statusPanelEl;
 
   // Toggle panel visibility
-  queueStatusBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    queueStatusPanel.classList.toggle('visible');
-  });
+  cleanupFunctions.push(
+    addButtonListener(statusBtnEl, PAGE_ID, (e) => {
+      e.stopPropagation();
+      statusPanelEl.classList.toggle('visible');
+    })
+  );
 
-  // Close panel when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!queueStatusPanel.contains(e.target) && !queueStatusBtn.contains(e.target)) {
-      queueStatusPanel.classList.remove('visible');
-    }
-  });
+  // Close panel when clicking outside - using scoped document listener
+  cleanupFunctions.push(
+    addScopedDocumentListener(PAGE_ID, (e) => {
+      if (!statusPanelEl.contains(e.target) && !statusBtnEl.contains(e.target)) {
+        statusPanelEl.classList.remove('visible');
+      }
+    })
+  );
 
   // Status change handler
   document.querySelectorAll('input[name="queue-status"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-      queueStatusPanel.classList.remove('visible');
-      currentPage = 1;
-      fetchQueue();
-    });
+    cleanupFunctions.push(
+      addListener(PAGE_ID, radio, 'change', () => {
+        statusPanelEl.classList.remove('visible');
+        currentPage = 1;
+        fetchQueue();
+      })
+    );
   });
 }
 
 /**
- * Setup date range filter
+ * Setup date range filter with scoped listeners
  */
 function setupDateRangeFilter() {
-  if (!queueDateRangeBtn || !queueDateRangePanel) return;
+  // Re-query to ensure elements exist
+  const dateRangeBtnEl = document.getElementById('queue-date-range-btn');
+  const dateRangePanelEl = document.getElementById('queue-date-range-panel');
+  const startDateInputEl = document.getElementById('queue-start-date-input');
+  const endDateInputEl = document.getElementById('queue-end-date-input');
+  const applyDateBtnEl = document.getElementById('queue-apply-date-btn');
+  const clearDateBtnEl = document.getElementById('queue-clear-date-btn');
+  
+  if (!dateRangeBtnEl || !dateRangePanelEl) return;
+
+  // Update global references
+  queueDateRangeBtn = dateRangeBtnEl;
+  queueDateRangePanel = dateRangePanelEl;
+  queueStartDateInput = startDateInputEl;
+  queueEndDateInput = endDateInputEl;
+  queueApplyDateBtn = applyDateBtnEl;
+  queueClearDateBtn = clearDateBtnEl;
 
   // Toggle panel visibility
-  queueDateRangeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    queueDateRangePanel.classList.toggle('visible');
-  });
+  cleanupFunctions.push(
+    addButtonListener(dateRangeBtnEl, PAGE_ID, (e) => {
+      e.stopPropagation();
+      dateRangePanelEl.classList.toggle('visible');
+    })
+  );
 
-  // Close panel when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!queueDateRangePanel.contains(e.target) && !queueDateRangeBtn.contains(e.target)) {
-      queueDateRangePanel.classList.remove('visible');
-    }
-  });
+  // Close panel when clicking outside - using scoped document listener
+  cleanupFunctions.push(
+    addScopedDocumentListener(PAGE_ID, (e) => {
+      if (!dateRangePanelEl.contains(e.target) && !dateRangeBtnEl.contains(e.target)) {
+        dateRangePanelEl.classList.remove('visible');
+      }
+    })
+  );
 
   // Apply date filter
-  if (queueApplyDateBtn) {
-    queueApplyDateBtn.addEventListener('click', () => {
-      queueDateRangePanel.classList.remove('visible');
-      currentPage = 1;
-      fetchQueue();
-    });
+  if (applyDateBtnEl) {
+    cleanupFunctions.push(
+      addButtonListener(applyDateBtnEl, PAGE_ID, () => {
+        dateRangePanelEl.classList.remove('visible');
+        const startDate = startDateInputEl?.value || '';
+        const endDate = endDateInputEl?.value || '';
+        
+        if (startDate || endDate) {
+          // Apply filters (you'll need to implement this based on your filter logic)
+          currentPage = 1;
+          fetchQueue();
+        }
+      })
+    );
   }
 
   // Clear date filter
-  if (queueClearDateBtn) {
-    queueClearDateBtn.addEventListener('click', () => {
-      if (queueStartDateInput) queueStartDateInput.value = '';
-      if (queueEndDateInput) queueEndDateInput.value = '';
-      queueDateRangePanel.classList.remove('visible');
-      currentPage = 1;
-      fetchQueue();
-    });
+  if (clearDateBtnEl) {
+    cleanupFunctions.push(
+      addButtonListener(clearDateBtnEl, PAGE_ID, () => {
+        if (startDateInputEl) startDateInputEl.value = '';
+        if (endDateInputEl) endDateInputEl.value = '';
+        dateRangePanelEl.classList.remove('visible');
+        currentPage = 1;
+        fetchQueue();
+      })
+    );
   }
 }
 
@@ -1883,6 +2045,9 @@ async function fetchWaitingAreas() {
  * Open reassign modal
  */
 async function openReassignModal() {
+  // Close any existing modals first
+  closeAllModals();
+  
   try {
     // Fetch available doctors
     const response = await apiGet('/queue/doctors');
@@ -2170,9 +2335,48 @@ function openEmailModal(entryId, patientName) {
 }
 
 /**
+ * Close all open modals (only dynamically created ones, not static HTML modals)
+ */
+function closeAllModals() {
+  // Only close dynamically created modals (those added to body, not static HTML modals)
+  const modals = document.querySelectorAll('.modal-overlay');
+  modals.forEach(modal => {
+    try {
+      // Skip static HTML modals (like room-modal-overlay which is part of the page HTML)
+      // Only close modals that were dynamically created and added to body
+      const isStaticModal = modal.id === 'room-modal-overlay' || 
+                           modal.closest('#app-content') !== null;
+      
+      if (!isStaticModal) {
+        // This is a dynamically created modal
+        modal.classList.remove('modal-show');
+        modal.classList.add('modal-hide');
+        setTimeout(() => {
+          if (modal.parentNode && modal.parentNode === document.body) {
+            modal.parentNode.removeChild(modal);
+          }
+        }, 100);
+      } else {
+        // For static modals, just hide them if they're visible
+        if (modal.classList.contains('active') || modal.style.display === 'flex') {
+          modal.classList.remove('active');
+          modal.style.display = 'none';
+        }
+      }
+    } catch (error) {
+      // Modal might already be removed
+    }
+  });
+  document.body.style.overflow = '';
+}
+
+/**
  * Open bulk notify modal
  */
 function openBulkNotifyModal() {
+  // Close any existing modals first
+  closeAllModals();
+  
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
 
@@ -2285,21 +2489,49 @@ function debounce(func, wait) {
   };
 }
 
+// Store view-loaded handler for cleanup
+let viewLoadedHandler = null;
+let isInitializing = false; // Prevent multiple simultaneous initializations
+
 // Register event listener immediately when module loads
-window.addEventListener('view-loaded', async (e) => {
+viewLoadedHandler = async (e) => {
   if (e.detail.route === 'queues') {
+    // Prevent multiple simultaneous initializations
+    if (isInitializing) {
+      console.log('Queue page initialization already in progress, skipping...');
+      return;
+    }
+    
     console.log('view-loaded event received for queues route');
+    isInitializing = true;
+    
+    // Cleanup previous page before initializing (close modals, remove listeners)
+    cleanupPage(PAGE_ID);
+    closeAllModals();
+    stopPolling();
+    
     // Wait a bit to ensure DOM is fully ready
-    setTimeout(() => {
-      initQueuePage().catch(err => {
+    setTimeout(async () => {
+      try {
+        await initQueuePage();
+      } catch (err) {
         console.error('Error initializing queue page:', err);
         toast.error('Failed to initialize queue page');
-      });
+      } finally {
+        isInitializing = false;
+      }
     }, 150);
   }
-}, { once: false }); // Allow multiple calls if needed
+};
+
+window.addEventListener('view-loaded', viewLoadedHandler);
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
+  if (viewLoadedHandler) {
+    window.removeEventListener('view-loaded', viewLoadedHandler);
+  }
+  cleanupPage(PAGE_ID);
+  closeAllModals();
   stopPolling();
 });

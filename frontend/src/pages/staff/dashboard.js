@@ -8,6 +8,31 @@
 import { apiGet, apiPost, apiPatch } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated, getAuthToken } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { cleanupPage } from '../../utils/pageLifecycle.js';
+
+const PAGE_ID = 'dashboard';
+let viewLoadedHandler = null;
+
+/**
+ * Close all open modals
+ */
+function closeAllModals() {
+  const modals = document.querySelectorAll('.modal-overlay');
+  modals.forEach(modal => {
+    try {
+      modal.classList.remove('modal-show');
+      modal.classList.add('modal-hide');
+      setTimeout(() => {
+        if (modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
+      }, 100);
+    } catch (error) {
+      // Modal might already be removed
+    }
+  });
+  document.body.style.overflow = '';
+}
 
 // ============================================
 // AUTH GUARD - Initialize Once
@@ -60,11 +85,15 @@ if (logoutBtn) {
 // ============================================
 
 // Listen for view-loaded events to initialize view-specific code
-window.addEventListener('view-loaded', async (event) => {
+viewLoadedHandler = async (event) => {
   const { route, view } = event.detail;
 
   // Initialize dashboard view
   if (route === 'dashboard') {
+    // Cleanup previous state
+    cleanupPage(PAGE_ID);
+    closeAllModals();
+    
     await initializeDashboard();
   }
 
@@ -72,6 +101,17 @@ window.addEventListener('view-loaded', async (event) => {
   // if (route === 'queues') {
   //   await initializeQueues();
   // }
+};
+
+window.addEventListener('view-loaded', viewLoadedHandler);
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  if (viewLoadedHandler) {
+    window.removeEventListener('view-loaded', viewLoadedHandler);
+  }
+  cleanupPage(PAGE_ID);
+  closeAllModals();
 });
 
 // ============================================

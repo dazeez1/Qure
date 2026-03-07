@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <link rel="stylesheet" href="../src/styles/variables.css" />
+    <link rel="stylesheet" href="../src/styles/toast.css" />
+    <link rel="stylesheet" href="../src/styles/modal.css" />
+    <title>Qure - Book Appointment</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+        background-color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Header */
+      .header {
+        background-color: #EFF3F6;
+        padding: 1.2rem 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .header-content {
+        max-width: 140rem;
+        margin: 0 auto;
+        padding: 0 4rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+      }
+
+      .logo-icon {
+        width: 2rem;
+        height: 2rem;
+        object-fit: contain;
+      }
+
+      .logo-text {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--color-primary-blue);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        list-style: none;
+        margin-right: 1.6rem;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+        color: var(--color-text-primary);
+        font-size: 1.2rem;
+        font-weight: 500;
+        transition: color 0.2s;
+      }
+
+      .nav-links a:hover {
+        color: var(--color-primary-blue);
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 1.6rem;
+      }
+
+      .hamburger-menu {
+        display: none;
+        flex-direction: column;
+        gap: 0.4rem;
+        cursor: pointer;
+        padding: 0.4rem;
+        background: none;
+        border: none;
+        z-index: 1001;
+        position: relative;
+      }
+
+      .hamburger-menu span {
+        width: 2rem;
+        height: 0.25rem;
+        background-color: var(--color-text-primary);
+        border-radius: 0.2rem;
+        transition: all 0.3s;
+      }
+
+      .hamburger-menu.active span:nth-child(1) {
+        transform: rotate(45deg) translate(0.5rem, 0.5rem);
+      }
+
+      .hamburger-menu.active span:nth-child(2) {
+        opacity: 0;
+      }
+
+      .hamburger-menu.active span:nth-child(3) {
+        transform: rotate(-45deg) translate(0.5rem, -0.5rem);
+      }
+
+      .mobile-nav {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 75%;
+        height: 100vh;
+        background-color: var(--color-primary-blue);
+        z-index: 1000;
+        padding: 2rem;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+        flex-direction: column;
+      }
+
+      .mobile-nav.active {
+        transform: translateX(0);
+      }
+
+      .mobile-nav-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 3rem;
+      }
+
+      .mobile-nav-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        color: #fff;
+      }
+
+      .mobile-nav-links {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1.6rem;
+        margin-bottom: 2rem;
+      }
+
+      .mobile-nav-links a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 1.6rem;
+        font-weight: 500;
+        padding: 1rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .user-profile {
+        width: 3.2rem;
+        height: 3.2rem;
+        border-radius: 50%;
+        background-color: var(--color-primary-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 600;
+        font-size: 1.2rem;
+        cursor: pointer;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        flex-shrink: 0;
+      }
+
+      /* Main Content */
+      .main-content {
+        flex: 1;
+        max-width: 140rem;
+        margin: 0 auto;
+        padding: 3rem 4rem;
+        width: 100%;
+      }
+
+      .page-title {
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin-bottom: 2.4rem;
+      }
+
+      .booking-container {
+        background-color: #EFF3F6;
+        border-radius: 1.2rem;
+        padding: 2rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4rem;
+      }
+
+      /* Form Sections */
+      .form-section {
+        background-color: transparent;
+        padding: 0;
+      }
+
+      .section-title {
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin-bottom: 2rem;
+      }
+
+      .form-group {
+        margin-bottom: 1.6rem;
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.2rem;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 1.2rem;
+        font-weight: 500;
+        color: var(--color-text-primary);
+        margin-bottom: 0.8rem;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 0.6rem 1.2rem;
+        border: 1px solid #757575;
+        border-radius: 0.8rem;
+        font-size: 1.1rem;
+        color: var(--color-text-primary);
+        background-color: #EFF3F6;
+        transition: border-color 0.2s;
+        height: 2.49rem;
+      }
+
+      .form-select {
+        width: 100%;
+        padding: 0.6rem 1.2rem;
+        padding-right: 2.8rem;
+        border: 1px solid #757575;
+        border-radius: 0.8rem;
+        font-size: 1.1rem;
+        color: var(--color-text-primary);
+        background-color: #EFF3F6;
+        transition: border-color 0.2s;
+        height: 2.49rem;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.8rem center;
+      }
+
+      .form-input:focus,
+      .form-select:focus {
+        outline: none;
+        border-color: var(--color-primary-blue);
+      }
+
+      .form-input[readonly] {
+        background-color: #f5f5f5;
+        cursor: not-allowed;
+        color: #666;
+      }
+
+      .form-input::placeholder {
+        color: var(--color-text-tertiary);
+      }
+
+      .form-textarea {
+        width: 100%;
+        padding: 0.6rem 1.2rem;
+        border: 1px solid #757575;
+        border-radius: 0.8rem;
+        font-size: 1.1rem;
+        color: var(--color-text-primary);
+        background-color: #EFF3F6;
+        resize: vertical;
+        min-height: 10rem;
+        font-family: inherit;
+        transition: border-color 0.2s;
+      }
+
+      .form-textarea:focus {
+        outline: none;
+        border-color: var(--color-primary-blue);
+      }
+
+      /* Appointment Details Display */
+      .appointment-details {
+        background-color: #f9fafb;
+        border-radius: 0.8rem;
+        padding: 1.6rem;
+        margin-bottom: 2rem;
+      }
+
+      .appointment-detail-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 0.8rem;
+        font-size: 1.2rem;
+      }
+
+      .appointment-detail-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .appointment-detail-label {
+        color: var(--color-text-tertiary);
+        font-weight: 500;
+      }
+
+      .appointment-detail-value {
+        color: var(--color-text-primary);
+        font-weight: 600;
+      }
+
+      /* Buttons */
+      .btn-primary {
+        width: 100%;
+        background-color: var(--color-primary-blue);
+        color: #fff;
+        border: none;
+        padding: 1.4rem 2.4rem;
+        border-radius: 0.8rem;
+        font-size: 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .btn-primary:hover {
+        background-color: var(--color-primary-blue-dark);
+        transform: translateY(-1px);
+      }
+
+      .btn-secondary {
+        width: 100%;
+        background-color: #fff;
+        color: var(--color-text-primary);
+        border: 1px solid #e5e7eb;
+        padding: 1.4rem 2.4rem;
+        border-radius: 0.8rem;
+        font-size: 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .btn-secondary:hover {
+        background-color: #f9fafb;
+        border-color: #d1d5db;
+      }
+
+      .book-appointment-wrapper {
+        margin-top: 2rem;
+        max-width: 140rem;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 0 4rem;
+      }
+
+      /* Footer */
+      .footer {
+        background-color: #fff;
+        padding: 1.4rem 0;
+        border-top: 1px solid #e5e7eb;
+        margin-top: auto;
+      }
+
+      .footer-content {
+        max-width: 140rem;
+        margin: 0 auto;
+        padding: 0 4rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .footer-copyright {
+        font-size: 1rem;
+        color: var(--color-text-tertiary);
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 2rem;
+        list-style: none;
+      }
+
+      .footer-links a {
+        font-size: 1rem;
+        color: var(--color-text-tertiary);
+        text-decoration: underline;
+        transition: color 0.2s;
+      }
+
+      .footer-links a:hover {
+        color: var(--color-primary-blue);
+      }
+
+      /* Responsive */
+      @media (max-width: 1024px) {
+        .booking-container {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+        }
+
+        .main-content {
+          padding: 3rem 2rem;
+        }
+
+        .header-content,
+        .footer-content {
+          padding: 0 2rem;
+        }
+
+        .header-content {
+          flex-wrap: wrap;
+        }
+
+        .nav-links {
+          order: 3;
+          width: 100%;
+          justify-content: center;
+          margin-right: 0;
+          margin-top: 1rem;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .header {
+          padding: 1rem 0;
+        }
+
+        .header-content {
+          padding: 0 1.6rem;
+        }
+
+        .hamburger-menu {
+          display: flex;
+        }
+
+        .nav-links {
+          display: none;
+        }
+
+        .mobile-nav {
+          display: block;
+        }
+
+        .logo-text {
+          font-size: 1.8rem;
+        }
+
+        .logo-icon {
+          width: 1.8rem;
+          height: 1.8rem;
+        }
+
+        .user-profile {
+          width: 2.8rem;
+          height: 2.8rem;
+          font-size: 1rem;
+        }
+
+        .main-content {
+          padding: 2rem 1.6rem;
+        }
+
+        .page-title {
+          font-size: 1.4rem;
+          margin-bottom: 2rem;
+        }
+
+        .booking-container {
+          padding: 1.6rem;
+          gap: 2rem;
+        }
+
+        .section-title {
+          font-size: 1.3rem;
+          margin-bottom: 1.6rem;
+        }
+
+        .form-group {
+          margin-bottom: 1.4rem;
+        }
+
+        .form-label {
+          font-size: 1.1rem;
+          margin-bottom: 0.6rem;
+        }
+
+        .form-input,
+        .form-select {
+          height: 2.49rem;
+          font-size: 1rem;
+          padding: 0.5rem 1rem;
+        }
+
+        .form-select {
+          padding-right: 2.4rem;
+          background-position: right 0.6rem center;
+        }
+
+        .btn-primary,
+        .btn-secondary {
+          padding: 1.2rem 2rem;
+          font-size: 1.1rem;
+        }
+
+        .footer {
+          padding: 1.2rem 0;
+        }
+
+        .footer-content {
+          padding: 0 1.6rem;
+          flex-direction: column;
+          gap: 1rem;
+          text-align: center;
+          align-items: center;
+        }
+
+        .footer-copyright {
+          font-size: 0.9rem;
+          text-align: center;
+          width: 100%;
+        }
+
+        .footer-links {
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 1.2rem;
+          width: 100%;
+        }
+
+        .footer-links a {
+          font-size: 0.9rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .header {
+          padding: 0.8rem 0;
+        }
+
+        .header-content {
+          padding: 0 1.2rem;
+        }
+
+        .logo-text {
+          font-size: 1.6rem;
+        }
+
+        .logo-icon {
+          width: 1.6rem;
+          height: 1.6rem;
+        }
+
+        .user-profile {
+          width: 2.4rem;
+          height: 2.4rem;
+          font-size: 0.9rem;
+        }
+
+        .form-input,
+        .form-select {
+          height: 2.49rem;
+        }
+
+        .hamburger-menu span {
+          width: 1.8rem;
+          height: 0.2rem;
+        }
+
+        .main-content {
+          padding: 1.6rem 1.2rem;
+        }
+
+        .page-title {
+          font-size: 1.3rem;
+          margin-bottom: 1.6rem;
+        }
+
+        .booking-container {
+          padding: 1.2rem;
+          gap: 1.6rem;
+        }
+
+        .section-title {
+          font-size: 1.2rem;
+          margin-bottom: 1.4rem;
+        }
+
+        .form-group {
+          margin-bottom: 1.2rem;
+        }
+
+        .form-row {
+          gap: 0.8rem;
+        }
+
+        .form-label {
+          font-size: 1rem;
+        }
+
+        .form-input,
+        .form-select {
+          height: 2.49rem;
+          font-size: 0.95rem;
+          padding: 0.4rem 0.8rem;
+        }
+
+        .form-select {
+          padding-right: 2.2rem;
+          background-position: right 0.6rem center;
+        }
+
+        .form-textarea {
+          min-height: 8rem;
+          font-size: 0.95rem;
+        }
+
+        .btn-primary,
+        .btn-secondary {
+          padding: 1rem 1.6rem;
+          font-size: 1rem;
+        }
+
+        .appointment-details {
+          padding: 1.2rem;
+          margin-bottom: 1.6rem;
+        }
+
+        .appointment-detail-item {
+          font-size: 1rem;
+        }
+
+        .footer {
+          padding: 1rem 0;
+        }
+
+        .footer-content {
+          padding: 0 1.2rem;
+          flex-direction: column;
+          gap: 1rem;
+          text-align: center;
+          align-items: center;
+        }
+
+        .footer-copyright {
+          font-size: 0.85rem;
+          text-align: center;
+          width: 100%;
+        }
+
+        .footer-links {
+          flex-direction: column;
+          gap: 0.8rem;
+          width: 100%;
+          align-items: center;
+        }
+
+        .footer-links a {
+          font-size: 0.85rem;
+        }
+
+        .book-appointment-wrapper {
+          padding: 0 1.2rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo" id="logo-link" style="cursor: pointer;">
+          <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" />
+          <span class="logo-text">Qure</span>
+        </div>
+        <div class="header-right">
+          <button class="hamburger-menu" id="hamburger-menu" aria-label="Menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <nav>
+            <ul class="nav-links">
+              <li><a href="dashboard.html">My Bookings</a></li>
+              <li><a href="queue-status.html">Queue Status</a></li>
+              <li><a href="#contact">Contact Us</a></li>
+              <li><a href="feedback.html">Feedback</a></li>
+            </ul>
+          </nav>
+          <div class="user-profile" id="user-profile">
+            <span id="user-initial">U</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <h1 class="page-title">Book Appointment</h1>
+
+      <div class="booking-container">
+        <!-- Left Column - Booking Form -->
+        <div class="form-section">
+          <h2 class="section-title">Booking Form</h2>
+
+          <form id="booking-form">
+            <div class="form-group">
+              <label for="hospital" class="form-label">Hospital/Clinic</label>
+              <select id="hospital" name="hospital" class="form-select" required>
+                <option value="">Select Hospital</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="department" class="form-label">Service/Department</label>
+              <select id="department" name="department" class="form-select" required>
+                <option value="">Select Department</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <div class="form-row">
+                <div>
+                  <label for="appointment-date" class="form-label">Date</label>
+                  <input
+                    type="date"
+                    id="appointment-date"
+                    name="appointmentDate"
+                    class="form-input"
+                    required
+                  />
+                </div>
+                <div>
+                  <label for="appointment-time" class="form-label">Time</label>
+                  <input
+                    type="time"
+                    id="appointment-time"
+                    name="appointmentTime"
+                    class="form-input"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="phone-number" class="form-label">Phone Number</label>
+              <input
+                type="tel"
+                id="phone-number"
+                name="phoneNumber"
+                class="form-input"
+                placeholder="Enter your Phone Number"
+                required
+                readonly
+              />
+            </div>
+
+            <!-- Appointment Details Display -->
+            <div class="appointment-details" id="appointment-details" style="display: none;">
+              <div class="appointment-detail-item">
+                <span class="appointment-detail-label">Appointment Date:</span>
+                <span class="appointment-detail-value" id="display-date">-</span>
+              </div>
+              <div class="appointment-detail-item">
+                <span class="appointment-detail-label">Appointment Time:</span>
+                <span class="appointment-detail-value" id="display-time">-</span>
+              </div>
+            </div>
+
+          </form>
+        </div>
+
+        <!-- Right Column - Patient Details -->
+        <div class="form-section">
+          <h2 class="section-title">Patient Details</h2>
+
+          <form id="patient-form">
+            <div class="form-group">
+              <label for="full-name" class="form-label">Full name</label>
+              <input
+                type="text"
+                id="full-name"
+                name="fullName"
+                class="form-input"
+                readonly
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="gender" class="form-label">Gender</label>
+              <input
+                type="text"
+                id="gender"
+                name="gender"
+                class="form-input"
+                readonly
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="reason-for-visit" class="form-label">Reason For Visit</label>
+              <select id="reason-for-visit" name="reasonForVisit" class="form-select">
+                <option value="">Reason For Visit</option>
+                <option value="consultation">Consultation</option>
+                <option value="follow-up">Follow-up</option>
+                <option value="checkup">Checkup</option>
+                <option value="emergency">Emergency</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="other-specify" class="form-label">If Other Specify</label>
+              <textarea
+                id="other-specify"
+                name="otherSpecify"
+                class="form-textarea"
+                placeholder="Please specify..."
+              ></textarea>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+      <!-- Book Appointment Button - Outside both forms -->
+      <div style="margin-top: 2rem; max-width: 140rem; margin-left: auto; margin-right: auto; padding: 0 4rem;">
+        <button type="button" class="btn-primary" id="book-appointment-submit-btn">Book Appointment</button>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-content">
+        <p class="footer-copyright">© 2025 Qure Nigeria. All rights reserved.</p>
+        <ul class="footer-links">
+          <li><a href="#privacy">Privacy Policy</a></li>
+          <li><a href="#terms">Terms of Service</a></li>
+          <li><a href="#cookies">Cookie Settings</a></li>
+        </ul>
+      </div>
+    </footer>
+
+    <!-- Mobile Navigation -->
+    <div class="mobile-nav" id="mobile-nav">
+      <div class="mobile-nav-header">
+        <div class="mobile-nav-logo">
+          <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" style="filter: brightness(0) invert(1);" />
+          <span class="logo-text" style="color: #fff;">Qure</span>
+        </div>
+      </div>
+      <nav>
+        <ul class="mobile-nav-links">
+          <li><a href="dashboard.html">My Bookings</a></li>
+          <li><a href="queue-status.html">Queue Status</a></li>
+          <li><a href="#contact">Contact Us</a></li>
+          <li><a href="feedback.html">Feedback</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <script type="module" src="../src/pages/patient/book-appointment.js"></script>
+  </body>
+</html>

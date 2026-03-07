@@ -25,6 +25,29 @@ async function loadView(route) {
     return;
   }
 
+  // Cleanup previous page before loading new view
+  // Import cleanup function dynamically to avoid circular dependencies
+  try {
+    const { cleanupPage } = await import('../utils/pageLifecycle.js');
+    
+    // Cleanup based on route
+    const pageIdMap = {
+      'queues': 'queue',
+      'appointments': 'appointments',
+      'waiting-area': 'waiting-area',
+      'dashboard': 'dashboard',
+      'settings': 'settings'
+    };
+    
+    const pageId = pageIdMap[route];
+    if (pageId) {
+      cleanupPage(pageId);
+    }
+  } catch (error) {
+    // If cleanup fails, continue anyway (might be first load)
+    console.warn('Cleanup failed (this is normal on first load):', error);
+  }
+
   // Get the view file name from route mapping
   const view = ROUTE_TO_VIEW[route] || ROUTE_TO_VIEW[DEFAULT_ROUTE];
 

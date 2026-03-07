@@ -34,11 +34,12 @@ const router = express.Router();
 
 /**
  * GET /api/queue/preview
- * Get queue preview (read-only)
- * Requires patient authentication only
- * Query params: hospitalId, departmentId
+ * Get queue preview (read-only, public)
+ * Query params: hospitalId (required)
+ * Returns active queue entries for the hospital with masked patient names
+ * No authentication required - public queue tracking
  */
-router.get('/preview', authenticatePatient, getQueuePreview);
+router.get('/preview', getQueuePreview);
 
 /**
  * POST /api/queue/check-in

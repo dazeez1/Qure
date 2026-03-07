@@ -101,6 +101,7 @@ model Hospital {
   rooms               Room[]
   waitingAreas        WaitingArea[]
   announcements       Announcement[]
+  feedbacks           Feedback[]
 
   @@map("hospitals")
 }
@@ -131,6 +132,7 @@ model User {
 
   assignedQueueEntries QueueEntry[]
   createdAnnouncements Announcement[]
+  feedbacks           Feedback[]
 
   passwordResetTokens PasswordResetToken[]
 
@@ -209,6 +211,7 @@ model Patient {
   appointments Appointment[]
   queueEntries QueueEntry[]
   passwordResetTokens PasswordResetToken[]
+  feedbacks   Feedback[]
 
   @@map("patients")
 }
@@ -229,6 +232,7 @@ model Appointment {
   updatedAt    DateTime          @updatedAt
 
   queueEntry   QueueEntry?
+  feedbacks    Feedback[]
 
   @@index([hospitalId, status])
   @@index([hospitalId, appointmentDate])
@@ -320,4 +324,27 @@ model WaitTimeMetric {
   @@unique([departmentId, date])
   @@index([hospitalId, date])
   @@map("wait_time_metrics")
+}
+
+model Feedback {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  rating        Int
+  comment       String?
+
+  patientId     String   @db.ObjectId
+  appointmentId String   @db.ObjectId
+  doctorId      String?  @db.ObjectId
+  hospitalId    String   @db.ObjectId
+
+  createdAt     DateTime @default(now())
+
+  patient       Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctor        User?       @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  hospital      Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, appointmentId])
+  @@index([hospitalId, createdAt])
+  @@index([doctorId])
+  @@map("feedbacks")
 }

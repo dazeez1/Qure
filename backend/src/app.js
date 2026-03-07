@@ -13,6 +13,8 @@ import roomRoutes from './routes/roomRoutes.js';
 import waitingAreaRoutes from './routes/waitingAreaRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import publicRoutes from './routes/publicRoutes.js';
+import feedbackRoutes from './routes/feedbackRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
@@ -45,6 +47,8 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/waiting-areas', waitingAreaRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

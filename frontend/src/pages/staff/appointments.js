@@ -7,6 +7,9 @@ import { apiGet, apiPost, apiPatch } from '../../utils/apiClient.js';
 import { isAuthenticated, getAuthUser } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { showConfirmModal } from '../../utils/modal.js';
+import { cleanupPage } from '../../utils/pageLifecycle.js';
+
+const PAGE_ID = 'appointments';
 
 // State
 let appointmentsState = [];
@@ -27,6 +30,28 @@ let searchInputHandler = null;
 let searchKeypressHandler = null;
 let searchBtnHandler = null;
 let searchTimeout = null;
+let viewLoadedHandler = null;
+
+/**
+ * Close all open modals
+ */
+function closeAllModals() {
+  const modals = document.querySelectorAll('.modal-overlay');
+  modals.forEach(modal => {
+    try {
+      modal.classList.remove('modal-show');
+      modal.classList.add('modal-hide');
+      setTimeout(() => {
+        if (modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
+      }, 100);
+    } catch (error) {
+      // Modal might already be removed
+    }
+  });
+  document.body.style.overflow = '';
+}
 
 /**
  * Fetch appointments from API
@@ -676,6 +701,7 @@ async function handleMarkNoShow(appointmentId, patientName) {
  * @param {string|Date} currentDate - Current appointment date
  */
 function openRescheduleModal(appointmentId, currentDate) {
+  closeAllModals();
   const modal = document.getElementById('reschedule-modal-overlay');
   const datetimeInput = document.getElementById('reschedule-datetime-input');
   const cancelBtn = document.getElementById('reschedule-cancel-btn');
@@ -806,6 +832,7 @@ async function handleReschedule(appointmentId, newDateTime, closeModal) {
  * @param {string} currentNotes - Current notes
  */
 function openEditModal(appointmentId, currentReason, currentNotes) {
+  closeAllModals();
   const modal = document.getElementById('edit-modal-overlay');
   const reasonInput = document.getElementById('edit-reason-input');
   const notesInput = document.getElementById('edit-notes-input');
@@ -910,6 +937,7 @@ async function handleEditAppointment(appointmentId, reason, notes, closeModal) {
  * @param {string} patientName - Patient name
  */
 function openMessageModal(appointmentId, patientName) {
+  closeAllModals();
   const modal = document.getElementById('message-modal-overlay');
   const messageInput = document.getElementById('message-input');
   const cancelBtn = document.getElementById('message-cancel-btn');
@@ -1013,6 +1041,7 @@ async function handleSendMessage(appointmentId, message, closeModal) {
  * @param {string} appointmentId - Appointment ID
  */
 async function openAssignDoctorModal(appointmentId) {
+  closeAllModals();
   const modal = document.getElementById('assign-doctor-modal-overlay');
   const doctorSelect = document.getElementById('assign-doctor-select');
   const cancelBtn = document.getElementById('assign-doctor-cancel-btn');
@@ -1669,6 +1698,7 @@ async function handleBulkReschedule() {
  * @param {Array} appointments - Appointments to reschedule
  */
 function openBulkRescheduleModal(appointments) {
+  closeAllModals();
   const modal = document.getElementById('reschedule-modal-overlay');
   const datetimeInput = document.getElementById('reschedule-datetime-input');
   const cancelBtn = document.getElementById('reschedule-cancel-btn');
@@ -1931,14 +1961,29 @@ function setupBulkOperations() {
 export { initializeAppointments };
 
 // Listen for view-loaded event (SPA navigation)
-window.addEventListener('view-loaded', async (event) => {
+viewLoadedHandler = async (event) => {
   if (event.detail?.route === 'appointments') {
+    // Cleanup previous state
+    cleanupPage(PAGE_ID);
+    closeAllModals();
+    
     // Small delay to ensure DOM is ready
     setTimeout(() => {
       initializeAppointments();
     }, 100);
   }
-}, { once: false }); // Allow multiple calls when navigating back
+};
+
+window.addEventListener('view-loaded', viewLoadedHandler);
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  if (viewLoadedHandler) {
+    window.removeEventListener('view-loaded', viewLoadedHandler);
+  }
+  cleanupPage(PAGE_ID);
+  closeAllModals();
+});
 
 // Auto-initialize if page is loaded directly (non-SPA)
 if (document.readyState === 'loading') {

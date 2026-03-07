@@ -12,30 +12,31 @@ import {
 } from '../services/waitTimeNotification.service.js';
 
 /**
- * Get queue preview (read-only)
+ * Get queue preview for public display (read-only)
  * GET /api/queue/preview
  * 
  * Query params:
  *   hospitalId: string (required)
- *   departmentId: string (required)
  * 
- * Returns estimated wait time based on:
- * - Count of waiting queue entries (WAITING, TRIAGE, CALLED)
- * - Count of active available doctors in department
- * - Fixed average consultation time = 15 minutes
+ * Returns active queue entries for the hospital:
+ * - Statuses: WAITING, TRIAGE, CALLED, IN_CONSULTATION
+ * - Ordered by sequenceNumber ascending
+ * - Includes: ticketNumber, masked patient name, department name, status, estimatedWait (WAITING only)
+ * - Does NOT expose patient email, phone, or private data
+ * - Hospital-scoped for isolation
  * 
- * Formula: ceil(waitingCount / activeDoctors) × avgConsultationTime
- * If activeDoctors = 0 → returns null estimate
+ * estimatedWait calculation:
+ *   ceil(waitingCount / activeDoctorsWithCapacity) * 15
  */
 export const getQueuePreview = async (req, res, next) => {
   try {
-    const { hospitalId, departmentId } = req.query;
+    const { hospitalId } = req.query;
 
-    // Validate required query parameters
-    if (!hospitalId || !departmentId) {
+    // Validate required query parameter
+    if (!hospitalId) {
       return res.status(400).json({
         success: false,
-        message: 'Both hospitalId and departmentId are required.',
+        message: 'hospitalId is required.',
       });
     }
 
@@ -55,122 +56,114 @@ export const getQueuePreview = async (req, res, next) => {
       });
     }
 
-    // Verify department exists and belongs to the hospital
-    const department = await prisma.department.findUnique({
-      where: { id: departmentId },
-      select: {
-        id: true,
-        name: true,
-        shortCode: true,
-        hospitalId: true,
-        status: true,
-      },
-    });
-
-    if (!department) {
-      return res.status(404).json({
-        success: false,
-        message: 'Department not found.',
-      });
-    }
-
-    // Validate hospital and department relationship
-    if (department.hospitalId !== hospitalId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Department does not belong to the specified hospital.',
-      });
-    }
-
-    // Count waiting queue entries (status: WAITING, TRIAGE, CALLED)
-    // Note: QueueEntry model must exist with status field containing these values
-    // This is a read-only operation - does not create or modify QueueEntry
-    let waitingCount = 0;
-    try {
-      waitingCount = await prisma.queueEntry.count({
-        where: {
-          hospitalId: hospitalId,
-          departmentId: departmentId,
-          status: {
-            in: ['WAITING', 'TRIAGE', 'CALLED'],
-          },
-        },
-      });
-    } catch (error) {
-      // If QueueEntry model doesn't exist yet, return 0 for waitingCount
-      // This allows the endpoint to work during development
-      if (error.message && (error.message.includes('queueEntry') || error.message.includes('QueueEntry') || error.message.includes('model'))) {
-        waitingCount = 0;
-      } else {
-        throw error;
-      }
-    }
-
-    // Count active available doctors with capacity (same logic as check-in)
-    // Must match hybrid doctor assignment criteria exactly:
-    // - role = STAFF
-    // - staffRole = DOCTOR
-    // - isActive = true
-    // - isAvailable = true
-    // - currentActivePatients < maxConcurrentPatients
-    const availableDoctors = await prisma.user.findMany({
+    // Get all active queue entries for the hospital
+    // Statuses: WAITING, TRIAGE, CALLED, IN_CONSULTATION
+    const queueEntries = await prisma.queueEntry.findMany({
       where: {
         hospitalId: hospitalId,
-        departmentId: departmentId,
-        role: 'STAFF',
-        staffRole: 'DOCTOR',
-        isActive: true,
-        isAvailable: true,
+        status: {
+          in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
+        },
       },
-      select: {
-        id: true,
-        currentActivePatients: true,
-        maxConcurrentPatients: true,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            fullName: true,
+            // Do NOT include email, phone, or other private data
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+            shortCode: true,
+          },
+        },
+      },
+      orderBy: {
+        sequenceNumber: 'asc',
       },
     });
 
-    // Filter doctors with actual capacity (currentActivePatients < maxConcurrentPatients)
-    const doctorsWithCapacity = availableDoctors.filter(
-      (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
+    // Process queue entries and calculate estimatedWait for WAITING status
+    const processedEntries = await Promise.all(
+      queueEntries.map(async (entry) => {
+        // Mask patient name (show first name + last initial)
+        let maskedPatientName = 'Unknown';
+        if (entry.patient?.fullName) {
+          const nameParts = entry.patient.fullName.trim().split(' ');
+          if (nameParts.length >= 2) {
+            const firstName = nameParts[0];
+            const lastName = nameParts[nameParts.length - 1];
+            maskedPatientName = `${firstName} ${lastName.charAt(0).toUpperCase()}.`;
+          } else if (nameParts.length === 1) {
+            maskedPatientName = nameParts[0];
+          }
+        }
+
+        // Calculate estimatedWait only for WAITING status
+        let estimatedWait = null;
+        if (entry.status === 'WAITING') {
+          // Count waiting entries in the same department (WAITING, TRIAGE, CALLED)
+          const waitingCount = await prisma.queueEntry.count({
+            where: {
+              hospitalId: hospitalId,
+              departmentId: entry.departmentId,
+              status: {
+                in: ['WAITING', 'TRIAGE', 'CALLED'],
+              },
+              sequenceNumber: {
+                lte: entry.sequenceNumber, // Entries ahead or at same position
+              },
+            },
+          });
+
+          // Count active doctors with capacity in the department
+          const availableDoctors = await prisma.user.findMany({
+            where: {
+              hospitalId: hospitalId,
+              departmentId: entry.departmentId,
+              role: 'STAFF',
+              staffRole: 'DOCTOR',
+              isActive: true,
+              isAvailable: true,
+            },
+            select: {
+              id: true,
+              currentActivePatients: true,
+              maxConcurrentPatients: true,
+            },
+          });
+
+          // Filter doctors with capacity
+          const doctorsWithCapacity = availableDoctors.filter(
+            (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
+          );
+
+          const activeDoctorsWithCapacity = doctorsWithCapacity.length;
+
+          // Calculate estimatedWait: ceil(waitingCount / activeDoctorsWithCapacity) * 15
+          if (activeDoctorsWithCapacity > 0) {
+            estimatedWait = Math.ceil(waitingCount / activeDoctorsWithCapacity) * 15;
+          }
+        }
+
+        return {
+          ticketNumber: entry.ticketNumber,
+          patientName: maskedPatientName,
+          patientId: entry.patient.id, // Include patientId for row highlighting (if authenticated)
+          departmentName: entry.department.name,
+          status: entry.status,
+          estimatedWait: estimatedWait, // Only for WAITING, null otherwise
+        };
+      })
     );
 
-    const activeDoctors = doctorsWithCapacity.length;
-
-    // Get department-specific consultation time (dynamic or default)
-    const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(departmentId);
-
-    // Compute estimated wait time
-    // Formula: ceil(waitingCount / activeDoctors) × avgConsultationTime
-    // If activeDoctors = 0 → estimatedWaitMinutes = null
-    let estimatedWaitMinutes = null;
-    
-    if (activeDoctors > 0) {
-      const batches = Math.ceil(waitingCount / activeDoctors);
-      estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
-    }
-    // If activeDoctors = 0, estimatedWaitMinutes remains null
-
-    // Return preview data
+    // Return queue preview data
     res.status(200).json({
       success: true,
-      message: 'Queue preview retrieved successfully.',
-      data: {
-        hospital: {
-          id: hospital.id,
-          name: hospital.name,
-        },
-        department: {
-          id: department.id,
-          name: department.name,
-          shortCode: department.shortCode,
-        },
-        queuePreview: {
-          waitingCount: waitingCount,
-          activeDoctors: activeDoctors,
-          estimatedWaitMinutes: estimatedWaitMinutes,
-          avgConsultationTimeMinutes: avgConsultationTimeMinutes,
-        },
-      },
+      data: processedEntries,
     });
   } catch (error) {
     next(error);
@@ -2122,6 +2115,190 @@ export const getPatientQueueStatus = async (req, res, next) => {
       });
     }
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Cancel patient's queue entry
+ * PATCH /api/patient/queue/:id/cancel
+ * 
+ * Patient-only endpoint
+ * 
+ * Restrictions:
+ * - Allow: WAITING, TRIAGE, CALLED
+ * - Block: IN_CONSULTATION
+ * - Keep appointment as BOOKED if linked
+ * - Handle doctor load appropriately
+ * - Update appointment status appropriately
+ */
+export const cancelPatientQueueEntry = async (req, res, next) => {
+  try {
+    const patient = req.patient;
+    const { id } = req.params;
+
+    if (!patient) {
+      return res.status(401).json({
+        success: false,
+        message: 'Patient authentication required.',
+      });
+    }
+
+    // Wrap in transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Find queue entry
+      const queueEntry = await tx.queueEntry.findUnique({
+        where: { id },
+        include: {
+          assignedDoctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              currentActivePatients: true,
+              maxConcurrentPatients: true,
+            },
+          },
+          appointment: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      if (!queueEntry) {
+        throw new Error('Queue entry not found.');
+      }
+
+      // Verify queue entry belongs to patient
+      if (queueEntry.patientId !== patient.id) {
+        throw new Error('Access denied. You can only cancel your own queue entries.');
+      }
+
+      // Validate status - block IN_CONSULTATION
+      if (queueEntry.status === 'IN_CONSULTATION') {
+        throw new Error('Cannot cancel queue entry while in consultation. Please contact staff.');
+      }
+
+      // Validate status - allow only WAITING, TRIAGE, CALLED
+      const allowedStatuses = ['WAITING', 'TRIAGE', 'CALLED'];
+      if (!allowedStatuses.includes(queueEntry.status)) {
+        throw new Error(
+          `Cannot cancel queue entry with status ${queueEntry.status}. ` +
+          `Only queue entries with status WAITING, TRIAGE, or CALLED can be cancelled.`
+        );
+      }
+
+      // Handle doctor load - decrement if status is IN_CONSULTATION (but we block that above)
+      // However, we still need to handle the case where doctor might have been assigned
+      // but status hasn't transitioned to IN_CONSULTATION yet
+      let doctorLoadUpdated = false;
+      let newDoctorLoad = null;
+
+      // If doctor was assigned and status was IN_CONSULTATION, decrement load
+      // But we block IN_CONSULTATION above, so this shouldn't happen
+      // Still, handle it defensively
+      if (queueEntry.assignedDoctorId && queueEntry.status === 'IN_CONSULTATION') {
+        const doctor = queueEntry.assignedDoctor;
+        if (doctor && doctor.currentActivePatients > 0) {
+          newDoctorLoad = Math.max(0, doctor.currentActivePatients - 1);
+          await tx.user.update({
+            where: { id: doctor.id },
+            data: {
+              currentActivePatients: newDoctorLoad,
+            },
+          });
+          doctorLoadUpdated = true;
+        }
+      }
+
+      // Update queue entry status to CANCELLED
+      const updatedQueueEntry = await tx.queueEntry.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          assignedRoomId: null, // Clear room assignment
+          waitingAreaId: null, // Clear waiting area assignment
+        },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+            },
+          },
+          department: {
+            select: {
+              id: true,
+              name: true,
+              shortCode: true,
+            },
+          },
+          assignedDoctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      // Update appointment status - keep as BOOKED if linked
+      let appointmentUpdated = false;
+      if (queueEntry.appointmentId) {
+        // Keep appointment as BOOKED (don't change status)
+        // The appointment remains valid for potential rescheduling
+        // Only update if it was in a state that should be reverted
+        if (queueEntry.appointment.status === 'CHECKED_IN' || 
+            queueEntry.appointment.status === 'MOVED_TO_QUEUE') {
+          await tx.appointment.update({
+            where: { id: queueEntry.appointmentId },
+            data: {
+              status: 'BOOKED',
+            },
+          });
+          appointmentUpdated = true;
+        }
+      }
+
+      return {
+        queueEntry: updatedQueueEntry,
+        previousStatus: queueEntry.status,
+        appointmentUpdated,
+        doctorLoadUpdated,
+        newDoctorLoad,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Queue entry cancelled successfully.',
+      data: {
+        queueEntry: result.queueEntry,
+        previousStatus: result.previousStatus,
+        appointmentUpdated: result.appointmentUpdated,
+        doctorLoadUpdated: result.doctorLoadUpdated,
+        newDoctorLoad: result.newDoctorLoad,
+      },
+    });
+  } catch (error) {
+    if (error.message.includes('not found') || error.message.includes('Access denied')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    if (error.message.includes('Cannot cancel')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     next(error);
   }
 };

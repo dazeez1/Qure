@@ -49,7 +49,7 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
   startDate.setHours(0, 0, 0, 0);
 
   // Fetch all data in parallel
-  const [dashboard, dailyTrends, peakHours, queueEntries] = await Promise.all([
+  const [dashboard, dailyTrends, peakHours, queueEntries, feedbacks] = await Promise.all([
     getDashboardOverview({ hospitalId }),
     getDailyTrends({ hospitalId, days }),
     getPeakHours({ hospitalId, days }),
@@ -98,6 +98,42 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
       },
       orderBy: {
         checkInTime: 'desc',
+      },
+    }),
+    // Fetch feedback within date range
+    prisma.feedback.findMany({
+      where: {
+        hospitalId,
+        createdAt: {
+          gte: startDate,
+          lte: today,
+        },
+      },
+      include: {
+        patient: {
+          select: {
+            fullName: true,
+          },
+        },
+        doctor: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+        appointment: {
+          select: {
+            appointmentDate: true,
+            department: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc', // Chronological sorting
       },
     }),
   ]);
@@ -240,6 +276,32 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
     }
   } else {
     csvLines.push('No peak hours data');
+  }
+  
+  csvLines.push('');
+  csvLines.push('');
+
+  // Feedback Report Section
+  csvLines.push('--- Feedback Report ---');
+  csvLines.push('Date, Patient, Doctor, Department, Rating, Comment');
+  
+  if (feedbacks && feedbacks.length > 0) {
+    feedbacks.forEach((feedback) => {
+      const date = feedback.appointment.appointmentDate
+        ? escapeCsvField(new Date(feedback.appointment.appointmentDate).toLocaleDateString())
+        : '';
+      const patient = escapeCsvField(feedback.patient?.fullName || 'Unknown');
+      const doctor = feedback.doctor
+        ? escapeCsvField(`Dr. ${feedback.doctor.firstName} ${feedback.doctor.lastName}`)
+        : '';
+      const department = escapeCsvField(feedback.appointment.department?.name || 'Unknown');
+      const rating = escapeCsvField(feedback.rating || '');
+      const comment = escapeCsvField(feedback.comment || '');
+      
+      csvLines.push(`${date}, ${patient}, ${doctor}, ${department}, ${rating}, ${comment}`);
+    });
+  } else {
+    csvLines.push('No feedback found');
   }
 
   // Join all lines with newlines

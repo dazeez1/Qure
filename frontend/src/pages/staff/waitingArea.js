@@ -8,6 +8,31 @@
 import { apiGet, apiPatch, apiPost } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { cleanupPage } from '../../utils/pageLifecycle.js';
+
+const PAGE_ID = 'waiting-area';
+let viewLoadedHandler = null;
+
+/**
+ * Close all open modals
+ */
+function closeAllModals() {
+  const modals = document.querySelectorAll('.modal-overlay');
+  modals.forEach(modal => {
+    try {
+      modal.classList.remove('modal-show');
+      modal.classList.add('modal-hide');
+      setTimeout(() => {
+        if (modal.parentNode) {
+          modal.parentNode.removeChild(modal);
+        }
+      }, 100);
+    } catch (error) {
+      // Modal might already be removed
+    }
+  });
+  document.body.style.overflow = '';
+}
 
 // State
 let waitingAreas = [];
@@ -895,6 +920,7 @@ async function handleBulkMovePatients() {
  * @returns {Promise<string|null>} Selected area ID or null if cancelled
  */
 async function showMoveAreaModal() {
+  closeAllModals();
   return new Promise((resolve) => {
     // Create modal overlay
     const overlay = document.createElement('div');
@@ -1540,14 +1566,29 @@ function cancelDeleteWaitingArea() {
 export { fetchWaitingAreas, renderWaitingAreas, initializeWaitingArea };
 
 // Listen for view-loaded event (SPA navigation)
-window.addEventListener('view-loaded', async (event) => {
+viewLoadedHandler = async (event) => {
   if (event.detail?.route === 'waiting-area') {
+    // Cleanup previous state
+    cleanupPage(PAGE_ID);
+    closeAllModals();
+    
     // Small delay to ensure DOM is ready
     setTimeout(() => {
       initializeWaitingArea();
     }, 100);
   }
-}, { once: false }); // Allow multiple calls when navigating back
+};
+
+window.addEventListener('view-loaded', viewLoadedHandler);
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  if (viewLoadedHandler) {
+    window.removeEventListener('view-loaded', viewLoadedHandler);
+  }
+  cleanupPage(PAGE_ID);
+  closeAllModals();
+});
 
 // Auto-initialize if page is loaded directly (non-SPA)
 if (document.readyState === 'loading') {

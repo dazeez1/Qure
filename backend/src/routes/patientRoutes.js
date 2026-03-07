@@ -1,8 +1,10 @@
 import express from 'express';
 import { authenticatePatient } from '../middleware/patientAuthMiddleware.js';
 import { getPatientAppointments } from '../controllers/appointmentController.js';
-import { getPatientQueueStatus } from '../controllers/queueController.js';
+import { getPatientQueueStatus, cancelPatientQueueEntry } from '../controllers/queueController.js';
 import { getAnnouncements } from '../controllers/announcementController.js';
+import { getPatientDashboard } from '../controllers/patientDashboardController.js';
+import { createPatientFeedback } from '../controllers/feedbackController.js';
 
 const router = express.Router();
 
@@ -12,17 +14,9 @@ router.use(authenticatePatient);
 /**
  * GET /api/patient/dashboard
  * Patient dashboard data endpoint
+ * Returns: currentQueue, upcomingAppointments, notifications
  */
-router.get('/dashboard', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Access granted to patient dashboard',
-    data: {
-      patient: req.patient,
-      // Dashboard data will be added later
-    },
-  });
-});
+router.get('/dashboard', getPatientDashboard);
 
 /**
  * GET /api/patient/appointments
@@ -37,11 +31,28 @@ router.get('/appointments', getPatientAppointments);
 router.get('/queue-status', getPatientQueueStatus);
 
 /**
+ * PATCH /api/patient/queue/:id/cancel
+ * Cancel patient's queue entry (Patient only)
+ * Only allows cancellation from WAITING, TRIAGE, CALLED statuses
+ * Does NOT allow cancellation from IN_CONSULTATION
+ */
+router.patch('/queue/:id/cancel', cancelPatientQueueEntry);
+
+/**
  * GET /api/patient/announcements
  * Get announcements for patients
  * Access: Authenticated patients
  */
 router.get('/announcements', getAnnouncements);
+
+/**
+ * POST /api/patient/feedback
+ * Create patient feedback
+ * Access: Authenticated patients
+ * Body: { appointmentId: string, rating: number (1-5), comment?: string }
+ * Rules: Appointment must be COMPLETED, patient must own appointment, no duplicate feedback
+ */
+router.post('/feedback', createPatientFeedback);
 
 export default router;
 

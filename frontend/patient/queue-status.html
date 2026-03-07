@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <link rel="stylesheet" href="../src/styles/variables.css" />
+    <link rel="stylesheet" href="../src/styles/toast.css" />
+    <title>Qure - Real-Time Queue Tracking</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+        background-color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Header */
+      .header {
+        background-color: #EFF3F6;
+        padding: 1.2rem 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .header-content {
+        max-width: 140rem;
+        margin: 0 auto;
+        padding: 0 4rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+      }
+
+      .logo-icon {
+        width: 2rem;
+        height: 2rem;
+        object-fit: contain;
+      }
+
+      .logo-text {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--color-primary-blue);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        list-style: none;
+        margin-right: 1.6rem;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+        color: var(--color-text-primary);
+        font-size: 1rem;
+        font-weight: 500;
+        transition: color 0.2s;
+      }
+
+      .nav-links a:hover {
+        color: var(--color-primary-blue);
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 1.6rem;
+      }
+
+      .hamburger-menu {
+        display: none;
+        flex-direction: column;
+        gap: 0.4rem;
+        cursor: pointer;
+        padding: 0.4rem;
+        background: none;
+        border: none;
+        z-index: 1001;
+        position: relative;
+      }
+
+      .hamburger-menu span {
+        width: 2rem;
+        height: 0.25rem;
+        background-color: var(--color-text-primary);
+        border-radius: 0.2rem;
+        transition: all 0.3s;
+      }
+
+      .hamburger-menu.active span:nth-child(1) {
+        transform: rotate(45deg) translate(0.5rem, 0.5rem);
+      }
+
+      .hamburger-menu.active span:nth-child(2) {
+        opacity: 0;
+      }
+
+      .hamburger-menu.active span:nth-child(3) {
+        transform: rotate(-45deg) translate(0.5rem, -0.5rem);
+      }
+
+      .mobile-nav {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 75%;
+        height: 100vh;
+        background-color: var(--color-primary-blue);
+        z-index: 1000;
+        padding: 2rem;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+        flex-direction: column;
+      }
+
+      .mobile-nav.active {
+        transform: translateX(0);
+      }
+
+      .mobile-nav-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 3rem;
+      }
+
+      .mobile-nav-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        color: #fff;
+      }
+
+      .mobile-nav-links {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 1.6rem;
+        margin-bottom: 2rem;
+      }
+
+      .mobile-nav-links a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 1.6rem;
+        font-weight: 500;
+        padding: 1rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .user-profile {
+        width: 3.2rem;
+        height: 3.2rem;
+        border-radius: 50%;
+        background-color: var(--color-primary-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        flex-shrink: 0;
+      }
+
+      /* Main Content */
+      .main-content {
+        flex: 1;
+        max-width: 140rem;
+        margin: 0 auto;
+        padding: 3rem 4rem;
+        width: 100%;
+      }
+
+      .page-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin-bottom: 0.8rem;
+      }
+
+      .last-updated {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        font-size: 1rem;
+        color: var(--color-text-tertiary);
+        margin-bottom: 2.4rem;
+      }
+
+      .refresh-icon {
+        cursor: pointer;
+        font-size: 1.8rem;
+        color: var(--color-primary-blue);
+        transition: transform 0.3s;
+      }
+
+      .refresh-icon:hover {
+        transform: rotate(180deg);
+      }
+
+      /* Queue Table */
+      .queue-table-container {
+        background: #fff;
+        border-radius: 1.2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+      }
+
+      .queue-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .queue-table thead {
+        background-color: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+      }
+
+      .queue-table th {
+        padding: 1.6rem 2rem;
+        text-align: left;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--color-text-primary);
+      }
+
+      .queue-table tbody tr {
+        border-bottom: 1px solid #f3f4f6;
+        transition: background-color 0.2s;
+      }
+
+      .queue-table tbody tr:hover {
+        background-color: #f9fafb;
+      }
+
+      .queue-table tbody tr.your-position {
+        background-color: #eff6ff;
+        border-left: 4px solid var(--color-primary-blue);
+      }
+
+      .queue-table tbody tr.your-position:hover {
+        background-color: #dbeafe;
+      }
+
+      .queue-table td {
+        padding: 1.6rem 2rem;
+        font-size: 1rem;
+        color: var(--color-text-primary);
+      }
+
+      .patient-name-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+      }
+
+      .your-badge {
+        background-color: var(--color-primary-blue);
+        color: #fff;
+        padding: 0.4rem 0.8rem;
+        border-radius: 0.4rem;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 0.6rem 1.2rem;
+        border-radius: 0.6rem;
+        font-size: 1rem;
+        font-weight: 600;
+        text-align: center;
+        min-width: 10rem;
+      }
+
+      .status-badge.now-serving {
+        background-color: #10b981;
+        color: #fff;
+      }
+
+      .status-badge.next {
+        background-color: #3b82f6;
+        color: #fff;
+      }
+
+      .status-badge.waiting {
+        background-color: #f3f4f6;
+        color: var(--color-text-primary);
+      }
+
+      .wait-time {
+        font-size: 1rem;
+        color: var(--color-text-primary);
+        font-weight: 500;
+      }
+
+      /* Empty State */
+      .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--color-text-tertiary);
+        font-size: 1rem;
+      }
+
+      /* Loading State */
+      .loading-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--color-text-tertiary);
+        font-size: 1rem;
+      }
+
+      /* Footer */
+      .footer {
+        background-color: #fff;
+        padding: 1.4rem 0;
+        border-top: 1px solid #e5e7eb;
+        margin-top: auto;
+      }
+
+      .footer-content {
+        max-width: 140rem;
+        margin: 0 auto;
+        padding: 0 4rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .footer-copyright {
+        font-size: 1rem;
+        color: var(--color-text-tertiary);
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 2rem;
+        list-style: none;
+      }
+
+      .footer-links a {
+        font-size: 1rem;
+        color: var(--color-text-tertiary);
+        text-decoration: underline;
+        transition: color 0.2s;
+      }
+
+      .footer-links a:hover {
+        color: var(--color-primary-blue);
+      }
+
+      /* Responsive */
+      @media (max-width: 1024px) {
+        .main-content {
+          padding: 3rem 2rem;
+        }
+
+        .header-content,
+        .footer-content {
+          padding: 0 2rem;
+        }
+
+        .header-content {
+          flex-wrap: wrap;
+        }
+
+        .nav-links {
+          order: 3;
+          width: 100%;
+          justify-content: center;
+          margin-right: 0;
+          margin-top: 1rem;
+        }
+
+        .queue-table th,
+        .queue-table td {
+          padding: 1.2rem 1.6rem;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .header {
+          padding: 1rem 0;
+        }
+
+        .header-content {
+          padding: 0 1.6rem;
+        }
+
+        .hamburger-menu {
+          display: flex;
+        }
+
+        .nav-links {
+          display: none;
+        }
+
+        .mobile-nav {
+          display: block;
+        }
+
+        .logo-text {
+          font-size: 1.8rem;
+        }
+
+        .logo-icon {
+          width: 1.8rem;
+          height: 1.8rem;
+        }
+
+        .user-profile {
+          width: 2.8rem;
+          height: 2.8rem;
+          font-size: 1rem;
+        }
+
+        .main-content {
+          padding: 2rem 1.6rem;
+        }
+
+        .page-title {
+          font-size: 1.3rem;
+          margin-bottom: 2rem;
+        }
+
+        .last-updated {
+          font-size: 1rem;
+          margin-bottom: 2rem;
+        }
+
+        .queue-table-container {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .queue-table {
+          min-width: 100%;
+          display: block;
+          width: 100%;
+        }
+
+        .queue-table thead {
+          display: none;
+        }
+
+        .queue-table tbody {
+          display: block;
+          width: 100%;
+        }
+
+        .queue-table tbody tr {
+          display: block;
+          margin-bottom: 1.6rem;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 0.8rem;
+          padding: 1.6rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .queue-table tbody tr.your-position {
+          border-left: 4px solid var(--color-primary-blue);
+        }
+
+        .queue-table tbody td {
+          display: block;
+          padding: 0.8rem 0;
+          text-align: left;
+          border: none;
+          font-size: 1rem;
+        }
+
+        .queue-table tbody td:before {
+          content: attr(data-label);
+          font-weight: 600;
+          color: var(--color-text-primary);
+          display: block;
+          margin-bottom: 0.4rem;
+          font-size: 1rem;
+        }
+
+        .queue-table tbody td:first-child {
+          padding-top: 0;
+        }
+
+        .queue-table tbody td:last-child {
+          padding-bottom: 0;
+        }
+
+        .patient-name-cell {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.4rem;
+        }
+
+        .status-badge,
+        .wait-time {
+          font-size: 1rem;
+          min-width: auto;
+          width: 100%;
+          display: block;
+          text-align: left;
+        }
+
+        .footer {
+          padding: 1.2rem 0;
+        }
+
+        .footer-content {
+          padding: 0 1.6rem;
+          flex-direction: column;
+          gap: 1rem;
+          text-align: center;
+          align-items: center;
+        }
+
+        .footer-copyright {
+          font-size: 0.9rem;
+          text-align: center;
+          width: 100%;
+        }
+
+        .footer-links {
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 1.2rem;
+          width: 100%;
+        }
+
+        .footer-links a {
+          font-size: 0.9rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .header {
+          padding: 0.8rem 0;
+        }
+
+        .header-content {
+          padding: 0 1.2rem;
+        }
+
+        .main-content {
+          padding: 1.6rem 1.2rem;
+        }
+
+        .page-title {
+          font-size: 1.2rem;
+        }
+
+        .queue-table-container {
+          border-radius: 0.8rem;
+        }
+
+        .queue-table tbody tr {
+          padding: 1.2rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">
+          <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" />
+          <span class="logo-text">Qure</span>
+        </div>
+        <div class="header-right">
+          <button class="hamburger-menu" id="hamburger-menu" aria-label="Toggle menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <nav>
+            <ul class="nav-links">
+              <li><a href="dashboard.html">My Bookings</a></li>
+              <li><a href="queue-status.html">Queue Status</a></li>
+              <li><a href="#contact">Contact Us</a></li>
+              <li><a href="feedback.html">Feedback</a></li>
+            </ul>
+          </nav>
+          <div class="user-profile" id="user-profile">
+            <span id="user-initial">U</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <h1 class="page-title">Real-Time Queue Tracking</h1>
+      <div class="last-updated">
+        <span id="last-updated-text">Updated 10 secs ago</span>
+        <span class="material-symbols-outlined refresh-icon" id="refresh-icon">refresh</span>
+      </div>
+
+      <div class="queue-table-container">
+        <table class="queue-table">
+          <thead>
+            <tr>
+              <th>Patient</th>
+              <th>Service</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="queue-table-body">
+            <tr>
+              <td colspan="3" class="loading-state">Loading queue data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-content">
+        <p class="footer-copyright">© 2025 Qure Nigeria. All rights reserved.</p>
+        <ul class="footer-links">
+          <li><a href="#privacy">Privacy Policy</a></li>
+          <li><a href="#terms">Terms of Service</a></li>
+          <li><a href="#cookies">Cookie Settings</a></li>
+        </ul>
+      </div>
+    </footer>
+
+    <!-- Mobile Navigation -->
+    <div class="mobile-nav" id="mobile-nav">
+      <div class="mobile-nav-header">
+        <div class="mobile-nav-logo">
+          <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" style="filter: brightness(0) invert(1);" />
+          <span class="logo-text" style="color: #fff;">Qure</span>
+        </div>
+      </div>
+      <nav>
+        <ul class="mobile-nav-links">
+          <li><a href="dashboard.html">My Bookings</a></li>
+          <li><a href="queue-status.html">Queue Status</a></li>
+          <li><a href="#contact">Contact Us</a></li>
+          <li><a href="feedback.html">Feedback</a></li>
+        </ul>
+      </nav>
+    </div>
+
+    <script type="module" src="../src/pages/patient/queueStatus.js"></script>
+  </body>
+</html>
