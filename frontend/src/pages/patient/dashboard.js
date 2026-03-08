@@ -605,17 +605,102 @@ if (bookAppointmentBtn) {
   });
 }
 
+/**
+ * Load email notification preferences
+ */
+async function loadEmailNotificationPreferences() {
+  try {
+    const response = await apiGet('/patient/notification-preferences');
+    
+    if (response.status === 401) {
+      // Not authenticated, skip
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('Failed to load notification preferences');
+    }
+
+    const result = await response.json();
+    if (result.success && result.data) {
+      const emailToggle = document.getElementById('email-toggle');
+      if (emailToggle) {
+        // Set toggle state based on preference
+        if (result.data.emailNotificationsEnabled) {
+          emailToggle.classList.add('active');
+        } else {
+          emailToggle.classList.remove('active');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error loading email notification preferences:', error);
+    // Don't show error toast, just use default (enabled)
+  }
+}
+
+/**
+ * Save email notification preferences
+ */
+async function saveEmailNotificationPreferences(emailNotificationsEnabled) {
+  try {
+    const response = await apiPatch('/patient/notification-preferences', {
+      emailNotificationsEnabled,
+    });
+
+    if (response.status === 401) {
+      toast.error('Session expired. Please log in again.');
+      clearAuth();
+      setTimeout(() => {
+        window.location.href = '/login.html#login';
+      }, 1500);
+      return false;
+    }
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to save notification preferences');
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error saving email notification preferences:', error);
+    toast.error(error.message || 'Failed to save notification preferences');
+    return false;
+  }
+}
+
 // Email toggle
 const emailToggle = document.getElementById('email-toggle');
 if (emailToggle) {
-  // Set initial state (default: enabled)
-  emailToggle.classList.add('active');
+  // Load initial state from API
+  loadEmailNotificationPreferences();
   
-  emailToggle.addEventListener('click', () => {
-    emailToggle.classList.toggle('active');
-    const isEnabled = emailToggle.classList.contains('active');
-    // TODO: Save notification preference
-    toast.success(`Email notifications ${isEnabled ? 'enabled' : 'disabled'}`);
+  emailToggle.addEventListener('click', async () => {
+    const wasActive = emailToggle.classList.contains('active');
+    const newState = !wasActive;
+    
+    // Optimistically update UI
+    if (newState) {
+      emailToggle.classList.add('active');
+    } else {
+      emailToggle.classList.remove('active');
+    }
+    
+    // Save to backend
+    const success = await saveEmailNotificationPreferences(newState);
+    
+    if (!success) {
+      // Revert UI state on error
+      if (wasActive) {
+        emailToggle.classList.add('active');
+      } else {
+        emailToggle.classList.remove('active');
+      }
+    } else {
+      toast.success(`Email notifications ${newState ? 'enabled' : 'disabled'}`);
+    }
   });
 }
 
@@ -660,8 +745,10 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     initMobileNav();
     loadDashboard();
+    loadEmailNotificationPreferences();
   });
 } else {
   initMobileNav();
   loadDashboard();
+  loadEmailNotificationPreferences();
 }

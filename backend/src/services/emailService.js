@@ -1,4 +1,5 @@
 import { BrevoClient } from '@getbrevo/brevo';
+import prisma from '../config/database.js';
 
 /**
  * Production-ready Email Service using Brevo Transactional Email API
@@ -6,6 +7,51 @@ import { BrevoClient } from '@getbrevo/brevo';
  * This service uses the official Brevo SDK (@getbrevo/brevo) for reliable email delivery.
  * All credentials are loaded from environment variables.
  */
+
+/**
+ * Check if email notifications should be sent to a patient
+ * Checks both hospital-level and patient-level notification preferences
+ * @param {string} patientId - Patient ID
+ * @param {string} hospitalId - Hospital ID
+ * @returns {Promise<boolean>} True if email should be sent, false otherwise
+ */
+export async function shouldSendEmailToPatient(patientId, hospitalId) {
+  try {
+    // Check hospital-level notification settings
+    const hospitalSettings = await prisma.notificationSetting.findUnique({
+      where: { hospitalId },
+      select: {
+        patientEmailEnabled: true,
+      },
+    });
+
+    // If hospital has disabled email notifications, don't send
+    if (hospitalSettings && hospitalSettings.patientEmailEnabled === false) {
+      return false;
+    }
+
+    // Check patient-level notification preferences
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: {
+        emailNotificationsEnabled: true,
+      },
+    });
+
+    // If patient has explicitly disabled email notifications, don't send
+    // Note: null/undefined means default (enabled), only false means disabled
+    if (patient && patient.emailNotificationsEnabled === false) {
+      return false;
+    }
+
+    // Default to true if no restrictions found (including null/undefined values)
+    return true;
+  } catch (error) {
+    console.error('Error checking email notification preferences:', error);
+    // On error, default to allowing emails (fail open)
+    return true;
+  }
+}
 
 // Initialize Brevo API client (singleton pattern)
 let brevoClient = null;

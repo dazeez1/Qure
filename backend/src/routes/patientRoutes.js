@@ -10,6 +10,10 @@ import {
   updatePatientProfile,
   uploadPatientAvatar,
 } from '../controllers/patientProfileController.js';
+import {
+  getPatientNotificationPreferences,
+  updatePatientNotificationPreferences,
+} from '../controllers/patientNotificationController.js';
 import { uploadAvatar } from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
@@ -85,6 +89,22 @@ router.patch('/profile', updatePatientProfile);
  * Max size: 2MB
  */
 router.post('/avatar', uploadAvatar.single('avatar'), uploadPatientAvatar);
+
+/**
+ * GET /api/patient/notification-preferences
+ * Get patient notification preferences
+ * Access: Authenticated patients
+ * Returns: { emailNotificationsEnabled: boolean }
+ */
+router.get('/notification-preferences', getPatientNotificationPreferences);
+
+/**
+ * PATCH /api/patient/notification-preferences
+ * Update patient notification preferences
+ * Access: Authenticated patients
+ * Body: { emailNotificationsEnabled: boolean }
+ */
+router.patch('/notification-preferences', updatePatientNotificationPreferences);
 
 export default router;
 

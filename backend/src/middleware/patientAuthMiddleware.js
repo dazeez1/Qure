@@ -75,6 +75,7 @@ export const authenticatePatient = async (req, res, next) => {
         gender: true,
         dateOfBirth: true,
         avatarUrl: true,
+        emailNotificationsEnabled: true,
         createdAt: true,
         updatedAt: true,
       },

@@ -971,15 +971,24 @@ export async function sendAppointmentMessage(req, res) {
       let emailSent = false;
       let announcementCreated = false;
 
-      // Send email notification
+      // Send email notification (check patient preferences first)
       try {
-        await sendAnnouncement(
-          appointment.patient.email,
-          title,
-          fullMessage,
-          appointment.hospital.name
+        const { shouldSendEmailToPatient } = await import('../services/emailService.js');
+        const canSendEmail = await shouldSendEmailToPatient(
+          appointment.patient.id,
+          appointment.hospitalId
         );
-        emailSent = true;
+
+        if (canSendEmail) {
+          await sendAnnouncement(
+            appointment.patient.email,
+            title,
+            fullMessage,
+            appointment.hospital.name
+          );
+          emailSent = true;
+        }
+        // If patient has disabled emails, skip silently
       } catch (emailError) {
         console.error('Failed to send email notification:', emailError);
         // Don't fail the request if email fails

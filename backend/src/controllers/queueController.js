@@ -3333,7 +3333,20 @@ export const sendQueueEmail = async (req, res, next) => {
     }
 
     // Import email service
-    const { sendAnnouncement } = await import('../services/emailService.js');
+    const { sendAnnouncement, shouldSendEmailToPatient } = await import('../services/emailService.js');
+
+    // Check if email notifications are enabled for this patient
+    const canSendEmail = await shouldSendEmailToPatient(
+      queueEntry.patient.id,
+      queueEntry.hospitalId
+    );
+
+    if (!canSendEmail) {
+      return res.status(200).json({
+        success: true,
+        message: 'Email notification skipped - patient has disabled email notifications.',
+      });
+    }
 
     // Send email notification
     const emailSubject = `Queue Update - ${queueEntry.ticketNumber}`;
@@ -3484,6 +3497,18 @@ export const bulkNotifyQueue = async (req, res, next) => {
               reason: 'Patient email not found',
             });
             failedCount++;
+            continue;
+          }
+
+          // Check if email notifications are enabled for this patient
+          const { shouldSendEmailToPatient } = await import('../services/emailService.js');
+          const canSendEmail = await shouldSendEmailToPatient(
+            entry.patient.id,
+            entry.hospitalId
+          );
+
+          if (!canSendEmail) {
+            // Skip silently - patient has disabled email notifications
             continue;
           }
 
