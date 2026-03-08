@@ -8,6 +8,7 @@
 import { apiGet, apiPost } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { displayAvatar } from '../../utils/avatar.js';
 
 // Check authentication first
 if (!isAuthenticated()) {
@@ -18,20 +19,34 @@ if (!isAuthenticated()) {
 // Get user data
 const user = getAuthUser();
 
-// Display user initial
+// Display user avatar/initial
+const userProfileElement = document.getElementById('user-profile');
 const userInitialElement = document.getElementById('user-initial');
 
 if (user) {
-  let initial = 'U';
-  if (user.fullName) {
-    initial = user.fullName.charAt(0).toUpperCase();
-  } else if (user.firstName) {
-    initial = user.firstName.charAt(0).toUpperCase();
-  } else if (user.email) {
-    initial = user.email.charAt(0).toUpperCase();
+  if (userProfileElement) {
+    displayAvatar(userProfileElement, user.avatarUrl, user.fullName);
+    userProfileElement.style.cursor = 'pointer';
+    userProfileElement.addEventListener('click', () => {
+      window.location.href = 'profile.html';
+    });
   }
-  
-  if (userInitialElement) userInitialElement.textContent = initial;
+  if (userInitialElement && !user.avatarUrl) {
+    let initial = 'U';
+    if (user.fullName) {
+      initial = user.fullName
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    } else if (user.firstName) {
+      initial = user.firstName.charAt(0).toUpperCase();
+    } else if (user.email) {
+      initial = user.email.charAt(0).toUpperCase();
+    }
+    userInitialElement.textContent = initial;
+  }
 }
 
 /**

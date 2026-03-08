@@ -88,6 +88,23 @@ export const register = async (req, res, next) => {
       }
     }
 
+    // Normalize gender to uppercase enum values
+    let normalizedGender = null;
+    if (gender) {
+      const genderLower = gender.trim().toLowerCase();
+      // Map registration values to enum values
+      if (genderLower === 'male') {
+        normalizedGender = 'MALE';
+      } else if (genderLower === 'female') {
+        normalizedGender = 'FEMALE';
+      } else if (genderLower === 'other' || genderLower === 'prefer-not-to-say') {
+        normalizedGender = 'OTHER';
+      } else {
+        // If already uppercase, use as-is
+        normalizedGender = gender.trim().toUpperCase();
+      }
+    }
+
     // Create patient
     const patient = await prisma.patient.create({
       data: {
@@ -95,7 +112,7 @@ export const register = async (req, res, next) => {
         email: normalizedEmail,
         password: hashedPassword,
         phone: phone?.trim() || null,
-        gender: gender?.trim() || null,
+        gender: normalizedGender,
         dateOfBirth: parsedDateOfBirth,
       },
     });
@@ -154,6 +171,7 @@ export const login = async (req, res, next) => {
         password: true,
         gender: true,
         dateOfBirth: true,
+        avatarUrl: true,
       },
     });
 
@@ -224,6 +242,7 @@ export const login = async (req, res, next) => {
           phone: patient.phone,
           gender: patient.gender,
           dateOfBirth: patient.dateOfBirth,
+          avatarUrl: patient.avatarUrl || null,
         },
       },
     });

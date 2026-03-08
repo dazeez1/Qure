@@ -102,6 +102,7 @@ model Hospital {
   waitingAreas        WaitingArea[]
   announcements       Announcement[]
   feedbacks           Feedback[]
+  supportMessages     SupportMessage[]
 
   @@map("hospitals")
 }
@@ -205,6 +206,7 @@ model Patient {
   phone       String?
   gender      String?
   dateOfBirth DateTime?
+  avatarUrl   String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -212,6 +214,7 @@ model Patient {
   queueEntries QueueEntry[]
   passwordResetTokens PasswordResetToken[]
   feedbacks   Feedback[]
+  supportMessages SupportMessage[]
 
   @@map("patients")
 }
@@ -347,4 +350,22 @@ model Feedback {
   @@index([hospitalId, createdAt])
   @@index([doctorId])
   @@map("feedbacks")
+}
+
+model SupportMessage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String
+  message   String
+  hospitalId String? @db.ObjectId
+  patientId  String? @db.ObjectId
+  createdAt DateTime @default(now())
+
+  hospital  Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  patient   Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([hospitalId])
+  @@index([patientId])
+  @@map("support_messages")
 }

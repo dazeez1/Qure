@@ -195,6 +195,7 @@ async function handleLogin(role) {
             phone: result.data.patient.phone,
             gender: result.data.patient.gender,
             dateOfBirth: result.data.patient.dateOfBirth,
+            avatarUrl: result.data.patient.avatarUrl || null,
             role: 'PATIENT',
             type: 'PATIENT',
           });

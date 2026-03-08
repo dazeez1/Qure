@@ -9,6 +9,7 @@ import { apiGet, apiPatch } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { confirmCancelAppointment, confirmCancelQueue } from '../../utils/modal.js';
+import { displayAvatar } from '../../utils/avatar.js';
 
 // Check authentication first
 if (!isAuthenticated()) {
@@ -23,25 +24,47 @@ const user = getAuthUser();
 const userNameElement = document.getElementById('user-name');
 const userInitialElement = document.getElementById('user-initial');
 const greetingElement = document.getElementById('greeting');
+const userProfileElement = document.getElementById('user-profile');
 
 if (user) {
   let displayName = 'User';
-  let initial = 'U';
   
   // Patient has fullName, staff has firstName + lastName
   if (user.fullName) {
     displayName = user.fullName.split(' ')[0]; // First name only for greeting
-    initial = user.fullName.charAt(0).toUpperCase();
   } else if (user.firstName && user.lastName) {
     displayName = user.firstName;
-    initial = user.firstName.charAt(0).toUpperCase();
   } else if (user.email) {
     displayName = user.email.split('@')[0];
-    initial = displayName.charAt(0).toUpperCase();
   }
   
   if (userNameElement) userNameElement.textContent = displayName;
-  if (userInitialElement) userInitialElement.textContent = initial;
+  
+  // Display avatar in header
+  if (userProfileElement) {
+    displayAvatar(userProfileElement, user.avatarUrl, user.fullName);
+  }
+  
+  // Fallback for initial element if avatar not available
+  if (userInitialElement && !user.avatarUrl) {
+    const initial = user.fullName
+      ? user.fullName
+          .split(' ')
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2)
+      : 'U';
+    userInitialElement.textContent = initial;
+  }
+  
+  // Make profile clickable
+  if (userProfileElement) {
+    userProfileElement.style.cursor = 'pointer';
+    userProfileElement.addEventListener('click', () => {
+      window.location.href = 'profile.html';
+    });
+  }
 }
 
 /**

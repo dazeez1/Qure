@@ -8,6 +8,7 @@
 import { apiGet, apiPost } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
+import { displayAvatar } from '../../utils/avatar.js';
 
 let selectedRating = 0;
 let currentHospitalId = null;
@@ -509,14 +510,24 @@ async function initPage() {
   if (isAuthenticated()) {
     const user = getAuthUser();
     if (user) {
+      const userProfile = document.getElementById('user-profile');
       const userInitial = document.getElementById('user-initial');
-      if (userInitial && user.fullName) {
+      if (userProfile) {
+        displayAvatar(userProfile, user.avatarUrl, user.fullName);
+        userProfile.style.cursor = 'pointer';
+        userProfile.addEventListener('click', () => {
+          window.location.href = 'profile.html';
+        });
+      }
+      if (userInitial && !user.avatarUrl) {
         const initials = user.fullName
-          .split(' ')
-          .map((n) => n[0])
-          .join('')
-          .toUpperCase()
-          .slice(0, 2);
+          ? user.fullName
+              .split(' ')
+              .map((n) => n[0])
+              .join('')
+              .toUpperCase()
+              .slice(0, 2)
+          : 'U';
         userInitial.textContent = initials;
       }
     }

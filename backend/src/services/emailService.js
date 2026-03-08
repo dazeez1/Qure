@@ -427,6 +427,77 @@ export async function sendStaffInvitationEmail(
 }
 
 /**
+ * Send support message notification email
+ * @param {Object} params - Support message parameters
+ * @param {string} params.name - Sender name
+ * @param {string} params.email - Sender email
+ * @param {string} params.message - Support message content
+ * @param {string} [params.patientId] - Patient ID if authenticated (optional)
+ * @param {string} [params.hospitalId] - Hospital ID if available (optional)
+ * @returns {Promise<Object>} Result object with success status
+ */
+export async function sendSupportMessageEmail({ name, email, message, patientId, hospitalId }) {
+  const subject = `New Support Message from ${name}`;
+  
+  // Get hospital name if hospitalId is provided
+  let hospitalName = null;
+  if (hospitalId) {
+    try {
+      const prisma = (await import('../config/database.js')).default;
+      const hospital = await prisma.hospital.findUnique({
+        where: { id: hospitalId },
+        select: { name: true },
+      });
+      if (hospital) {
+        hospitalName = hospital.name;
+      }
+    } catch (error) {
+      console.error('Error fetching hospital name:', error);
+    }
+  }
+
+  const patientInfo = patientId 
+    ? `<p><strong>Patient ID:</strong> ${patientId}</p>`
+    : '<p><strong>Type:</strong> Guest User</p>';
+
+  const hospitalInfo = hospitalName
+    ? `<p><strong>Hospital:</strong> ${hospitalName}</p>`
+    : '';
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #0e3995; margin-bottom: 20px;">New Support Message</h2>
+      <p>A new support message has been received through the Qure contact form.</p>
+      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <p><strong>From:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        ${patientInfo}
+        ${hospitalInfo}
+        <p style="margin-top: 20px;"><strong>Message:</strong></p>
+        <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; word-wrap: break-word;">
+          ${message.replace(/\n/g, '<br>')}
+        </div>
+      </div>
+      <p style="margin-top: 20px; color: #757575; font-size: 12px;">
+        This is an automated notification from the Qure support system.
+      </p>
+    </div>
+  `;
+
+  const textContent = `New Support Message\n\nFrom: ${name}\nEmail: ${email}\n${patientId ? `Patient ID: ${patientId}\n` : 'Type: Guest User\n'}${hospitalName ? `Hospital: ${hospitalName}\n` : ''}\nMessage:\n${message}\n\nThis is an automated notification from the Qure support system.`;
+
+  const supportEmail = process.env.SUPPORT_EMAIL || 'support@qure.com';
+
+  return await sendEmail({
+    to: supportEmail,
+    subject,
+    htmlContent,
+    textContent,
+    senderName: 'Qure Support System',
+  });
+}
+
+/**
  * Example controller usage:
  * 
  * import { sendPasswordResetEmail } from '../services/emailService.js';

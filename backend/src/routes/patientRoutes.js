@@ -5,6 +5,12 @@ import { getPatientQueueStatus, cancelPatientQueueEntry } from '../controllers/q
 import { getAnnouncements } from '../controllers/announcementController.js';
 import { getPatientDashboard } from '../controllers/patientDashboardController.js';
 import { createPatientFeedback } from '../controllers/feedbackController.js';
+import {
+  getPatientProfile,
+  updatePatientProfile,
+  uploadPatientAvatar,
+} from '../controllers/patientProfileController.js';
+import { uploadAvatar } from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -53,6 +59,32 @@ router.get('/announcements', getAnnouncements);
  * Rules: Appointment must be COMPLETED, patient must own appointment, no duplicate feedback
  */
 router.post('/feedback', createPatientFeedback);
+
+/**
+ * GET /api/patient/me
+ * Get current authenticated patient profile
+ * Access: Authenticated patients
+ */
+router.get('/me', getPatientProfile);
+
+/**
+ * PATCH /api/patient/profile
+ * Update patient profile (phone and gender only)
+ * Email and fullName are NOT editable
+ * Access: Authenticated patients
+ * Body: { phone?: string, gender?: 'MALE' | 'FEMALE' | 'OTHER' }
+ */
+router.patch('/profile', updatePatientProfile);
+
+/**
+ * POST /api/patient/avatar
+ * Upload patient avatar image
+ * Access: Authenticated patients
+ * Accepts: multipart/form-data with 'avatar' field
+ * File types: jpeg, jpg, png
+ * Max size: 2MB
+ */
+router.post('/avatar', uploadAvatar.single('avatar'), uploadPatientAvatar);
 
 export default router;
 

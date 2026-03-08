@@ -190,13 +190,13 @@ async function _initQueuePage() {
   // Pause polling when page becomes hidden, resume when visible
   cleanupFunctions.push(
     addListener(PAGE_ID, document, 'visibilitychange', () => {
-      if (document.hidden) {
-        // Page is hidden - pause polling and close SSE connections
-        stopPolling();
-      } else {
-        // Page is visible - resume polling
-        startPolling();
-      }
+    if (document.hidden) {
+      // Page is hidden - pause polling and close SSE connections
+      stopPolling();
+    } else {
+      // Page is visible - resume polling
+      startPolling();
+    }
     })
   );
 }
@@ -341,8 +341,8 @@ function setupEventListeners() {
     cleanupFunctions.push(
       addListener(PAGE_ID, roomModalOverlayEl, 'click', (e) => {
         if (e.target === roomModalOverlayEl) {
-          closeRoomModal();
-        }
+        closeRoomModal();
+      }
       })
     );
   }
@@ -1600,7 +1600,7 @@ function setupStatusFilter() {
   // Toggle panel visibility
   cleanupFunctions.push(
     addButtonListener(statusBtnEl, PAGE_ID, (e) => {
-      e.stopPropagation();
+    e.stopPropagation();
       statusPanelEl.classList.toggle('visible');
     })
   );
@@ -1619,8 +1619,8 @@ function setupStatusFilter() {
     cleanupFunctions.push(
       addListener(PAGE_ID, radio, 'change', () => {
         statusPanelEl.classList.remove('visible');
-        currentPage = 1;
-        fetchQueue();
+      currentPage = 1;
+      fetchQueue();
       })
     );
   });
@@ -1651,7 +1651,7 @@ function setupDateRangeFilter() {
   // Toggle panel visibility
   cleanupFunctions.push(
     addButtonListener(dateRangeBtnEl, PAGE_ID, (e) => {
-      e.stopPropagation();
+    e.stopPropagation();
       dateRangePanelEl.classList.toggle('visible');
     })
   );
@@ -1675,8 +1675,8 @@ function setupDateRangeFilter() {
         
         if (startDate || endDate) {
           // Apply filters (you'll need to implement this based on your filter logic)
-          currentPage = 1;
-          fetchQueue();
+      currentPage = 1;
+      fetchQueue();
         }
       })
     );
@@ -1689,8 +1689,8 @@ function setupDateRangeFilter() {
         if (startDateInputEl) startDateInputEl.value = '';
         if (endDateInputEl) endDateInputEl.value = '';
         dateRangePanelEl.classList.remove('visible');
-        currentPage = 1;
-        fetchQueue();
+      currentPage = 1;
+      fetchQueue();
       })
     );
   }
