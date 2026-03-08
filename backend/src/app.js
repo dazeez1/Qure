@@ -68,10 +68,44 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Start auto-check-in scheduler (runs every 5 minutes)
+  if (process.env.ENABLE_AUTO_CHECKIN !== 'false') {
+    startAutoCheckInScheduler();
+  }
 });
+
+/**
+ * Start auto-check-in scheduler
+ * Runs every 5 minutes to automatically check in patients when appointment time arrives
+ */
+async function startAutoCheckInScheduler() {
+  try {
+    const { processAutoCheckIn } = await import('./services/autoCheckInService.js');
+    
+    // Run immediately on startup (for testing)
+    // processAutoCheckIn().catch(console.error);
+    
+    // Then run every 5 minutes
+    setInterval(async () => {
+      try {
+        const result = await processAutoCheckIn();
+        if (result.success) {
+          console.log(`[Auto-Check-In] Processed ${result.processed} appointments: ${result.successful} successful, ${result.errors} errors`);
+        }
+      } catch (error) {
+        console.error('[Auto-Check-In] Scheduler error:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    console.log('✅ Auto-check-in scheduler started (runs every 5 minutes)');
+  } catch (error) {
+    console.error('❌ Failed to start auto-check-in scheduler:', error);
+  }
+}
 
 export default app;
 

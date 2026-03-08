@@ -151,6 +151,7 @@ async function getCurrentQueue(patientId) {
       positionInQueue: entriesAhead + 1,
       status: queueEntry.status,
       department: queueEntry.department,
+      hospitalId: queueEntry.hospitalId, // Add hospitalId for queue status page
     };
   } catch (error) {
     console.error('Error getting current queue:', error);

@@ -343,7 +343,8 @@ function renderAppointmentDetails() {
   const patientMrnEl = document.getElementById('detail-patient-mrn');
 
   if (patientNameEl) {
-    patientNameEl.textContent = appointment.patient?.fullName || '-';
+    const fullName = appointment.patient?.fullName;
+    patientNameEl.textContent = fullName || 'Unknown Patient';
   }
   if (patientPhoneEl) {
     patientPhoneEl.textContent = appointment.patient?.phone || '-';
@@ -356,7 +357,6 @@ function renderAppointmentDetails() {
   const timeEl = document.getElementById('detail-time');
   const departmentEl = document.getElementById('detail-department');
   const doctorEl = document.getElementById('detail-doctor');
-  const notesEl = document.getElementById('detail-notes');
 
   if (timeEl) {
     timeEl.textContent = formatDateTime(appointment.appointmentDate);
@@ -378,14 +378,16 @@ function renderAppointmentDetails() {
     reasonEl.textContent = appointment.reason || '-';
   }
 
-  if (notesEl) {
-    notesEl.textContent = appointment.notes || '-';
-  }
-
-  // Notes section
+  // Notes section - show notes in the Notes section (removed duplicate from Appointment Details)
   const notesTextEl = document.getElementById('detail-notes-text');
   if (notesTextEl) {
-    notesTextEl.textContent = appointment.notes || 'No notes available.';
+    if (appointment.notes && appointment.notes.trim()) {
+      notesTextEl.textContent = appointment.notes;
+      notesTextEl.style.display = 'block';
+    } else {
+      notesTextEl.textContent = 'No notes available.';
+      notesTextEl.style.display = 'block';
+    }
   }
 
   // Determine appointment date relative to now

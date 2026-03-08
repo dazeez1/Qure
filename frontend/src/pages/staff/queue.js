@@ -10,6 +10,7 @@ import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { showConfirmModal } from '../../utils/modal.js';
 import { initPage, cleanupPage, addButtonListener, addListener, addScopedDocumentListener } from '../../utils/pageLifecycle.js';
+import { displayAvatar } from '../../utils/avatar.js';
 
 // State
 let queueData = [];
@@ -580,7 +581,7 @@ async function renderQueueTable() {
         </td>
         <td>
           <div class="patient-name-cell">
-            <div class="patient-avatar">${patientInitials}</div>
+            <div class="patient-avatar" id="table-avatar-${entry.id}">${patientInitials}</div>
             <span>${patientName}</span>
           </div>
         </td>
@@ -653,6 +654,18 @@ async function renderQueueTable() {
   });
 
   // Move dropdown functionality removed - use Waiting Area page instead
+
+  // Display avatars in table after DOM is ready
+  setTimeout(() => {
+    queueData.forEach(entry => {
+      const patient = entry.patient || {};
+      const patientName = patient.fullName || 'Unknown';
+      const avatarElement = document.getElementById(`table-avatar-${entry.id}`);
+      if (avatarElement) {
+        displayAvatar(avatarElement, patient.avatarUrl, patientName);
+      }
+    });
+  }, 0);
 
   // Attach priority change listeners (Admin/Primary only)
   if (isAdmin || isPrimary) {
@@ -774,6 +787,22 @@ function formatStatus(status) {
  */
 function getInitials(name) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+/**
+ * Calculate age from date of birth
+ */
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return null;
+  const birthDate = new Date(dateOfBirth);
+  if (isNaN(birthDate.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
 }
 
 // Remove select all functionality since checkbox is in sidebar
@@ -1469,6 +1498,9 @@ function showPatientDetails(entryId) {
   const patientName = patient.fullName || 'Unknown';
   const patientInitials = getInitials(patientName);
   const isSelected = selectedQueueEntries.has(entryId);
+  
+  // Only show gender (no age/dateOfBirth)
+  const genderDisplay = patient.gender || 'N/A';
 
   // Show sidebar and adjust main content
   const queueContent = document.querySelector('.queue-content');
@@ -1491,7 +1523,9 @@ function showPatientDetails(entryId) {
     // For non-completed entries, fetch wait time if not available
     let waitTimeDisplay = 'Estimated Wait: Calculating...';
     if (estimatedWaitMinutes !== null) {
-      if (minWaitMinutes !== null && maxWaitMinutes !== null && minWaitMinutes !== maxWaitMinutes) {
+      if (estimatedWaitMinutes === 0) {
+        waitTimeDisplay = 'Estimated Wait: Ready now';
+      } else if (minWaitMinutes !== null && maxWaitMinutes !== null && minWaitMinutes !== maxWaitMinutes) {
         waitTimeDisplay = `Estimated Wait: ${minWaitMinutes}-${maxWaitMinutes} mins`;
       } else {
         waitTimeDisplay = `Estimated Wait: ${Math.round(estimatedWaitMinutes)} mins`;
@@ -1509,24 +1543,27 @@ function showPatientDetails(entryId) {
 
   patientDetailsCard.innerHTML = `
     <div class="patient-details-header">
-      <div class="patient-details-avatar">${patientInitials}</div>
+      <div class="patient-details-avatar" id="sidebar-avatar-${entryId}">${patientInitials}</div>
       <div class="patient-details-name">${patientName}</div>
-      <div class="patient-details-info">${patient.age || 'N/A'}/${patient.gender || 'N/A'}</div>
+      <div class="patient-details-info">${genderDisplay}</div>
     </div>
     ${waitTimeSection}
     <div class="patient-details-section">
-      <div class="patient-details-section-title">Queue History</div>
+      <div class="patient-details-section-title">Appointment Details</div>
       <div class="patient-details-section-content">
-        Visit 1: ${new Date(entry.checkInTime).toLocaleDateString()}
-      </div>
-    </div>
-    <div class="patient-details-section">
-      <div class="patient-details-section-title">Notes</div>
-      <div class="patient-details-section-content">
-        ${entry.appointment?.reason || 'No notes available'}
+        ${entry.appointment?.reason ? `<div style="margin-bottom: 0.8rem;">${entry.appointment.reason}</div>` : ''}
+        <div style="color: var(--color-text-tertiary); font-size: 0.9rem;">
+          Checked in: ${new Date(entry.checkInTime).toLocaleDateString()} at ${new Date(entry.checkInTime).toLocaleTimeString()}
+        </div>
       </div>
     </div>
   `;
+  
+  // Display avatar in sidebar
+  const sidebarAvatarEl = document.getElementById(`sidebar-avatar-${entryId}`);
+  if (sidebarAvatarEl) {
+    displayAvatar(sidebarAvatarEl, patient.avatarUrl, patientName);
+  }
 
   // Fetch wait time if not completed
   // Always fetch if not available or cache is stale (older than 1 minute) to ensure fresh data
@@ -1826,13 +1863,13 @@ function startPolling() {
   // Use SSE for real-time wait time updates (preferred) or fallback to polling
   startWaitTimeSSE();
   
-  // Fallback polling every 30 seconds if SSE is not available
+  // Fallback polling every 15 seconds if SSE is not available
   // Only poll when page is visible
   waitTimePollingInterval = setInterval(() => {
     if (!document.hidden) {
       updateWaitTimes(); // Update wait times without full refresh
     }
-  }, 30000);
+  }, 15000); // 15 seconds
 }
 
 /**

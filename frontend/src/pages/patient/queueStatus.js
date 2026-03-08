@@ -46,6 +46,13 @@ async function getHospitalId() {
           if (appointments.length > 0 && appointments[0].hospital?.id) {
             return appointments[0].hospital.id;
           }
+          
+          // Also try to get from any appointment's hospitalId
+          for (const apt of appointments) {
+            if (apt.hospital?.id) {
+              return apt.hospital.id;
+            }
+          }
         }
       }
     } catch (error) {
@@ -95,10 +102,14 @@ function getStatusDisplay(status, estimatedWait) {
         text: 'Next',
       };
     case 'TRIAGE':
+      return {
+        class: 'waiting',
+        text: 'Processing',
+      };
     case 'WAITING':
       return {
         class: 'waiting',
-        text: estimatedWait ? formatWaitTime(estimatedWait) : 'Waiting',
+        text: 'Waiting',
       };
     default:
       return {
@@ -106,6 +117,22 @@ function getStatusDisplay(status, estimatedWait) {
         text: status,
       };
   }
+}
+
+/**
+ * Get waiting time display text
+ */
+function getWaitingTimeDisplay(status, estimatedWait) {
+  if (status === 'WAITING' && estimatedWait) {
+    return formatWaitTime(estimatedWait);
+  } else if (status === 'IN_CONSULTATION') {
+    return 'In Progress';
+  } else if (status === 'CALLED') {
+    return 'Next';
+  } else if (status === 'TRIAGE') {
+    return 'Processing';
+  }
+  return '-';
 }
 
 /**
@@ -119,7 +146,7 @@ async function loadQueuePreview() {
       const tbody = document.getElementById('queue-table-body');
       tbody.innerHTML = `
         <tr>
-          <td colspan="3" class="empty-state">
+          <td colspan="4" class="empty-state">
             Please provide a hospitalId in the URL (e.g., ?hospitalId=xxx) or log in to view your hospital's queue.
           </td>
         </tr>
@@ -145,7 +172,7 @@ async function loadQueuePreview() {
     const tbody = document.getElementById('queue-table-body');
     tbody.innerHTML = `
       <tr>
-        <td colspan="3" class="empty-state">
+        <td colspan="4" class="empty-state">
           Failed to load queue data. Please try again.
         </td>
       </tr>
@@ -163,7 +190,7 @@ function renderQueueTable(queueEntries) {
   if (queueEntries.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="3" class="empty-state">No active queue entries</td>
+        <td colspan="4" class="empty-state">No active queue entries</td>
       </tr>
     `;
     return;
@@ -172,6 +199,7 @@ function renderQueueTable(queueEntries) {
   tbody.innerHTML = queueEntries
     .map((entry, index) => {
       const statusDisplay = getStatusDisplay(entry.status, entry.estimatedWait);
+      const waitingTimeDisplay = getWaitingTimeDisplay(entry.status, entry.estimatedWait);
       // Check if this entry belongs to the current patient
       const isYourPosition = currentPatientId && entry.patientId === currentPatientId;
       
@@ -184,12 +212,11 @@ function renderQueueTable(queueEntries) {
             </div>
           </td>
           <td data-label="Service">${entry.departmentName}</td>
+          <td data-label="Waiting Time">
+            <span class="wait-time-cell ${entry.status === 'WAITING' && entry.estimatedWait ? 'has-wait-time' : ''}">${waitingTimeDisplay}</span>
+          </td>
           <td data-label="Status">
-            ${entry.status === 'WAITING' && entry.estimatedWait ? (
-              `<span class="wait-time">${statusDisplay.text}</span>`
-            ) : (
-              `<span class="status-badge ${statusDisplay.class}">${statusDisplay.text}</span>`
-            )}
+            <span class="status-badge ${statusDisplay.class}">${statusDisplay.text}</span>
           </td>
         </tr>
       `;

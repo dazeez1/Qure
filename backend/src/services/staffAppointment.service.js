@@ -68,11 +68,12 @@ async function getStaffAppointments({
     };
   }
 
-  // Count total
-  const totalCount = await prisma.appointment.count({ where });
+  // Define active and inactive statuses
+  const activeStatuses = ['BOOKED', 'CHECKED_IN', 'MOVED_TO_QUEUE', 'IN_CONSULTATION'];
+  const inactiveStatuses = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
-  // Fetch paginated
-  const appointments = await prisma.appointment.findMany({
+  // Fetch all appointments matching filters (without pagination for proper sorting)
+  const allAppointments = await prisma.appointment.findMany({
     where,
     include: {
       patient: {
@@ -93,12 +94,39 @@ async function getStaffAppointments({
         },
       },
     },
-    orderBy: {
-      appointmentDate: 'asc',
-    },
-    skip: (page - 1) * limit,
-    take: limit,
   });
+
+  // Split appointments into active and inactive groups
+  const activeAppointments = allAppointments.filter((apt) =>
+    activeStatuses.includes(apt.status)
+  );
+  const inactiveAppointments = allAppointments.filter((apt) =>
+    inactiveStatuses.includes(apt.status)
+  );
+
+  // Sort active appointments by appointmentDate ASC (earliest first)
+  activeAppointments.sort((a, b) => {
+    const dateA = new Date(a.appointmentDate).getTime();
+    const dateB = new Date(b.appointmentDate).getTime();
+    return dateA - dateB;
+  });
+
+  // Sort inactive appointments by appointmentDate DESC (most recent first)
+  inactiveAppointments.sort((a, b) => {
+    const dateA = new Date(a.appointmentDate).getTime();
+    const dateB = new Date(b.appointmentDate).getTime();
+    return dateB - dateA;
+  });
+
+  // Merge: active first, then inactive
+  const sortedAppointments = [...activeAppointments, ...inactiveAppointments];
+
+  // Count total
+  const totalCount = sortedAppointments.length;
+
+  // Apply pagination to merged result
+  const skip = (page - 1) * limit;
+  const appointments = sortedAppointments.slice(skip, skip + limit);
 
   // Return structured response
   return {

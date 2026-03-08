@@ -554,7 +554,7 @@ function createPatientItem(entry) {
     <input type="checkbox" class="patient-item-checkbox" data-entry-id="${entry.id}" ${isSelected ? 'checked' : ''}>
     <div class="patient-item-info">
       <div class="patient-item-name">${escapeHtml(patientName)}</div>
-      <div class="patient-item-wait">- ${waitTimeText}</div>
+      <div class="patient-item-wait">${waitTimeText}</div>
       ${waitingAreaInfo}
     </div>
     <div class="patient-item-actions">

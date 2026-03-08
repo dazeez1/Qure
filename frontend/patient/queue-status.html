@@ -51,6 +51,12 @@
         display: flex;
         align-items: center;
         gap: 0.8rem;
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+
+      .logo:hover {
+        opacity: 0.8;
       }
 
       .logo-icon {
@@ -248,10 +254,14 @@
 
       .queue-table th {
         padding: 1.6rem 2rem;
-        text-align: left;
+        text-align: center;
         font-size: 1rem;
         font-weight: 600;
         color: var(--color-text-primary);
+      }
+
+      .queue-table th:first-child {
+        text-align: left;
       }
 
       .queue-table tbody tr {
@@ -276,11 +286,17 @@
         padding: 1.6rem 2rem;
         font-size: 1rem;
         color: var(--color-text-primary);
+        text-align: center;
+      }
+
+      .queue-table td:first-child {
+        text-align: left;
       }
 
       .patient-name-cell {
         display: flex;
         align-items: center;
+        justify-content: flex-start;
         gap: 0.8rem;
       }
 
@@ -318,10 +334,16 @@
         color: var(--color-text-primary);
       }
 
-      .wait-time {
+      /* Style wait time when it shows actual time (not "-" or status text) */
+      .wait-time-cell {
         font-size: 1rem;
         color: var(--color-text-primary);
         font-weight: 500;
+      }
+
+      .wait-time-cell.has-wait-time {
+        color: var(--color-primary-blue);
+        font-weight: 600;
       }
 
       /* Empty State */
@@ -495,7 +517,7 @@
         .queue-table tbody td {
           display: block;
           padding: 0.8rem 0;
-          text-align: left;
+          text-align: center;
           border: none;
           font-size: 1rem;
         }
@@ -511,6 +533,7 @@
 
         .queue-table tbody td:first-child {
           padding-top: 0;
+          text-align: left;
         }
 
         .queue-table tbody td:last-child {
@@ -524,12 +547,12 @@
         }
 
         .status-badge,
-        .wait-time {
+        .wait-time-cell {
           font-size: 1rem;
           min-width: auto;
           width: 100%;
           display: block;
-          text-align: left;
+          text-align: center;
         }
 
         .footer {
@@ -593,10 +616,10 @@
     <!-- Header -->
     <header class="header">
       <div class="header-content">
-        <div class="logo">
+        <a href="dashboard.html" class="logo" style="text-decoration: none; color: inherit;">
           <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" />
           <span class="logo-text">Qure</span>
-        </div>
+        </a>
         <div class="header-right">
           <button class="hamburger-menu" id="hamburger-menu" aria-label="Toggle menu">
             <span></span>
@@ -632,12 +655,13 @@
             <tr>
               <th>Patient</th>
               <th>Service</th>
+              <th>Waiting Time</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody id="queue-table-body">
             <tr>
-              <td colspan="3" class="loading-state">Loading queue data...</td>
+              <td colspan="4" class="loading-state">Loading queue data...</td>
             </tr>
           </tbody>
         </table>
@@ -659,10 +683,10 @@
     <!-- Mobile Navigation -->
     <div class="mobile-nav" id="mobile-nav">
       <div class="mobile-nav-header">
-        <div class="mobile-nav-logo">
+        <a href="dashboard.html" class="mobile-nav-logo" style="text-decoration: none; color: inherit;">
           <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" style="filter: brightness(0) invert(1);" />
           <span class="logo-text" style="color: #fff;">Qure</span>
-        </div>
+        </a>
       </div>
       <nav>
         <ul class="mobile-nav-links">

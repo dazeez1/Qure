@@ -880,7 +880,10 @@ export const checkInToQueueStaff = async (req, res, next) => {
  *   - Doctor: Returns only assigned queue entries
  *   - Admin: Returns hospital-wide queue entries (can filter by departmentId)
  * 
- * Order: priority DESC, sequenceNumber ASC
+ * Order: Active entries (WAITING, TRIAGE, CALLED, IN_CONSULTATION) first,
+ *       sorted by priority DESC, then sequenceNumber DESC.
+ *       Inactive entries (COMPLETED, CANCELLED, NO_SHOW) at bottom,
+ *       sorted by checkInTime DESC.
  * 
  * Requires: STAFF role
  */
@@ -964,6 +967,8 @@ export const getStaffQueue = async (req, res, next) => {
     }
 
     // Status filter - validate against enum
+    // Note: We'll handle status filtering after fetching to allow active/inactive splitting
+    let statusFilter = null;
     if (status) {
       const statusArray = status.split(',').map(s => s.trim().toUpperCase());
       // Use enum values for validation (not raw strings)
@@ -971,16 +976,23 @@ export const getStaffQueue = async (req, res, next) => {
       const filteredStatuses = statusArray.filter(s => validStatuses.includes(s));
       
       if (filteredStatuses.length > 0) {
-        where.status = { in: filteredStatuses };
+        statusFilter = filteredStatuses;
       } else if (statusArray.length > 0) {
         // If all statuses invalid, return empty result
-        where.status = { in: [] };
+        statusFilter = [];
       }
     } else if (isDoctor && !isPrimary) {
       // Default for Doctor (non-primary): only active statuses
-      where.status = {
-        in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
-      };
+      statusFilter = ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'];
+    }
+    
+    // Apply status filter to where clause if provided
+    if (statusFilter !== null) {
+      if (statusFilter.length === 0) {
+        where.status = { in: [] }; // Empty result
+      } else {
+        where.status = { in: statusFilter };
+      }
     }
 
     // Priority filter - validate against enum
@@ -1091,13 +1103,15 @@ export const getStaffQueue = async (req, res, next) => {
       }
     }
 
+    // Define active and inactive statuses
+    const activeStatuses = ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'];
+    const inactiveStatuses = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
+
     // Use transaction for findMany + count
     const result = await prisma.$transaction(async (tx) => {
-      // Get total count
-      const totalCount = await tx.queueEntry.count({ where });
-
-      // Get queue entries with pagination
-      const queueEntries = await tx.queueEntry.findMany({
+      // Fetch all queue entries matching filters (without pagination for proper sorting)
+      // We'll split into active/inactive after fetching
+      const allQueueEntries = await tx.queueEntry.findMany({
         where,
         include: {
           patient: {
@@ -1106,6 +1120,9 @@ export const getStaffQueue = async (req, res, next) => {
               fullName: true,
               email: true,
               phone: true,
+              dateOfBirth: true,
+              gender: true,
+              avatarUrl: true,
             },
           },
           appointment: {
@@ -1142,16 +1159,48 @@ export const getStaffQueue = async (req, res, next) => {
             },
           },
         },
-        orderBy: [
-          { priority: 'desc' }, // Priority DESC
-          { sequenceNumber: 'asc' }, // SequenceNumber ASC
-        ],
-        skip,
-        take: limitNum,
       });
 
+      // Split entries into active and inactive groups
+      const activeQueueEntries = allQueueEntries.filter((entry) =>
+        activeStatuses.includes(entry.status)
+      );
+      const inactiveQueueEntries = allQueueEntries.filter((entry) =>
+        inactiveStatuses.includes(entry.status)
+      );
+
+      // Sort active entries: priority DESC, then sequenceNumber DESC
+      activeQueueEntries.sort((a, b) => {
+        const priorityOrder = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
+        const priorityA = priorityOrder[a.priority] || 2;
+        const priorityB = priorityOrder[b.priority] || 2;
+        
+        if (priorityA !== priorityB) {
+          return priorityB - priorityA; // DESC
+        }
+        
+        // Same priority - sort by sequenceNumber DESC (newest first)
+        return (b.sequenceNumber || 0) - (a.sequenceNumber || 0);
+      });
+
+      // Sort inactive entries: checkInTime DESC (most recent first)
+      inactiveQueueEntries.sort((a, b) => {
+        const timeA = new Date(a.checkInTime || 0).getTime();
+        const timeB = new Date(b.checkInTime || 0).getTime();
+        return timeB - timeA; // DESC
+      });
+
+      // Merge: active first, then inactive
+      const sortedQueueEntries = [...activeQueueEntries, ...inactiveQueueEntries];
+
+      // Get total count
+      const totalCount = sortedQueueEntries.length;
+
+      // Apply pagination to merged result
+      const paginatedQueueEntries = sortedQueueEntries.slice(skip, skip + limitNum);
+
       return {
-        queueEntries,
+        queueEntries: paginatedQueueEntries,
         totalCount,
       };
     });
@@ -1487,6 +1536,9 @@ export const updateQueueEntryStatus = async (req, res, next) => {
               fullName: true,
               email: true,
               phone: true,
+              dateOfBirth: true,
+              gender: true,
+              avatarUrl: true,
             },
           },
           appointment: {
@@ -3598,20 +3650,26 @@ export const getQueueEntryWaitTime = async (req, res, next) => {
 
     let estimatedWaitMinutes = null;
 
-    if (activeDoctors > 0) {
-      // Count waiting queue entries (WAITING, TRIAGE, CALLED)
-      const waitingCount = await prisma.queueEntry.count({
-        where: {
-          hospitalId: queueEntry.hospitalId,
-          departmentId: queueEntry.departmentId,
-          status: {
-            in: ['WAITING', 'TRIAGE', 'CALLED'],
-          },
+    // Count waiting queue entries (WAITING, TRIAGE, CALLED) - needed for both calculation and variance
+    const waitingCount = await prisma.queueEntry.count({
+      where: {
+        hospitalId: queueEntry.hospitalId,
+        departmentId: queueEntry.departmentId,
+        status: {
+          in: ['WAITING', 'TRIAGE', 'CALLED'],
         },
-      });
+      },
+    });
 
+    if (activeDoctors > 0 && waitingCount > 0) {
       const batches = Math.ceil(waitingCount / activeDoctors);
       estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
+    } else if (activeDoctors === 0) {
+      // No active doctors - wait time cannot be calculated
+      estimatedWaitMinutes = null;
+    } else if (waitingCount === 0) {
+      // No one waiting - immediate service
+      estimatedWaitMinutes = 0;
     }
 
     // Monitor wait time changes for this queue entry
