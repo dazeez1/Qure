@@ -619,9 +619,49 @@ if (emailToggle) {
   });
 }
 
+/**
+ * Initialize mobile navigation
+ */
+function initMobileNav() {
+  const hamburgerMenu = document.getElementById('hamburger-menu');
+  const mobileNav = document.getElementById('mobile-nav');
+
+  if (hamburgerMenu && mobileNav) {
+    hamburgerMenu.addEventListener('click', () => {
+      hamburgerMenu.classList.toggle('active');
+      mobileNav.classList.toggle('active');
+    });
+
+    // Close mobile nav when clicking on a link
+    const mobileNavLinks = mobileNav.querySelectorAll('a');
+    mobileNavLinks.forEach((link) => {
+      link.addEventListener('click', () => {
+        hamburgerMenu.classList.remove('active');
+        mobileNav.classList.remove('active');
+      });
+    });
+
+    // Close mobile nav when clicking outside
+    document.addEventListener('click', (e) => {
+      if (
+        !hamburgerMenu.contains(e.target) &&
+        !mobileNav.contains(e.target) &&
+        mobileNav.classList.contains('active')
+      ) {
+        hamburgerMenu.classList.remove('active');
+        mobileNav.classList.remove('active');
+      }
+    });
+  }
+}
+
 // Load dashboard on page load
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', loadDashboard);
+  document.addEventListener('DOMContentLoaded', () => {
+    initMobileNav();
+    loadDashboard();
+  });
 } else {
+  initMobileNav();
   loadDashboard();
 }
