@@ -6,8 +6,15 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/((?!api|_next|404\\.html|index\\.html|register\\.html|login\\.html|forgot-password\\.html|reset-password\\.html|accept-invite\\.html|patient|staff|public|.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)).*)",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": "text/html"
+        }
+      ]
     }
   ],
   "headers": [
