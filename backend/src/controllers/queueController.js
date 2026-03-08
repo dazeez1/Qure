@@ -104,20 +104,32 @@ export const getQueuePreview = async (req, res, next) => {
 
         // Calculate estimatedWait only for WAITING status
         let estimatedWait = null;
-        if (entry.status === 'WAITING') {
-          // Count waiting entries in the same department (WAITING, TRIAGE, CALLED)
-          const waitingCount = await prisma.queueEntry.count({
+        let waitTimeDisplay = null;
+        
+        if (entry.status === 'IN_CONSULTATION') {
+          waitTimeDisplay = 'Now Serving';
+        } else if (entry.status === 'CALLED') {
+          waitTimeDisplay = 'Next';
+        } else if (entry.status === 'WAITING' || entry.status === 'TRIAGE') {
+          // Find the lowest sequenceNumber currently being served (IN_CONSULTATION)
+          const currentServingEntry = await prisma.queueEntry.findFirst({
             where: {
               hospitalId: hospitalId,
               departmentId: entry.departmentId,
-              status: {
-                in: ['WAITING', 'TRIAGE', 'CALLED'],
-              },
-              sequenceNumber: {
-                lte: entry.sequenceNumber, // Entries ahead or at same position
-              },
+              status: 'IN_CONSULTATION',
+            },
+            orderBy: {
+              sequenceNumber: 'asc',
+            },
+            select: {
+              sequenceNumber: true,
             },
           });
+
+          const currentServingSequence = currentServingEntry?.sequenceNumber || 0;
+          
+          // Ensure position is never negative
+          const position = Math.max(0, entry.sequenceNumber - currentServingSequence);
 
           // Count active doctors with capacity in the department
           const availableDoctors = await prisma.user.findMany({
@@ -143,9 +155,20 @@ export const getQueuePreview = async (req, res, next) => {
 
           const activeDoctorsWithCapacity = doctorsWithCapacity.length;
 
-          // Calculate estimatedWait: ceil(waitingCount / activeDoctorsWithCapacity) * 15
-          if (activeDoctorsWithCapacity > 0) {
-            estimatedWait = Math.ceil(waitingCount / activeDoctorsWithCapacity) * 15;
+          // Calculate estimatedWait: ceil(position / activeDoctorsWithCapacity) * 15
+          if (activeDoctorsWithCapacity > 0 && position > 0) {
+            estimatedWait = Math.ceil(position / activeDoctorsWithCapacity) * 15;
+            
+            // Cap extremely large wait times (>120 mins)
+            if (estimatedWait > 120) {
+              waitTimeDisplay = '>120 mins';
+            } else {
+              waitTimeDisplay = `${estimatedWait} mins`;
+            }
+          } else if (position === 0) {
+            waitTimeDisplay = 'Ready now';
+          } else {
+            waitTimeDisplay = 'Calculating...';
           }
         }
 
@@ -156,6 +179,7 @@ export const getQueuePreview = async (req, res, next) => {
           departmentName: entry.department.name,
           status: entry.status,
           estimatedWait: estimatedWait, // Only for WAITING, null otherwise
+          waitTimeDisplay: waitTimeDisplay, // Formatted wait time display
         };
       })
     );
@@ -1190,14 +1214,110 @@ export const getStaffQueue = async (req, res, next) => {
         return timeB - timeA; // DESC
       });
 
-      // Merge: active first, then inactive
-      const sortedQueueEntries = [...activeQueueEntries, ...inactiveQueueEntries];
+      // Only return active entries (filter out COMPLETED, CANCELLED, NO_SHOW)
+      // Queue view should show only active flow
+      const sortedQueueEntries = activeQueueEntries;
 
-      // Get total count
+      // Get total count (only active entries)
       const totalCount = sortedQueueEntries.length;
 
+      // Group entries by department for efficient wait time calculation
+      const entriesByDepartment = new Map();
+      sortedQueueEntries.forEach(entry => {
+        const key = `${entry.hospitalId}-${entry.departmentId}`;
+        if (!entriesByDepartment.has(key)) {
+          entriesByDepartment.set(key, []);
+        }
+        entriesByDepartment.get(key).push(entry);
+      });
+
+      // Calculate wait time for all entries efficiently
+      const entriesWithWaitTime = await Promise.all(
+        Array.from(entriesByDepartment.entries()).flatMap(async ([key, entries]) => {
+          const firstEntry = entries[0];
+          const hospitalId = firstEntry.hospitalId;
+          const departmentId = firstEntry.departmentId;
+
+          // Find the lowest sequenceNumber currently being served (IN_CONSULTATION) - once per department
+          const currentServingEntry = await tx.queueEntry.findFirst({
+            where: {
+              hospitalId,
+              departmentId,
+              status: 'IN_CONSULTATION',
+            },
+            orderBy: {
+              sequenceNumber: 'asc',
+            },
+            select: {
+              sequenceNumber: true,
+            },
+          });
+
+          const currentServingSequence = currentServingEntry?.sequenceNumber || 0;
+
+          // Count available doctors with capacity - once per department
+          const availableDoctors = await tx.user.findMany({
+            where: {
+              hospitalId,
+              departmentId,
+              role: 'STAFF',
+              staffRole: 'DOCTOR',
+              isActive: true,
+              isAvailable: true,
+            },
+            select: {
+              id: true,
+              currentActivePatients: true,
+              maxConcurrentPatients: true,
+            },
+          });
+
+          const doctorsWithCapacity = availableDoctors.filter(
+            (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
+          );
+          const availableDoctorsCount = doctorsWithCapacity.length;
+
+          // Calculate wait time for each entry in this department
+          return entries.map(entry => {
+            let waitTimeDisplay = null;
+            let waitTimeMinutes = null;
+
+            if (entry.status === 'IN_CONSULTATION') {
+              waitTimeDisplay = 'Now Serving';
+            } else if (entry.status === 'CALLED') {
+              waitTimeDisplay = 'Next';
+            } else if (entry.status === 'WAITING' || entry.status === 'TRIAGE') {
+              // Calculate wait time based on queue position
+              // Ensure position is never negative
+              const position = Math.max(0, entry.sequenceNumber - currentServingSequence);
+
+              if (availableDoctorsCount > 0 && position > 0) {
+                waitTimeMinutes = Math.ceil(position / availableDoctorsCount) * 15;
+                
+                // Cap extremely large wait times (>120 mins)
+                if (waitTimeMinutes > 120) {
+                  waitTimeDisplay = '>120 mins';
+                } else {
+                  waitTimeDisplay = `${waitTimeMinutes} mins`;
+                }
+              } else if (position === 0) {
+                waitTimeDisplay = 'Ready now';
+              } else {
+                waitTimeDisplay = 'Calculating...';
+              }
+            }
+
+            return {
+              ...entry,
+              waitTimeDisplay,
+              waitTimeMinutes,
+            };
+          });
+        })
+      ).then(results => results.flat());
+
       // Apply pagination to merged result
-      const paginatedQueueEntries = sortedQueueEntries.slice(skip, skip + limitNum);
+      const paginatedQueueEntries = entriesWithWaitTime.slice(skip, skip + limitNum);
 
       return {
         queueEntries: paginatedQueueEntries,

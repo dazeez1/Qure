@@ -409,9 +409,9 @@ async function fetchQueueEntries(departmentId = '', search = '') {
     const query = new URLSearchParams();
     if (departmentId) query.append('departmentId', departmentId);
     if (search) query.append('search', search);
-    // Add pagination - limit to 8 for dashboard preview
+    // Add pagination - limit to 7 for dashboard preview
     query.append('page', '1');
-    query.append('limit', '8');
+    query.append('limit', '7');
 
     const queryString = query.toString();
     const endpoint = `/staff/queue${queryString ? `?${queryString}` : ''}`;
@@ -470,10 +470,17 @@ function renderQueueTable(data) {
     const ticketNumber = entry.ticketNumber || '-';
     const status = entry.status || 'WAITING';
     
-    // Calculate wait time (minutes since checkInTime)
-    const waitTime = entry.checkInTime 
-      ? Math.floor((new Date() - new Date(entry.checkInTime)) / 60000)
-      : 0;
+    // Use backend-calculated wait time (not elapsed time)
+    let waitTimeDisplay = '-';
+    if (entry.waitTimeDisplay) {
+      waitTimeDisplay = entry.waitTimeDisplay;
+    } else if (status === 'IN_CONSULTATION') {
+      waitTimeDisplay = 'Now Serving';
+    } else if (status === 'CALLED') {
+      waitTimeDisplay = 'Next';
+    } else if (status === 'WAITING' || status === 'TRIAGE') {
+      waitTimeDisplay = 'Calculating...';
+    }
 
     // Status badge styling
     const statusClass = status.toLowerCase().replace('_', '-');
@@ -485,7 +492,7 @@ function renderQueueTable(data) {
         <td>${escapeHtml(ticketNumber)}</td>
         <td>${escapeHtml(departmentName)}</td>
         <td><span class="status-badge status-${statusClass}">${escapeHtml(statusLabel)}</span></td>
-        <td>${waitTime} mins</td>
+        <td>${escapeHtml(waitTimeDisplay)}</td>
       </tr>
     `;
   }).join('');

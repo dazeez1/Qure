@@ -55,23 +55,23 @@
             <div style="padding: 0.8rem 0;">
               <label style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; cursor: pointer; font-size: 1.2rem;">
                 <input type="radio" name="queue-status" value="" id="status-all" checked style="width: 1.6rem; height: 1.6rem;">
-                <span>All Statuses</span>
+                <span>All Active</span>
               </label>
               <label style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; cursor: pointer; font-size: 1.2rem;">
-                <input type="radio" name="queue-status" value="WAITING,TRIAGE,CALLED,IN_CONSULTATION" id="status-active" style="width: 1.6rem; height: 1.6rem;">
-                <span>Active Only</span>
+                <input type="radio" name="queue-status" value="WAITING" id="status-waiting" style="width: 1.6rem; height: 1.6rem;">
+                <span>Waiting</span>
               </label>
               <label style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; cursor: pointer; font-size: 1.2rem;">
-                <input type="radio" name="queue-status" value="COMPLETED" id="status-completed" style="width: 1.6rem; height: 1.6rem;">
-                <span>Completed</span>
+                <input type="radio" name="queue-status" value="TRIAGE" id="status-triage" style="width: 1.6rem; height: 1.6rem;">
+                <span>Triage</span>
               </label>
               <label style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; cursor: pointer; font-size: 1.2rem;">
-                <input type="radio" name="queue-status" value="CANCELLED" id="status-cancelled" style="width: 1.6rem; height: 1.6rem;">
-                <span>Cancelled</span>
+                <input type="radio" name="queue-status" value="CALLED" id="status-called" style="width: 1.6rem; height: 1.6rem;">
+                <span>Called</span>
               </label>
               <label style="display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem 0; cursor: pointer; font-size: 1.2rem;">
-                <input type="radio" name="queue-status" value="NO_SHOW" id="status-no-show" style="width: 1.6rem; height: 1.6rem;">
-                <span>No-Show</span>
+                <input type="radio" name="queue-status" value="IN_CONSULTATION" id="status-consultation" style="width: 1.6rem; height: 1.6rem;">
+                <span>In Consultation</span>
               </label>
             </div>
           </div>
@@ -111,14 +111,15 @@
           <th>Patient Name</th>
           <th>Ticket #</th>
           <th>Status</th>
-              <th>Priority</th>
+          <th>Wait Time</th>
+          <th>Priority</th>
           <th>Assigned Room</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody id="queue-table-body">
         <tr>
-          <td colspan="7" class="loading-message">Loading queue data...</td>
+          <td colspan="8" class="loading-message">Loading queue data...</td>
         </tr>
       </tbody>
     </table>

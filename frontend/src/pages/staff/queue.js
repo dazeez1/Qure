@@ -545,7 +545,7 @@ async function renderQueueTable() {
     
     queueTableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="empty-state">${emptyMessage}</td>
+        <td colspan="8" class="empty-state">${emptyMessage}</td>
       </tr>
     `;
     return;
@@ -587,7 +587,10 @@ async function renderQueueTable() {
         </td>
         <td>${ticketNumber}</td>
         <td>
-          <span class="status-badge ${statusClass}">${formatStatus(status)}</span>
+          ${getStatusBadge(status)}
+        </td>
+        <td>
+          ${getWaitTimeDisplay(entry)}
         </td>
         <td>
           ${(isAdmin || isPrimary) ? `
@@ -775,6 +778,61 @@ function canUpdateStatus(entry) {
 /**
  * Format status for display
  */
+/**
+ * Get status badge with color coding
+ * Green for "Now Serving", Blue for "Next", Gray for "Waiting"
+ */
+function getStatusBadge(status) {
+  const statusUpper = (status || '').toUpperCase();
+  
+  if (statusUpper === 'IN_CONSULTATION') {
+    return '<span class="status-badge now-serving" style="background-color: #10b981; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 1.2rem; font-weight: 600;">Now Serving</span>';
+  } else if (statusUpper === 'CALLED') {
+    return '<span class="status-badge next" style="background-color: #3b82f6; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 1.2rem; font-weight: 600;">Next</span>';
+  } else if (statusUpper === 'WAITING' || statusUpper === 'TRIAGE') {
+    return '<span class="status-badge waiting" style="background-color: #6b7280; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 1.2rem; font-weight: 600;">Waiting</span>';
+  } else {
+    return `<span class="status-badge ${status.toLowerCase().replace('_', '-')}">${formatStatus(status)}</span>`;
+  }
+}
+
+/**
+ * Get wait time display
+ */
+function getWaitTimeDisplay(entry) {
+  if (!entry) return '-';
+  
+  const status = (entry.status || '').toUpperCase();
+  
+  // Use backend-calculated wait time if available
+  if (entry.waitTimeDisplay) {
+    // Cap display for extremely large wait times (should already be handled by backend, but double-check)
+    let displayText = entry.waitTimeDisplay;
+    if (entry.waitTimeMinutes !== null && entry.waitTimeMinutes !== undefined && entry.waitTimeMinutes > 120) {
+      displayText = '>120 mins';
+    }
+    
+    if (status === 'IN_CONSULTATION') {
+      return '<span style="color: #10b981; font-weight: 600;">Now Serving</span>';
+    } else if (status === 'CALLED') {
+      return '<span style="color: #3b82f6; font-weight: 600;">Next</span>';
+    } else {
+      return `<span style="color: #6b7280; font-weight: 500;">${displayText}</span>`;
+    }
+  }
+  
+  // Fallback display based on status
+  if (status === 'IN_CONSULTATION') {
+    return '<span style="color: #10b981; font-weight: 600;">Now Serving</span>';
+  } else if (status === 'CALLED') {
+    return '<span style="color: #3b82f6; font-weight: 600;">Next</span>';
+  } else if (status === 'WAITING' || status === 'TRIAGE') {
+    return '<span style="color: #6b7280; font-weight: 500;">Calculating...</span>';
+  }
+  
+  return '-';
+}
+
 function formatStatus(status) {
   return status.replace('_', ' ').toLowerCase()
     .split(' ')

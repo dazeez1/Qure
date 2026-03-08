@@ -113,9 +113,29 @@ async function getCurrentQueue(patientId) {
       },
     });
 
-    // Calculate estimated wait time
-    // Get active doctors in the department
-    const activeDoctors = await prisma.user.count({
+    // Calculate estimated wait time based on queue position (not elapsed time)
+    // Find the lowest sequenceNumber currently being served (IN_CONSULTATION)
+    const currentServingEntry = await prisma.queueEntry.findFirst({
+      where: {
+        hospitalId: queueEntry.hospitalId,
+        departmentId: queueEntry.departmentId,
+        status: 'IN_CONSULTATION',
+      },
+      orderBy: {
+        sequenceNumber: 'asc',
+      },
+      select: {
+        sequenceNumber: true,
+      },
+    });
+
+    const currentServingSequence = currentServingEntry?.sequenceNumber || 0;
+    
+    // Ensure position is never negative
+    const position = Math.max(0, queueEntry.sequenceNumber - currentServingSequence);
+
+    // Get active doctors with capacity in the department
+    const availableDoctors = await prisma.user.findMany({
       where: {
         hospitalId: queueEntry.hospitalId,
         departmentId: queueEntry.departmentId,
@@ -124,7 +144,19 @@ async function getCurrentQueue(patientId) {
         isActive: true,
         isAvailable: true,
       },
+      select: {
+        id: true,
+        currentActivePatients: true,
+        maxConcurrentPatients: true,
+      },
     });
+
+    // Filter doctors with capacity
+    const doctorsWithCapacity = availableDoctors.filter(
+      (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
+    );
+
+    const activeDoctorsCount = doctorsWithCapacity.length;
 
     // Get department's average consultation time (default 15 minutes)
     const department = await prisma.department.findUnique({
@@ -139,16 +171,43 @@ async function getCurrentQueue(patientId) {
                                 department?.defaultConsultationTimeMinutes || 
                                 15;
 
-    // Estimate: (entries ahead / active doctors) * avg consultation time
+    // Estimate: ceil(position / availableDoctors) * 15
+    // Cap extremely large wait times (>120 mins)
     let estimatedWaitMinutes = null;
-    if (activeDoctors > 0) {
-      estimatedWaitMinutes = Math.ceil(entriesAhead / activeDoctors) * avgConsultationTime;
+    if (activeDoctorsCount > 0 && position > 0) {
+      estimatedWaitMinutes = Math.ceil(position / activeDoctorsCount) * avgConsultationTime;
+      
+      // Cap wait times >120 mins
+      if (estimatedWaitMinutes > 120) {
+        estimatedWaitMinutes = 121; // Use 121 to indicate ">120 mins" in frontend
+      }
+    } else if (position === 0) {
+      estimatedWaitMinutes = 0; // Ready now
+    }
+
+    // Format wait time display
+    let waitTimeDisplay = null;
+    if (queueEntry.status === 'IN_CONSULTATION') {
+      waitTimeDisplay = 'Now Serving';
+    } else if (queueEntry.status === 'CALLED') {
+      waitTimeDisplay = 'Next';
+    } else if (estimatedWaitMinutes !== null) {
+      if (estimatedWaitMinutes === 0) {
+        waitTimeDisplay = 'Ready now';
+      } else if (estimatedWaitMinutes > 120) {
+        waitTimeDisplay = '>120 mins';
+      } else {
+        waitTimeDisplay = `${estimatedWaitMinutes} mins`;
+      }
+    } else {
+      waitTimeDisplay = 'Calculating...';
     }
 
     return {
       ticketNumber: queueEntry.ticketNumber,
       estimatedWaitMinutes,
-      positionInQueue: entriesAhead + 1,
+      waitTimeDisplay, // Formatted wait time display
+      positionInQueue: position + 1, // Use position (never negative) + 1
       status: queueEntry.status,
       department: queueEntry.department,
       hospitalId: queueEntry.hospitalId, // Add hospitalId for queue status page

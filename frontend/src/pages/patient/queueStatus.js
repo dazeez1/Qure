@@ -122,8 +122,18 @@ function getStatusDisplay(status, estimatedWait) {
 /**
  * Get waiting time display text
  */
-function getWaitingTimeDisplay(status, estimatedWait) {
+function getWaitingTimeDisplay(status, estimatedWait, waitTimeDisplay) {
+  // Use backend-calculated waitTimeDisplay if available
+  if (waitTimeDisplay) {
+    return waitTimeDisplay;
+  }
+  
+  // Fallback to estimatedWait if available
   if (status === 'WAITING' && estimatedWait) {
+    // Cap extremely large wait times (>120 mins)
+    if (estimatedWait > 120) {
+      return '>120 mins';
+    }
     return formatWaitTime(estimatedWait);
   } else if (status === 'IN_CONSULTATION') {
     return 'In Progress';
@@ -199,7 +209,7 @@ function renderQueueTable(queueEntries) {
   tbody.innerHTML = queueEntries
     .map((entry, index) => {
       const statusDisplay = getStatusDisplay(entry.status, entry.estimatedWait);
-      const waitingTimeDisplay = getWaitingTimeDisplay(entry.status, entry.estimatedWait);
+      const waitingTimeDisplay = getWaitingTimeDisplay(entry.status, entry.estimatedWait, entry.waitTimeDisplay);
       // Check if this entry belongs to the current patient
       const isYourPosition = currentPatientId && entry.patientId === currentPatientId;
       
