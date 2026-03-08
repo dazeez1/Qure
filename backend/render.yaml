@@ -3,7 +3,7 @@ services:
     name: qure-backend
     env: node
     plan: free
-    buildCommand: npm install && npx prisma generate
+    buildCommand: npm install && npm run prisma:generate
     startCommand: npm start
     envVars:
       - key: NODE_ENV
