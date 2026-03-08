@@ -148,25 +148,54 @@ async function autoCheckInAppointment(appointment) {
     }
 
     // Generate department-based daily ticket number
+    // Use a retry mechanism to handle concurrent check-ins
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    // Count queue entries for this department today
-    const todayQueueCount = await tx.queueEntry.count({
-      where: {
-        departmentId: appointment.departmentId,
-        hospitalId: appointment.hospitalId,
-        checkInTime: {
-          gte: todayStart,
-          lte: todayEnd,
-        },
-      },
-    });
+    let sequenceNumber;
+    let ticketNumber;
+    let attempts = 0;
+    const maxAttempts = 10;
 
-    const sequenceNumber = todayQueueCount + 1;
-    const ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
+    // Retry logic to handle race conditions
+    while (attempts < maxAttempts) {
+      // Count queue entries for this department today
+      const todayQueueCount = await tx.queueEntry.count({
+        where: {
+          departmentId: appointment.departmentId,
+          hospitalId: appointment.hospitalId,
+          checkInTime: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+        },
+      });
+
+      sequenceNumber = todayQueueCount + 1;
+      ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
+
+      // Check if this ticket number already exists (race condition check)
+      const existingTicket = await tx.queueEntry.findFirst({
+        where: {
+          hospitalId: appointment.hospitalId,
+          departmentId: appointment.departmentId,
+          ticketNumber: ticketNumber,
+        },
+      });
+
+      if (!existingTicket) {
+        // Ticket number is available, break out of loop
+        break;
+      }
+
+      // Ticket number exists, try next number
+      attempts++;
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique ticket number after multiple attempts');
+      }
+    }
 
     // Auto-assign doctor (same logic as manual check-in)
     const availableDoctors = await tx.user.findMany({
