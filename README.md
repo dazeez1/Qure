@@ -1,278 +1,364 @@
 # Qure - Healthcare Queue Management System
 
-A comprehensive healthcare queue management system designed to streamline patient flow, appointment scheduling, and staff operations in healthcare facilities.
+A comprehensive multi-hospital SaaS healthcare queue management system that streamlines patient appointments, queue management, and hospital operations.
 
+![Qure Logo](frontend/public/images/Vector%20(3).png)
 
-##  Description
+##  Table of Contents
 
-Qure is a full-stack healthcare queue management system that enables healthcare facilities to efficiently manage patient queues, appointments, and staff operations. The system features role-based access control with separate interfaces for patients and staff, secure authentication, and a modern, responsive user interface.
+- [Overview](#overview)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Project Structure](#project-structure)
+- [Installation & Setup](#installation--setup)
+- [Running the Application](#running-the-application)
+- [Deployment](#deployment)
+- [Demo Video](#demo-video)
+- [Live Deployment](#live-deployment)
+- [Related Files](#related-files)
+- [Analysis](#analysis)
+- [Contributing](#contributing)
+- [License](#license)
 
-### Key Features
+##  Overview
 
-- **User Authentication & Authorization**
-  - Patient and Staff registration with role-based access
-  - JWT-based secure authentication
-  - Password reset functionality with email notifications
-  - Hospital access code verification for staff
+Qure is a modern healthcare queue management system designed to improve patient experience and optimize hospital operations. The system supports multiple hospitals, real-time queue management, appointment scheduling, automated check-ins, and comprehensive notification systems.
 
-- **Role-Based Dashboards**
-  - Patient dashboard for queue management
-  - Staff dashboard for facility operations
-  - Settings page with organization management
+### Key Capabilities
 
-- **Security Features**
-  - Password hashing with bcrypt
-  - JWT token authentication
-  - Input validation and sanitization
-  - Protected API routes
+- **Multi-Hospital Support**: Complete isolation and scoping for multiple healthcare facilities
+- **Real-Time Queue Management**: Live queue status updates with estimated wait times
+- **Appointment Scheduling**: Patient self-service appointment booking and management
+- **Automated Workflows**: Auto-check-in, appointment reminders, and status notifications
+- **Role-Based Access**: Separate interfaces for patients, staff, doctors, and administrators
+- **Analytics & Reporting**: Comprehensive dashboards and export capabilities
 
----
+##  Features
 
-##  Setup Instructions
+### Patient Features
+-  Book and manage appointments
+-  View real-time queue status
+-  In-app and email notifications
+-  View appointment history with pagination
+-  Submit feedback after consultations
+-  Profile management with avatar uploads
+
+### Staff Features
+-  Multi-department queue management
+-  Doctor assignment and load balancing
+-  Room and waiting area management
+-  Real-time analytics and dashboards
+-  Export functionality for reports
+-  Hospital settings and configuration
+
+### System Features
+-  Automated appointment check-in (15 minutes before appointment time)
+-  Automated appointment reminders (24h and 2h before)
+-  Email notifications via Brevo
+-  Cloudinary integration for image uploads
+-  JWT-based authentication
+-  Hospital-scoped data isolation
+
+##  Technology Stack
+
+### Frontend
+- **Framework**: Vanilla JavaScript (ES6+)
+- **Build Tool**: Vite 7.3.1
+- **Styling**: CSS3 with CSS Variables
+- **Deployment**: Vercel
+
+### Backend
+- **Runtime**: Node.js 18+
+- **Framework**: Express.js 4.21.1
+- **Database**: MongoDB with Prisma ORM 5.19.0
+- **Authentication**: JWT (jsonwebtoken)
+- **File Upload**: Cloudinary, Multer
+- **Email Service**: Brevo 
+- **Deployment**: Render
+
+### Development Tools
+- **Package Manager**: npm
+- **Code Quality**: ESLint
+- **Version Control**: Git
+
+##  Project Structure
+
+```
+Qure/
+├── backend/                 # Backend API server
+│   ├── src/
+│   │   ├── config/         # Database and service configurations
+│   │   ├── controllers/    # Request handlers
+│   │   ├── middleware/     # Authentication, error handling
+│   │   ├── routes/         # API route definitions
+│   │   ├── services/       # Business logic services
+│   │   └── utils/          # Utility functions
+│   ├── prisma/
+│   │   └── schema.prisma   # Database schema
+│   ├── uploads/            # Local file uploads (dev)
+│   ├── package.json
+│   └── render.yaml         # Render deployment config
+│
+├── frontend/               # Frontend application
+│   ├── src/
+│   │   ├── pages/          # Page-specific JavaScript
+│   │   ├── utils/          # Utility functions
+│   │   ├── styles/         # CSS stylesheets
+│   │   └── js/             # Shared JavaScript modules
+│   ├── patient/            # Patient-facing pages
+│   ├── staff/              # Staff-facing pages
+│   ├── public/             # Static assets
+│   ├── package.json
+│   ├── vite.config.js      # Vite configuration
+│   └── vercel.json         # Vercel deployment config
+│
+├── Docs/                   # Project documentation
+├── DEPLOYMENT.md           # Deployment guide
+├── VERCEL_TROUBLESHOOTING.md
+└── README.md               # This file
+```
+
+##  Installation & Setup
 
 ### Prerequisites
 
-- **Node.js** (v18.0.0 or higher)
-- **npm** (v9.0.0 or higher)
-- **MongoDB** (running locally or connection string)
-- **Git**
+- **Node.js**: Version 18.0.0 or higher
+- **npm**: Version 9.0.0 or higher
+- **MongoDB**: MongoDB Atlas account or local MongoDB instance
+- **Cloudinary Account**: For image uploads
+- **Brevo Account**: For email notifications
 
-### Installation Steps
+### Step 1: Clone the Repository
 
-1. **Clone the repository**
    ```bash
-   git clone https://github.com/dazeez1/Qure.git
+git clone  https://github.com/dazeez1/Qure.git
    cd Qure
    ```
 
-2. **Install dependencies**
+### Step 2: Backend Setup
+
    ```bash
-   # Install root dependencies
+# Navigate to backend directory
+cd backend
+   
+# Install dependencies
    npm install
    
-   # Install backend dependencies
-   cd backend
-   npm install
-   
-   # Install frontend dependencies
-   cd ../frontend
-   npm install
+# Set up environment variables
+# Create a .env file in the backend directory with the following:
    ```
 
-3. **Set up environment variables**
+**Backend Environment Variables** (`.env` file):
 
-   Create a `.env` file in the `backend` directory:
    ```env
+# Server Configuration
+NODE_ENV=development
+PORT=5001
+
    # Database
-   DATABASE_URL="mongodb://localhost:27017/qure"
-   
-   # JWT Secret (change this to a secure random string)
-   JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
-   
-   # Server Port
-   PORT=5001
-   
-   # Frontend URL (for email links)
-   FRONTEND_URL="http://localhost:3000"
-   
-   # Environment
-   NODE_ENV="development"
-   ```
+DATABASE_URL=your_mongodb_connection_string
 
-4. **Set up the database**
+# JWT Configuration
+JWT_SECRET=your_jwt_secret_key_here
+JWT_EXPIRES_IN=7d
 
-   Ensure MongoDB is running, then generate Prisma client:
+# Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+# Brevo (Email Service) Configuration
+BREVO_API_KEY=your_brevo_api_key
+
+# Frontend URL (for CORS)
+FRONTEND_URL=http://localhost:3000
+
+# Feature Flags
+ENABLE_AUTO_CHECKIN=true
+ENABLE_APPOINTMENT_REMINDERS=true
+```
+
    ```bash
-   cd backend
-   npm run prisma:generate
-   npm run prisma:push
-   ```
+# Generate Prisma Client
+npx prisma generate
 
-5. **Run the application**
+# Push database schema (for development)
+npx prisma db push
 
-   From the root directory:
+# (Optional) Open Prisma Studio to view database
+npx prisma studio
+```
+
+### Step 3: Frontend Setup
+
    ```bash
-   # Run both frontend and backend concurrently
-   npm run dev
-   
-   # Or run separately:
-   # Backend (port 5001)
-   npm run dev:backend
-   
-   # Frontend (port 3000)
-   npm run dev:frontend
-   ```
+# Navigate to frontend directory (from project root)
+cd frontend
 
-6. **Access the application**
+# Install dependencies
+npm install
 
-   - **Frontend:** http://localhost:3000
-   - **Backend API:** http://localhost:5001
-   - **API Health Check:** http://localhost:5001/health
+# Set up environment variables
+# Create a .env file in the frontend directory:
+```
 
-### Development Scripts
+**Frontend Environment Variables** (`.env` file):
+
+```env
+# API Configuration
+VITE_API_URL=http://localhost:5001/api
+```
+
+### Step 4: Verify Installation
 
 ```bash
-# Run both servers
-npm run dev
-
-# Run frontend only
-npm run dev:frontend
-
-# Run backend only
-npm run dev:backend
-
-# Lint code
-npm run lint
+# From project root, verify both packages are installed
+npm install
 ```
 
----
+## ▶ Running the Application
 
-## Designs
+### Development Mode
 
-### Figma Mockups
+#### Option 1: Run Separately
 
-**Design Link:** [Qure Design - ALU](https://www.figma.com/design/ZgIejwv9TrGqiXm86h9CRd/Qure-Design---ALU?m=auto&t=D2U8iypO1VrQHnMH-1)
+**Terminal 1 - Backend:**
+```bash
+cd backend
+npm run dev
+```
+Backend will run on `http://localhost:5001`
 
-The Figma design includes:
-- User interface mockups for all pages
-- Component designs and style guide
-- Responsive layouts for mobile and desktop
-- User flow diagrams
-
-### System Diagrams
-
-The following system architecture and design diagrams are available in the `Docs/` folder:
-
-#### 1. System Architecture Diagram
-![System Architecture](Docs/System%20Architecture%20Design.png)
-
-#### 2. Entity Relationship Diagram (ERD)
-![ERD](Docs/ERD.png)
-
-#### 3. Class Diagram
-![Class Diagram](Docs/Class%20Diagram.png)
-
-#### 4. Use Case Diagram
-![Use Case Diagram](Docs/Use%20Case%20Diagram.png)
-
-#### 5. System Architecture (Alternative)
-![System Architecture](Docs/system-architecture.png)
-
-
----
-
-##  Deployment Plan
-
-### Production Deployment Checklist
-
-#### Backend Deployment
-
-1. **Environment Setup**
-   - Set up MongoDB Atlas
-   - Configure production environment variables
-   - Set secure JWT secret
-   - Configure production email service (replace Ethereal Email)
-
-2. **Server Deployment Options**
-   - **Option :** Deploy to Render, Railway.
-
-
-3. **Database Migration**
-   ```bash
-   npm run prisma:push  # Push schema to production database
-   ```
-
-4. **Environment Variables (Production)**
-   ```env
-   DATABASE_URL="<production-mongodb-connection-string>"
-   JWT_SECRET="<strong-random-secret>"
-   PORT=5001
-   FRONTEND_URL="<production-frontend-url>"
-   NODE_ENV="production"
-   EMAIL_HOST="<smtp-host>"
-   EMAIL_USER="<smtp-user>"
-   EMAIL_PASS="<smtp-password>"
-   ```
-
-#### Frontend Deployment
-
-1. **Build the application**
+**Terminal 2 - Frontend:**
    ```bash
    cd frontend
-   npm run build
-   ```
-
-2. **Deployment Options**
-   - **Option 1:** Deploy to Vercel 
-   - **Option 2:** Deploy to GitHub Pages
-
-
-3. **Environment Variables**
-   - Set `VITE_API_URL` to production backend URL
-
-4. **Update API Configuration**
-   - Ensure `frontend/src/config/api.js` points to production backend
-
-### Deployment Architecture
-
+npm run dev
 ```
-┌─────────────────┐
-│   Frontend      │  (Vercel/Github)  │
-└────────┬────────┘
-         │
-         │ HTTPS
-         │
-┌────────▼────────┐
-│   Backend API   │  (Render/Heroku/Railway)
-│   (Express.js)  │
-└────────┬────────┘
-         │
-         │
-┌────────▼────────┐
-│   MongoDB      │  (MongoDB Atlas)
-│   Database     │
-└─────────────────┘
+Frontend will run on `http://localhost:3000`
+
+#### Option 2: Run from Root (if configured)
+
+```bash
+# From project root
+npm run dev:backend  # In one terminal
+npm run dev:frontend # In another terminal
 ```
 
----
-
-##  Video Demo
-
-**Video Demo:** [Watch the demo video](https://drive.google.com/drive/folders/1SpUOKctHdocRaEIQT2HmYX0LnV1txvPV?usp=sharing)
-
-
-**Demo Content:**
-- Project overview and setup
-- User registration (Patient and Staff)
-- Login functionality
-- Patient dashboard features
-- Staff dashboard and access code verification
-- Settings page navigation
-- System architecture overview
-
----
-
-
-### Key Technologies
+### Production Build
 
 **Backend:**
-- Node.js & Express.js
-- Prisma ORM
-- MongoDB
-- JWT (jsonwebtoken)
-- bcryptjs
-- nodemailer
+```bash
+cd backend
+npm start
+```
 
 **Frontend:**
-- Vanilla JavaScript (ES6+)
-- Vite
-- CSS3
+```bash
+cd frontend
+npm run build
+npm run preview  # Preview production build locally
+```
 
----
+### Access the Application
 
-## Contributors
+- **Frontend**: Open `http://localhost:3000` in your browser
+- **Backend API**: Available at `http://localhost:5001/api`
+- **Health Check**: `http://localhost:5001/health`
 
-- [Azeez Damilare Gbenga]
+### Default Accounts
 
----
+After initial setup, you'll need to:
+1. Register a new hospital admin account through the registration page
+2. Create staff accounts through the admin dashboard
+3. Patients can self-register or be invited
+
+##  Deployment
+
+The application is configured for deployment on:
+- **Frontend**: Vercel (from `frontend/` directory)
+- **Backend**: Render (from `backend/` directory)
+
+### Quick Deployment Steps
+
+1. **Deploy Backend to Render:**
+   - Connect GitHub repository
+   - Set Root Directory to `backend`
+   - Add environment variables (see `DEPLOYMENT.md`)
+   - Deploy
+
+2. **Deploy Frontend to Vercel:**
+   - Connect GitHub repository
+   - Set Root Directory to `frontend`
+   - Add `VITE_API_URL` environment variable
+   - Deploy
+
+3. **Update CORS:**
+   - Update `FRONTEND_URL` in Render with your Vercel URL
+   - Redeploy backend
+
+For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+##  Demo Video
+
+Watch the comprehensive 5-minute demo showcasing the core functionalities of Qure:
+
+**[ Demo Video - Google Drive](https://drive.google.com/drive/folders/1nQ650BPcvyr-nnSnXwHxgzmxtOee-j4F?usp=sharing)**
+
+The demo covers:
+- Patient appointment booking and management
+- Real-time queue management and status updates
+- Staff dashboard and queue operations
+- Doctor assignment and consultation workflow
+- Notification system (in-app and email)
+- Analytics and reporting features
+- Multi-hospital isolation and scoping
+
+> **Note**: The demo focuses on core functionalities rather than sign-up and sign-in processes.
+
+##  Live Deployment
+
+**Frontend (Vercel)**: [Your Vercel Deployment URL]
+**Backend API (Render)**: [Your Render Deployment URL]
+**API Health Check**: [Your Render URL]/health
+
+*Note: Update these URLs with your actual deployment links after deployment*
+
+##  Related Files
+
+### Documentation
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete deployment guide for Vercel and Render
+- [VERCEL_TROUBLESHOOTING.md](./VERCEL_TROUBLESHOOTING.md) - Vercel deployment troubleshooting
+- [Analysis.md](./Analysis.md) - Project analysis and objectives evaluation
+
+### Configuration Files
+- `backend/render.yaml` - Render deployment configuration
+- `frontend/vercel.json` - Vercel deployment configuration
+- `backend/prisma/schema.prisma` - Database schema definition
+- `frontend/vite.config.js` - Vite build configuration
+
+### Key Source Files
+- `backend/src/app.js` - Express application entry point
+- `backend/src/config/database.js` - Prisma database client
+- `frontend/src/utils/apiClient.js` - API client wrapper
+- `frontend/src/utils/auth.js` - Authentication utilities
+
+##  Analysis
+
+For a detailed analysis of the project results, objectives achievement, and implementation details, see:
+
+**[ Analysis.md](./Analysis.md)**
+
+The analysis covers:
+- Project objectives vs. achieved results
+- Implementation approach and decisions
+- Technical challenges and solutions
+- System architecture and design patterns
+- Future improvements and recommendations
+
+##  Contributing
+
+This is a project submission. For questions or issues, please contact the development team.
+
+## License
+
 
