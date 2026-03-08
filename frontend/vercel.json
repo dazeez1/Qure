@@ -1,16 +1,15 @@
 {
+  "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "devCommand": "npm run dev",
   "installCommand": "npm install",
+  "framework": null,
   "rewrites": [
     {
       "source": "/((?!api|_next|404\\.html|index\\.html|register\\.html|login\\.html|forgot-password\\.html|reset-password\\.html|accept-invite\\.html|patient|staff|public|.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)).*)",
       "destination": "/index.html"
     }
   ],
-  "cleanUrls": true,
-  "trailingSlash": false,
   "headers": [
     {
       "source": "/(.*)",
