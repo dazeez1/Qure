@@ -1104,13 +1104,29 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
 async function openRoomModal(entryId) {
   currentQueueEntryId = entryId;
   
-  // Re-query room modal in case it wasn't found during initialization
+  // Always re-query room modal elements to ensure they're found
+  // This handles cases where the modal wasn't in DOM during initialization
+  roomModalOverlay = document.getElementById('room-modal-overlay');
+  roomList = document.getElementById('room-list');
+  roomModalConfirm = document.getElementById('room-modal-confirm');
+  roomModalCancel = document.getElementById('room-modal-cancel');
+  roomModalClose = document.getElementById('room-modal-close');
+  
+  // If still not found, wait a bit and try again (for dynamic loading)
   if (!roomModalOverlay) {
+    await new Promise(resolve => setTimeout(resolve, 100));
     roomModalOverlay = document.getElementById('room-modal-overlay');
     roomList = document.getElementById('room-list');
     roomModalConfirm = document.getElementById('room-modal-confirm');
     roomModalCancel = document.getElementById('room-modal-cancel');
     roomModalClose = document.getElementById('room-modal-close');
+  }
+  
+  // Final check - if modal still not found, show error
+  if (!roomModalOverlay) {
+    console.error('Room modal overlay not found in DOM');
+    toast.error('Room selection modal not available. Please refresh the page.');
+    return;
   }
   
   const entry = queueData.find(e => e.id === entryId);
@@ -1143,44 +1159,40 @@ async function openRoomModal(entryId) {
   // Fetch available rooms for the department
   await fetchRooms(departmentId);
 
-  // Ensure modal is visible
-  if (roomModalOverlay) {
-    // Check if modal card exists
-    const modalCard = roomModalOverlay.querySelector('.modal-card');
-    if (!modalCard) {
-      toast.error('Room modal error. Please refresh');
-      return;
-    }
-    
-    // Force show the modal - use requestAnimationFrame to ensure DOM is ready
-    requestAnimationFrame(() => {
-      roomModalOverlay.style.display = 'flex';
-      roomModalOverlay.style.zIndex = '10000';
-      
-      // Small delay to ensure display is set before adding active class
-      setTimeout(() => {
-    roomModalOverlay.classList.add('active');
-      }, 10);
-      
-      // Ensure modal card is visible and clickable
-      modalCard.style.position = 'relative';
-      modalCard.style.zIndex = '10001';
-      modalCard.style.display = 'block';
-      modalCard.style.visibility = 'visible';
-      modalCard.style.opacity = '1';
-      modalCard.style.pointerEvents = 'auto';
-      
-      // Ensure buttons are clickable
-      const buttons = modalCard.querySelectorAll('button');
-      buttons.forEach(btn => {
-        btn.style.pointerEvents = 'auto';
-        btn.style.zIndex = '10002';
-        btn.style.position = 'relative';
-      });
-    });
-  } else {
-    toast.error('Room selection modal not available');
+  // Check if modal card exists
+  const modalCard = roomModalOverlay.querySelector('.modal-card');
+  if (!modalCard) {
+    console.error('Modal card not found inside overlay');
+    toast.error('Room modal error. Please refresh');
+    return;
   }
+  
+  // Force show the modal - use requestAnimationFrame to ensure DOM is ready
+  requestAnimationFrame(() => {
+    roomModalOverlay.style.display = 'flex';
+    roomModalOverlay.style.zIndex = '10000';
+    
+    // Small delay to ensure display is set before adding active class
+    setTimeout(() => {
+      roomModalOverlay.classList.add('active');
+    }, 10);
+    
+    // Ensure modal card is visible and clickable
+    modalCard.style.position = 'relative';
+    modalCard.style.zIndex = '10001';
+    modalCard.style.display = 'block';
+    modalCard.style.visibility = 'visible';
+    modalCard.style.opacity = '1';
+    modalCard.style.pointerEvents = 'auto';
+    
+    // Ensure buttons are clickable
+    const buttons = modalCard.querySelectorAll('button');
+    buttons.forEach(btn => {
+      btn.style.pointerEvents = 'auto';
+      btn.style.zIndex = '10002';
+      btn.style.position = 'relative';
+    });
+  });
 }
 
 /**

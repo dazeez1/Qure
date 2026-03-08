@@ -1,5 +1,10 @@
 import prisma from '../config/database.js';
 import { validateRequiredFields } from '../utils/validation.js';
+import {
+  createAppointmentConfirmationNotification,
+  createAppointmentCancellationNotification,
+  createAppointmentRescheduleNotification,
+} from '../services/patientNotification.service.js';
 
 /**
  * Create a new appointment (Patient only)
@@ -186,6 +191,22 @@ export const createAppointment = async (req, res, next) => {
       },
     });
 
+    // Create appointment confirmation notification (non-blocking)
+    // Note: No doctor is assigned at appointment creation time - doctors are assigned when checking into queue
+    try {
+      await createAppointmentConfirmationNotification({
+        patientId: patient.id,
+        hospitalId: hospitalId,
+        appointmentId: appointment.id,
+        appointmentDate: appointmentDateTime,
+        departmentName: department.name,
+        doctorName: null, // No doctor assigned at appointment creation
+      });
+    } catch (notificationError) {
+      console.error('Failed to create appointment confirmation notification:', notificationError);
+      // Don't fail appointment creation if notification fails
+    }
+
     res.status(201).json({
       success: true,
       message: 'Appointment created successfully.',
@@ -213,6 +234,8 @@ export const createAppointment = async (req, res, next) => {
  * Query params:
  *   status: string (optional) - Filter by status (BOOKED, CHECKED_IN, MOVED_TO_QUEUE, IN_CONSULTATION, COMPLETED, CANCELLED, NO_SHOW)
  *   hospitalId: string (optional) - Filter by hospital
+ *   page: number (optional) - Page number (default: 1)
+ *   limit: number (optional) - Items per page (default: 10)
  */
 export const getPatientAppointments = async (req, res, next) => {
   try {
@@ -225,24 +248,18 @@ export const getPatientAppointments = async (req, res, next) => {
       });
     }
 
-    const { status, hospitalId } = req.query;
+    const { status, hospitalId, page = '1', limit = '10' } = req.query;
 
-    // Build where clause
+    // Parse pagination params
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build where clause - only BOOKED appointments
     const where = {
       patientId: patient.id,
+      status: 'BOOKED', // Only BOOKED appointments
     };
-
-    // Add status filter if provided
-    if (status) {
-      const validStatuses = ['BOOKED', 'CHECKED_IN', 'MOVED_TO_QUEUE', 'IN_CONSULTATION', 'COMPLETED', 'CANCELLED', 'NO_SHOW'];
-      if (!validStatuses.includes(status.toUpperCase())) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
-        });
-      }
-      where.status = status.toUpperCase();
-    }
 
     // Add hospital filter if provided
     if (hospitalId) {
@@ -262,7 +279,10 @@ export const getPatientAppointments = async (req, res, next) => {
       where.hospitalId = hospitalId;
     }
 
-    // Fetch appointments
+    // Get total count for pagination
+    const totalCount = await prisma.appointment.count({ where });
+
+    // Fetch appointments with pagination
     const appointments = await prisma.appointment.findMany({
       where,
       include: {
@@ -287,9 +307,13 @@ export const getPatientAppointments = async (req, res, next) => {
         },
       },
       orderBy: {
-        appointmentDate: 'desc',
+        appointmentDate: 'asc', // Earliest first (upcoming appointments)
       },
+      skip,
+      take: limitNum,
     });
+
+    const totalPages = Math.ceil(totalCount / limitNum);
 
     res.status(200).json({
       success: true,
@@ -307,6 +331,14 @@ export const getPatientAppointments = async (req, res, next) => {
           createdAt: apt.createdAt,
           updatedAt: apt.updatedAt,
         })),
+        pagination: {
+          currentPage: pageNum,
+          totalPages,
+          total: totalCount,
+          limit: limitNum,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
+        },
       },
     });
   } catch (error) {
@@ -448,6 +480,9 @@ export const rescheduleAppointment = async (req, res, next) => {
         throw new Error('This appointment time conflicts with an existing appointment. Please choose a different time.');
       }
 
+      // Store old date for notification
+      const oldDate = appointment.appointmentDate;
+
       // Update appointment date
       const updatedAppointment = await tx.appointment.update({
         where: { id },
@@ -471,8 +506,24 @@ export const rescheduleAppointment = async (req, res, next) => {
         },
       });
 
-      return updatedAppointment;
+      return { updatedAppointment, oldDate, department: appointment.department };
     });
+
+    // Create reschedule notification (non-blocking)
+    // Note: No doctor is assigned at appointment reschedule time - doctors are assigned when checking into queue
+    try {
+      await createAppointmentRescheduleNotification({
+        patientId: patient.id,
+        hospitalId: result.updatedAppointment.hospitalId,
+        oldDate: result.oldDate,
+        newDate: result.updatedAppointment.appointmentDate,
+        departmentName: result.department.name,
+        doctorName: null, // No doctor assigned at appointment reschedule
+      });
+    } catch (notificationError) {
+      console.error('Failed to create reschedule notification:', notificationError);
+      // Don't fail reschedule if notification fails
+    }
 
     res.status(200).json({
       success: true,
@@ -587,6 +638,19 @@ export const cancelAppointment = async (req, res, next) => {
         },
       },
     });
+
+    // Create cancellation notification (non-blocking)
+    try {
+      await createAppointmentCancellationNotification({
+        patientId: patient.id,
+        hospitalId: appointment.hospitalId,
+        appointmentDate: appointment.appointmentDate,
+        departmentName: appointment.department.name,
+      });
+    } catch (notificationError) {
+      console.error('Failed to create cancellation notification:', notificationError);
+      // Don't fail cancellation if notification fails
+    }
 
     res.status(200).json({
       success: true,

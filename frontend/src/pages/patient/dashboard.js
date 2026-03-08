@@ -5,10 +5,10 @@
 
 'use strict';
 
-import { apiGet, apiPatch } from '../../utils/apiClient.js';
+import { apiGet, apiPatch, apiDelete } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
-import { confirmCancelAppointment, confirmCancelQueue } from '../../utils/modal.js';
+import { confirmCancelAppointment, confirmCancelQueue, showConfirmModal } from '../../utils/modal.js';
 import { displayAvatar } from '../../utils/avatar.js';
 
 // Check authentication first
@@ -146,9 +146,25 @@ function renderCurrentQueue(queueData) {
   // Display queue number (e.g., "C-012")
   queueNumber.textContent = queueData.ticketNumber || '-';
   
-  // Display ETA
-  const etaMinutes = queueData.estimatedWaitMinutes;
-  queueEta.textContent = formatWaitTime(etaMinutes);
+  // Display ETA - sync with queue table display
+  // When status is WAITING, CALLED, or IN_CONSULTATION, show "<1 min"
+  // These correspond to "waiting", "next", "now serving" in the queue table
+  const status = queueData.status;
+  let etaDisplay = '';
+  
+  if (status === 'WAITING' || status === 'CALLED' || status === 'IN_CONSULTATION') {
+    // Show "<1 min" for these statuses to match queue table
+    etaDisplay = '< 1 min';
+  } else if (queueData.waitTimeDisplay) {
+    // Use backend-provided waitTimeDisplay if available
+    etaDisplay = queueData.waitTimeDisplay;
+  } else {
+    // Fallback to calculated estimatedWaitMinutes
+    const etaMinutes = queueData.estimatedWaitMinutes;
+    etaDisplay = formatWaitTime(etaMinutes);
+  }
+  
+  queueEta.textContent = etaDisplay;
 }
 
 /**
@@ -163,9 +179,12 @@ function renderAppointments(appointments) {
     return;
   }
 
+  // Show only the 3 nearest upcoming appointments on dashboard
+  const nearestAppointments = appointments.slice(0, 3);
+
   const fragment = document.createDocumentFragment();
   
-  appointments.forEach((apt) => {
+  nearestAppointments.forEach((apt) => {
     const appointmentCard = document.createElement('div');
     appointmentCard.className = 'appointment-card';
     
@@ -220,36 +239,221 @@ function renderAppointments(appointments) {
 }
 
 /**
- * Render notifications
+ * Get category icon and color
+ */
+function getCategoryInfo(category) {
+  const categories = {
+    APPOINTMENT: { icon: 'event', color: '#3b82f6' },
+    QUEUE: { icon: 'person', color: '#10b981' },
+    FEEDBACK: { icon: 'chat_bubble', color: '#f59e0b' },
+    ANNOUNCEMENT: { icon: 'campaign', color: '#8b5cf6' },
+  };
+  return categories[category] || { icon: 'notifications', color: '#6b7280' };
+}
+
+/**
+ * Get unread count
+ */
+function getUnreadCount(notifications) {
+  if (!notifications || notifications.length === 0) return 0;
+  return notifications.filter(n => !n.isRead).length;
+}
+
+/**
+ * Render notifications with categories, badges, and actions
  */
 function renderNotifications(notifications) {
   const notificationsList = document.getElementById('notifications-list');
+  const notificationBadge = document.getElementById('notification-badge');
   if (!notificationsList) return;
+
+  // Update badge count
+  const unreadCount = getUnreadCount(notifications);
+  if (notificationBadge) {
+    if (unreadCount > 0) {
+      notificationBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+      notificationBadge.style.display = 'flex';
+    } else {
+      notificationBadge.style.display = 'none';
+    }
+  }
 
   if (!notifications || notifications.length === 0) {
     notificationsList.innerHTML = '<div class="empty-state">No notifications</div>';
     return;
   }
 
+  // Group notifications by category
+  const grouped = notifications.reduce((acc, notif) => {
+    const category = notif.category || 'ANNOUNCEMENT';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(notif);
+    return acc;
+  }, {});
+
   const fragment = document.createDocumentFragment();
   
-  notifications.forEach((notif) => {
-    const notificationItem = document.createElement('div');
-    notificationItem.className = 'notification-item';
-    
-    notificationItem.innerHTML = `
-      <div class="notification-dot"></div>
-      <div class="notification-content">
-        <div class="notification-text">${notif.title || notif.content || 'Notification'}</div>
-        <div class="notification-time">${formatRelativeTime(notif.createdAt)}</div>
+  // Render each category
+  Object.keys(grouped).forEach((category) => {
+    const categoryInfo = getCategoryInfo(category);
+    const categoryNotifications = grouped[category];
+
+    // Category header
+    const categoryHeader = document.createElement('div');
+    categoryHeader.className = 'notification-category-header';
+    categoryHeader.innerHTML = `
+      <div class="category-icon" style="color: ${categoryInfo.color}">
+        <span class="material-symbols-outlined">${categoryInfo.icon}</span>
       </div>
+      <span class="category-name">${category}</span>
+      <span class="category-count">${categoryNotifications.length}</span>
     `;
-    
-    fragment.appendChild(notificationItem);
+    fragment.appendChild(categoryHeader);
+
+    // Notifications in this category
+    categoryNotifications.forEach((notif) => {
+      const notificationItem = document.createElement('div');
+      notificationItem.className = `notification-item ${notif.isRead ? 'read' : 'unread'}`;
+      notificationItem.dataset.notificationId = notif.id;
+      
+      notificationItem.innerHTML = `
+        <div class="notification-dot ${notif.isRead ? '' : 'unread-dot'}" style="background-color: ${categoryInfo.color}"></div>
+        <div class="notification-content">
+          <div class="notification-text">${notif.title || notif.content || 'Notification'}</div>
+          <div class="notification-time">${formatRelativeTime(notif.createdAt)}</div>
+        </div>
+        ${!notif.isRead ? '<button class="mark-read-btn" title="Mark as read"><span class="material-symbols-outlined">check</span></button>' : ''}
+      `;
+      
+      // Add click handler to mark as read
+      if (!notif.isRead) {
+        const markReadBtn = notificationItem.querySelector('.mark-read-btn');
+        if (markReadBtn) {
+          markReadBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await markNotificationAsRead(notif.id, notificationItem);
+          });
+        }
+      }
+
+      // Click on notification item to mark as read
+      notificationItem.addEventListener('click', async () => {
+        if (!notif.isRead) {
+          await markNotificationAsRead(notif.id, notificationItem);
+        }
+      });
+
+      fragment.appendChild(notificationItem);
+    });
   });
 
   notificationsList.innerHTML = '';
   notificationsList.appendChild(fragment);
+}
+
+/**
+ * Mark notification as read
+ */
+async function markNotificationAsRead(notificationId, element) {
+  try {
+    const response = await apiPatch(`/patient/notifications/${notificationId}/read`, {});
+
+    if (response.status === 401) {
+      toast.error('Session expired. Please log in again.');
+      clearAuth();
+      setTimeout(() => {
+        window.location.href = '/login.html#login';
+      }, 1500);
+      return;
+    }
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      // Update UI
+      if (element) {
+        element.classList.remove('unread');
+        element.classList.add('read');
+        const dot = element.querySelector('.notification-dot');
+        if (dot) {
+          dot.classList.remove('unread-dot');
+        }
+        const markReadBtn = element.querySelector('.mark-read-btn');
+        if (markReadBtn) {
+          markReadBtn.remove();
+        }
+      }
+      // Reload notifications to update badge
+      await loadDashboard();
+    } else {
+      toast.error(result.message || 'Failed to mark notification as read');
+    }
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    toast.error('Failed to mark notification as read');
+  }
+}
+
+/**
+ * Mark all notifications as read
+ */
+async function markAllNotificationsAsRead() {
+  try {
+    const response = await apiPatch('/patient/notifications/read-all', {});
+
+    if (response.status === 401) {
+      toast.error('Session expired. Please log in again.');
+      clearAuth();
+      setTimeout(() => {
+        window.location.href = '/login.html#login';
+      }, 1500);
+      return;
+    }
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      toast.success(result.message || 'All notifications marked as read');
+      await loadDashboard();
+    } else {
+      toast.error(result.message || 'Failed to mark all notifications as read');
+    }
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    toast.error('Failed to mark all notifications as read');
+  }
+}
+
+/**
+ * Clear all read notifications
+ */
+async function clearAllReadNotifications() {
+  try {
+    const response = await apiDelete('/patient/notifications/clear-all');
+
+    if (response.status === 401) {
+      toast.error('Session expired. Please log in again.');
+      clearAuth();
+      setTimeout(() => {
+        window.location.href = '/login.html#login';
+      }, 1500);
+      return;
+    }
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      toast.success(result.message || 'Read notifications cleared');
+      await loadDashboard();
+    } else {
+      toast.error(result.message || 'Failed to clear notifications');
+    }
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    toast.error('Failed to clear notifications');
+  }
 }
 
 /**
@@ -486,8 +690,8 @@ async function loadDashboard() {
     
     // Handle 401 errors
     if (error.message?.includes('401') || error.message?.includes('expired')) {
-      toast.error('Session expired. Please log in again.');
-      clearAuth();
+        toast.error('Session expired. Please log in again.');
+        clearAuth();
       setTimeout(() => {
         window.location.href = '/login.html#login';
       }, 1500);
@@ -738,6 +942,30 @@ function initMobileNav() {
       }
     });
   }
+}
+
+// Notification action buttons
+const markAllReadBtn = document.getElementById('mark-all-read-btn');
+if (markAllReadBtn) {
+  markAllReadBtn.addEventListener('click', async () => {
+    await markAllNotificationsAsRead();
+  });
+}
+
+const clearAllBtn = document.getElementById('clear-all-btn');
+if (clearAllBtn) {
+  clearAllBtn.addEventListener('click', async () => {
+    const confirmed = await showConfirmModal({
+      title: 'Clear Read Notifications',
+      message: 'Are you sure you want to clear all read notifications? This action cannot be undone.',
+      confirmText: 'Clear All',
+      cancelText: 'Cancel',
+      confirmColor: 'red',
+    });
+    if (confirmed) {
+      await clearAllReadNotifications();
+    }
+  });
 }
 
 // Load dashboard on page load

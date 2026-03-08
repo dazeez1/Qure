@@ -91,3 +91,111 @@ export const updatePatientNotificationPreferences = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Mark notification as read
+ * PATCH /api/patient/notifications/:id/read
+ * Marks a specific notification as read
+ * Access: Authenticated patients
+ */
+export const markNotificationAsRead = async (req, res, next) => {
+  try {
+    const patientId = req.user.id;
+    const { id } = req.params;
+
+    // Verify notification belongs to patient
+    const notification = await prisma.patientNotification.findFirst({
+      where: {
+        id,
+        patientId,
+      },
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found.',
+      });
+    }
+
+    // Mark as read
+    await prisma.patientNotification.update({
+      where: { id },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification marked as read.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Mark all notifications as read
+ * PATCH /api/patient/notifications/read-all
+ * Marks all unread notifications as read for the patient
+ * Access: Authenticated patients
+ */
+export const markAllNotificationsAsRead = async (req, res, next) => {
+  try {
+    const patientId = req.user.id;
+
+    // Mark all unread notifications as read
+    const result = await prisma.patientNotification.updateMany({
+      where: {
+        patientId,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `${result.count} notification(s) marked as read.`,
+      data: {
+        count: result.count,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Clear all read notifications
+ * DELETE /api/patient/notifications/clear-all
+ * Deletes all read notifications for the patient
+ * Access: Authenticated patients
+ */
+export const clearAllReadNotifications = async (req, res, next) => {
+  try {
+    const patientId = req.user.id;
+
+    // Delete all read notifications
+    const result = await prisma.patientNotification.deleteMany({
+      where: {
+        patientId,
+        isRead: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `${result.count} notification(s) cleared.`,
+      data: {
+        count: result.count,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

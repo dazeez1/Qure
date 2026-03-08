@@ -13,6 +13,9 @@ import {
 import {
   getPatientNotificationPreferences,
   updatePatientNotificationPreferences,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  clearAllReadNotifications,
 } from '../controllers/patientNotificationController.js';
 import { uploadAvatar } from '../middleware/uploadMiddleware.js';
 
@@ -105,6 +108,27 @@ router.get('/notification-preferences', getPatientNotificationPreferences);
  * Body: { emailNotificationsEnabled: boolean }
  */
 router.patch('/notification-preferences', updatePatientNotificationPreferences);
+
+/**
+ * PATCH /api/patient/notifications/:id/read
+ * Mark a notification as read
+ * Access: Authenticated patients
+ */
+router.patch('/notifications/:id/read', markNotificationAsRead);
+
+/**
+ * PATCH /api/patient/notifications/read-all
+ * Mark all notifications as read
+ * Access: Authenticated patients
+ */
+router.patch('/notifications/read-all', markAllNotificationsAsRead);
+
+/**
+ * DELETE /api/patient/notifications/clear-all
+ * Clear all read notifications
+ * Access: Authenticated patients
+ */
+router.delete('/notifications/clear-all', clearAllReadNotifications);
 
 export default router;
 

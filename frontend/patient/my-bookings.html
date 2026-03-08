@@ -12,7 +12,8 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <link rel="stylesheet" href="../src/styles/variables.css" />
     <link rel="stylesheet" href="../src/styles/toast.css" />
-    <title>Qure - Real-Time Queue Tracking</title>
+    <link rel="stylesheet" href="../src/styles/modal.css" />
+    <title>Qure - My Bookings</title>
     <style>
       * {
         margin: 0;
@@ -53,6 +54,8 @@
         gap: 0.8rem;
         cursor: pointer;
         transition: opacity 0.2s;
+        text-decoration: none;
+        color: inherit;
       }
 
       .logo:hover {
@@ -82,7 +85,7 @@
       .nav-links a {
         text-decoration: none;
         color: var(--color-text-primary);
-        font-size: 1rem;
+        font-size: 1.2rem;
         font-weight: 500;
         transition: color 0.2s;
       }
@@ -151,16 +154,19 @@
 
       .mobile-nav-header {
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        gap: 0.8rem;
         margin-bottom: 3rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
       }
 
       .mobile-nav-logo {
         display: flex;
         align-items: center;
         gap: 0.8rem;
-        color: #fff;
+        text-decoration: none;
+        color: inherit;
       }
 
       .mobile-nav-links {
@@ -168,7 +174,6 @@
         display: flex;
         flex-direction: column;
         gap: 1.6rem;
-        margin-bottom: 2rem;
       }
 
       .mobile-nav-links a {
@@ -176,25 +181,25 @@
         text-decoration: none;
         font-size: 1.6rem;
         font-weight: 500;
-        padding: 1rem 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        transition: opacity 0.2s;
+      }
+
+      .mobile-nav-links a:hover {
+        opacity: 0.8;
       }
 
       .user-profile {
-        width: 3.2rem;
-        height: 3.2rem;
+        width: 3.6rem;
+        height: 3.6rem;
         border-radius: 50%;
         background-color: var(--color-primary-blue);
+        color: white;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #fff;
         font-weight: 600;
-        font-size: 1rem;
+        font-size: 1.4rem;
         cursor: pointer;
-        border: 2px solid #fff;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        flex-shrink: 0;
       }
 
       /* Main Content */
@@ -207,34 +212,14 @@
       }
 
       .page-title {
-        font-size: 1.3rem;
-        font-weight: 600;
+        font-size: 1.5rem;
+        font-weight: 700;
         color: var(--color-text-primary);
-        margin-bottom: 0.8rem;
-      }
-
-      .last-updated {
-        display: flex;
-        align-items: center;
-        gap: 0.8rem;
-        font-size: 1rem;
-        color: var(--color-text-tertiary);
         margin-bottom: 2.4rem;
       }
 
-      .refresh-icon {
-        cursor: pointer;
-        font-size: 1.8rem;
-        color: var(--color-primary-blue);
-        transition: transform 0.3s;
-      }
-
-      .refresh-icon:hover {
-        transform: rotate(180deg);
-      }
-
-      /* Queue Table */
-      .queue-table-container {
+      /* Appointments Table */
+      .appointments-table-container {
         background: #fff;
         border-radius: 1.2rem;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -242,130 +227,283 @@
         overflow: hidden;
       }
 
-      .queue-table {
+      .appointments-table {
         width: 100%;
         border-collapse: collapse;
       }
 
-      .queue-table thead {
+      .appointments-table thead {
         background-color: #f9fafb;
         border-bottom: 2px solid #e5e7eb;
       }
 
-      .queue-table th {
+      .appointments-table th {
         padding: 1.6rem 2rem;
         text-align: center;
-        font-size: 1rem;
+        font-size: 1.2rem;
         font-weight: 600;
         color: var(--color-text-primary);
       }
 
-      .queue-table th:first-child {
-        text-align: left;
-      }
-
-      .queue-table tbody tr {
+      .appointments-table tbody tr {
         border-bottom: 1px solid #f3f4f6;
         transition: background-color 0.2s;
       }
 
-      .queue-table tbody tr:hover {
+      .appointments-table tbody tr:hover {
         background-color: #f9fafb;
       }
 
-      .queue-table tbody tr.your-position {
-        background-color: #eff6ff;
-      }
-
-      .queue-table tbody tr.your-position:hover {
-        background-color: #dbeafe;
-      }
-
-      .queue-table td {
+      .appointments-table td {
         padding: 1.6rem 2rem;
+        text-align: center;
         font-size: 1rem;
         color: var(--color-text-primary);
-        text-align: center;
         border: none;
-      }
-
-      .queue-table td:first-child {
-        text-align: left;
-      }
-
-      .patient-name-cell {
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 0.8rem;
-      }
-
-      .your-badge {
-        background-color: var(--color-primary-blue);
-        color: #fff;
-        padding: 0.4rem 0.8rem;
-        border-radius: 0.4rem;
-        font-size: 0.7rem;
-        font-weight: 600;
       }
 
       .status-badge {
         display: inline-block;
-        padding: 0.4rem 0.8rem;
-        border-radius: 0.4rem;
-        font-size: 0.7rem;
-        font-weight: 600;
+        padding: 0.4rem 1.2rem;
+        border-radius: 1.6rem;
+        font-size: 1.2rem;
+        font-weight: 500;
+        text-transform: capitalize;
+      }
+
+      .status-badge.booked {
+        background-color: #3b82f6;
+        color: white;
+      }
+
+      .status-badge.checked_in {
+        background-color: #10b981;
+        color: white;
+      }
+
+      .status-badge.moved_to_queue {
+        background-color: #f59e0b;
+        color: white;
+      }
+
+      .status-badge.in_consultation {
+        background-color: #f97316;
+        color: white;
+      }
+
+      .status-badge.completed {
+        background-color: #6366f1;
+        color: white;
+      }
+
+      .status-badge.cancelled {
+        background-color: #ef4444;
+        color: white;
+      }
+
+      .status-badge.no_show {
+        background-color: #6b7280;
+        color: white;
+      }
+
+      .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .action-link {
+        font-size: 1rem;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        display: inline-block;
+      }
+
+      .action-link.reschedule {
+        color: var(--color-primary-blue);
+      }
+
+      .action-link.reschedule:hover {
+        opacity: 0.8;
+      }
+
+      .action-link.cancel {
+        color: #ef4444;
+      }
+
+      .action-link.cancel:hover {
+        opacity: 0.8;
+      }
+
+      /* Reschedule Modal */
+      .reschedule-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        backdrop-filter: blur(4px);
+      }
+
+      .reschedule-modal-container {
+        background: #ffffff;
+        border-radius: 0.8rem;
+        box-shadow: 0 0.4rem 1.6rem rgba(0, 0, 0, 0.15),
+                    0 0.2rem 0.4rem rgba(0, 0, 0, 0.1);
+        max-width: 40rem;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .reschedule-modal-content {
+        padding: 2.4rem;
+      }
+
+      .reschedule-modal-title {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 1.2rem 0;
         text-align: center;
       }
 
-      .status-badge.now-serving {
-        background-color: #10b981;
-        color: #fff;
+      .reschedule-modal-message {
+        font-size: 1.1rem;
+        color: #64748b;
+        margin: 0 0 2rem 0;
+        text-align: center;
       }
 
-      .status-badge.next {
-        background-color: #3b82f6;
-        color: #fff;
+      .reschedule-form-group {
+        margin-bottom: 2rem;
       }
 
-      .status-badge.waiting {
-        background-color: #f3f4f6;
-        color: var(--color-text-primary);
-      }
-
-      /* Style wait time when it shows actual time (not "-" or status text) */
-      .wait-time-cell {
+      .reschedule-form-label {
+        display: block;
         font-size: 1rem;
-        color: var(--color-text-primary);
-        font-weight: 500;
-      }
-
-      .wait-time-cell.has-wait-time {
-        color: var(--color-primary-blue);
         font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.8rem;
       }
 
-      /* Empty State */
+      .reschedule-datetime-input {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.6rem;
+        background-color: #ffffff;
+        color: #1e293b;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+
+      .reschedule-datetime-input:focus {
+        outline: none;
+        border-color: var(--color-primary-blue);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+
+      .reschedule-modal-actions {
+        display: flex;
+        gap: 1.2rem;
+        justify-content: flex-end;
+      }
+
+      .reschedule-modal-actions .btn {
+        padding: 0.8rem 1.6rem;
+        font-size: 1.1rem;
+        border-radius: 0.6rem;
+        min-width: 10rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .btn-primary {
+        background-color: var(--color-primary-blue);
+        color: white;
+        border: none;
+      }
+
+      .btn-primary:hover {
+        background-color: var(--color-primary-blue-dark);
+      }
+
+      .btn-secondary {
+        background-color: #f1f5f9;
+        color: #475569;
+        border: none;
+      }
+
+      .btn-secondary:hover {
+        background-color: #e2e8f0;
+      }
+
+      /* Pagination */
+      .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.6rem 2rem;
+        border-top: 1px solid #e5e7eb;
+        background-color: #f9fafb;
+      }
+
+      .pagination-info {
+        font-size: 1.2rem;
+        color: var(--color-text-secondary);
+      }
+
+      .pagination-controls {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+      }
+
+      .pagination-btn {
+        padding: 0.8rem 1.6rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.6rem;
+        background-color: white;
+        color: var(--color-text-primary);
+        font-size: 1.2rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .pagination-btn:hover:not(:disabled) {
+        background-color: var(--color-primary-blue);
+        color: white;
+        border-color: var(--color-primary-blue);
+      }
+
+      .pagination-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .loading-state,
       .empty-state {
         text-align: center;
         padding: 4rem 2rem;
         color: var(--color-text-tertiary);
-        font-size: 1rem;
-      }
-
-      /* Loading State */
-      .loading-state {
-        text-align: center;
-        padding: 4rem 2rem;
-        color: var(--color-text-tertiary);
-        font-size: 1rem;
+        font-size: 1.2rem;
       }
 
       /* Footer */
       .footer {
-        background-color: #fff;
-        padding: 1.4rem 0;
-        border-top: 1px solid #e5e7eb;
+        background-color: #EFF3F6;
+        padding: 2rem 0;
         margin-top: auto;
       }
 
@@ -410,40 +548,42 @@
         .footer-content {
           padding: 0 2rem;
         }
-
-        .header-content {
-          flex-wrap: wrap;
-        }
-
-        .nav-links {
-          order: 3;
-          width: 100%;
-          justify-content: center;
-          margin-right: 0;
-          margin-top: 1rem;
-        }
-
-        .queue-table th,
-        .queue-table td {
-          padding: 1.2rem 1.6rem;
-        }
       }
 
       @media (max-width: 768px) {
-        .header {
-          padding: 1rem 0;
-        }
-
         .header-content {
           padding: 0 1.6rem;
+        }
+
+        .nav-links {
+          display: none;
         }
 
         .hamburger-menu {
           display: flex;
         }
 
-        .nav-links {
-          display: none;
+        .main-content {
+          padding: 2rem 1.6rem;
+        }
+
+        .page-title {
+          font-size: 2rem;
+        }
+
+        .appointments-table-container {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .appointments-table {
+          min-width: 60rem;
+        }
+
+        .appointments-table th,
+        .appointments-table td {
+          padding: 1.2rem;
+          font-size: 1rem;
         }
 
         .mobile-nav {
@@ -465,118 +605,26 @@
           font-size: 1rem;
         }
 
-        .main-content {
-          padding: 2rem 1.6rem;
-        }
-
-        .page-title {
-          font-size: 1.3rem;
-          margin-bottom: 2rem;
-        }
-
-        .last-updated {
-          font-size: 1rem;
-          margin-bottom: 2rem;
-        }
-
-        .queue-table-container {
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-
-        .queue-table {
-          min-width: 100%;
-          display: block;
-          width: 100%;
-        }
-
-        .queue-table thead {
-          display: none;
-        }
-
-        .queue-table tbody {
-          display: block;
-          width: 100%;
-        }
-
-        .queue-table tbody tr {
-          display: block;
-          margin-bottom: 1.6rem;
-          background: #fff;
-          border: 1px solid #e5e7eb;
-          border-radius: 0.8rem;
-          padding: 1.6rem;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-
-        .queue-table tbody td {
-          display: block;
-          padding: 0.8rem 0;
-          text-align: center;
-          border: none;
-          font-size: 1rem;
-        }
-
-        .queue-table tbody td:before {
-          content: attr(data-label);
-          font-weight: 600;
-          color: var(--color-text-primary);
-          display: block;
-          margin-bottom: 0.4rem;
-          font-size: 1rem;
-        }
-
-        .queue-table tbody td:first-child {
-          padding-top: 0;
-          text-align: left;
-        }
-
-        .queue-table tbody td:last-child {
-          padding-bottom: 0;
-        }
-
-        .patient-name-cell {
+        .pagination {
           flex-direction: column;
-          align-items: flex-start;
-          gap: 0.4rem;
+          gap: 1.2rem;
+          align-items: stretch;
         }
 
-        .status-badge,
-        .wait-time-cell {
-          font-size: 1rem;
-          min-width: auto;
-          width: 100%;
-          display: block;
-          text-align: center;
-        }
-
-        .footer {
-          padding: 1.2rem 0;
+        .pagination-controls {
+          justify-content: center;
         }
 
         .footer-content {
-          padding: 0 1.6rem;
           flex-direction: column;
-          gap: 1rem;
+          gap: 1.2rem;
           text-align: center;
-          align-items: center;
-        }
-
-        .footer-copyright {
-          font-size: 0.9rem;
-          text-align: center;
-          width: 100%;
+          padding: 0 1.6rem;
         }
 
         .footer-links {
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: 1.2rem;
-          width: 100%;
-        }
-
-        .footer-links a {
-          font-size: 0.9rem;
+          flex-direction: column;
+          gap: 0.8rem;
         }
       }
 
@@ -594,15 +642,78 @@
         }
 
         .page-title {
-          font-size: 1.2rem;
+          font-size: 1.6rem;
         }
 
-        .queue-table-container {
+        .appointments-table-container {
           border-radius: 0.8rem;
         }
 
-        .queue-table tbody tr {
-          padding: 1.2rem;
+        .appointments-table-container {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .appointments-table {
+          min-width: 100%;
+          display: block;
+          width: 100%;
+        }
+
+        .appointments-table thead {
+          display: none;
+        }
+
+        .appointments-table tbody {
+          display: block;
+          width: 100%;
+        }
+
+        .appointments-table tbody tr {
+          display: block;
+          margin-bottom: 1.6rem;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 0.8rem;
+          padding: 1.6rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .appointments-table tbody td {
+          display: block;
+          padding: 0.8rem 0;
+          text-align: left;
+          border: none;
+          font-size: 1rem;
+        }
+
+        .appointments-table tbody td:before {
+          content: attr(data-label);
+          font-weight: 600;
+          color: var(--color-text-primary);
+          display: block;
+          margin-bottom: 0.4rem;
+          font-size: 1rem;
+        }
+
+        .appointments-table tbody td:first-child {
+          padding-top: 0;
+        }
+
+        .appointments-table tbody td:last-child {
+          padding-bottom: 0;
+        }
+
+        .action-buttons {
+          flex-direction: column;
+          gap: 0.8rem;
+        }
+
+        .action-link {
+          width: 100%;
+          text-align: center;
+          padding: 0.4rem 0.8rem;
+          font-size: 1rem;
         }
       }
     </style>
@@ -611,7 +722,7 @@
     <!-- Header -->
     <header class="header">
       <div class="header-content">
-        <a href="dashboard.html" class="logo" style="text-decoration: none; color: inherit;">
+        <a href="dashboard.html" class="logo">
           <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" />
           <span class="logo-text">Qure</span>
         </a>
@@ -638,28 +749,31 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <h1 class="page-title">Real-Time Queue Tracking</h1>
-      <div class="last-updated">
-        <span id="last-updated-text">Updated 10 secs ago</span>
-        <span class="material-symbols-outlined refresh-icon" id="refresh-icon">refresh</span>
-      </div>
+      <h1 class="page-title">My Bookings</h1>
 
-      <div class="queue-table-container">
-        <table class="queue-table">
+      <div class="appointments-table-container">
+        <table class="appointments-table">
           <thead>
             <tr>
-              <th>Patient</th>
-              <th>Service</th>
-              <th>Waiting Time</th>
-              <th>Status</th>
+              <th>Date & Time</th>
+              <th>Department</th>
+              <th>Actions</th>
             </tr>
           </thead>
-          <tbody id="queue-table-body">
+          <tbody id="appointments-table-body">
             <tr>
-              <td colspan="4" class="loading-state">Loading queue data...</td>
+              <td colspan="3" class="loading-state">Loading appointments...</td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="pagination" id="pagination" style="display: none;">
+        <div class="pagination-info" id="pagination-info"></div>
+        <div class="pagination-controls">
+          <button class="pagination-btn" id="prev-page-btn" disabled>Previous</button>
+          <button class="pagination-btn" id="next-page-btn" disabled>Next</button>
+        </div>
       </div>
     </main>
 
@@ -678,7 +792,7 @@
     <!-- Mobile Navigation -->
     <div class="mobile-nav" id="mobile-nav">
       <div class="mobile-nav-header">
-        <a href="dashboard.html" class="mobile-nav-logo" style="text-decoration: none; color: inherit;">
+        <a href="dashboard.html" class="mobile-nav-logo">
           <img src="/images/Vector (3).png" alt="Qure Logo" class="logo-icon" style="filter: brightness(0) invert(1);" />
           <span class="logo-text" style="color: #fff;">Qure</span>
         </a>
@@ -693,6 +807,31 @@
       </nav>
     </div>
 
-    <script type="module" src="../src/pages/patient/queueStatus.js"></script>
+    <!-- Reschedule Appointment Modal -->
+    <div class="reschedule-modal-overlay" id="reschedule-modal-overlay" style="display: none;">
+      <div class="reschedule-modal-container">
+        <div class="reschedule-modal-content">
+          <h2 class="reschedule-modal-title">Reschedule Appointment</h2>
+          <p class="reschedule-modal-message">Select a new date and time for this appointment.</p>
+          
+          <div class="reschedule-form-group">
+            <label for="reschedule-datetime-input" class="reschedule-form-label">New Date & Time</label>
+            <input 
+              type="datetime-local" 
+              id="reschedule-datetime-input" 
+              class="reschedule-datetime-input"
+              required
+            />
+          </div>
+
+          <div class="reschedule-modal-actions">
+            <button class="btn btn-secondary" id="reschedule-cancel-btn">Cancel</button>
+            <button class="btn btn-primary" id="reschedule-submit-btn">Reschedule</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="../src/pages/patient/myBookings.js"></script>
   </body>
 </html>

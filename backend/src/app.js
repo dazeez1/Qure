@@ -76,6 +76,9 @@ app.listen(PORT, async () => {
   if (process.env.ENABLE_AUTO_CHECKIN !== 'false') {
     startAutoCheckInScheduler();
   }
+  
+  // Start appointment reminder scheduler (runs every hour)
+  startAppointmentReminderScheduler();
 });
 
 /**
@@ -104,6 +107,32 @@ async function startAutoCheckInScheduler() {
     console.log('✅ Auto-check-in scheduler started (runs every 5 minutes)');
   } catch (error) {
     console.error('❌ Failed to start auto-check-in scheduler:', error);
+  }
+}
+
+/**
+ * Start appointment reminder scheduler
+ * Runs every hour to send appointment reminders (24h and 2h before)
+ */
+async function startAppointmentReminderScheduler() {
+  try {
+    const { checkAndSendAppointmentReminders } = await import('./services/appointmentReminder.service.js');
+    
+    // Run immediately on startup
+    checkAndSendAppointmentReminders().catch(console.error);
+    
+    // Then run every hour
+    setInterval(async () => {
+      try {
+        await checkAndSendAppointmentReminders();
+      } catch (error) {
+        console.error('[Appointment Reminders] Scheduler error:', error);
+      }
+    }, 60 * 60 * 1000); // 1 hour
+    
+    console.log('✅ Appointment reminder scheduler started (runs every hour)');
+  } catch (error) {
+    console.error('❌ Failed to start appointment reminder scheduler:', error);
   }
 }
 

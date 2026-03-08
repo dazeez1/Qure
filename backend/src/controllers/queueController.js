@@ -10,6 +10,11 @@ import {
   monitorWaitTimeForEntry,
   cleanupWaitTimeCache 
 } from '../services/waitTimeNotification.service.js';
+import {
+  createQueueStatusChangeNotification,
+  createQueueCancellationNotification,
+  createFeedbackRequestNotification,
+} from '../services/patientNotification.service.js';
 
 /**
  * Get queue preview for public display (read-only)
@@ -1700,13 +1705,22 @@ export const updateQueueEntryStatus = async (req, res, next) => {
       });
 
       // Update appointment status to COMPLETED when queue entry is completed
+      let appointmentCompleted = false;
       if (newStatus === 'COMPLETED' && queueEntry.appointmentId) {
         await tx.appointment.update({
           where: { id: queueEntry.appointmentId },
           data: {
             status: 'COMPLETED',
           },
+          include: {
+            department: {
+              select: {
+                name: true,
+              },
+            },
+          },
         });
+        appointmentCompleted = true;
       }
 
       // Update doctor load if it changed
@@ -1736,8 +1750,52 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         newStatus: newStatus,
         doctorLoadUpdated: updatedCurrentActivePatients !== doctor.currentActivePatients,
         newDoctorLoad: updatedCurrentActivePatients,
+        appointmentCompleted,
+        appointment: appointmentCompleted ? await tx.appointment.findUnique({
+          where: { id: queueEntry.appointmentId },
+          include: {
+            department: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        }) : null,
       };
     });
+
+    // Create queue status change notification for important status changes (non-blocking)
+    if (['TRIAGE', 'CALLED', 'IN_CONSULTATION', 'COMPLETED'].includes(result.newStatus)) {
+      try {
+        await createQueueStatusChangeNotification({
+          patientId: result.queueEntry.patient.id,
+          hospitalId: result.queueEntry.hospitalId,
+          ticketNumber: result.queueEntry.ticketNumber,
+          oldStatus: result.previousStatus,
+          newStatus: result.newStatus,
+          departmentName: result.queueEntry.department.name,
+        });
+      } catch (notificationError) {
+        console.error('Failed to create queue status change notification:', notificationError);
+        // Don't fail status update if notification fails
+      }
+    }
+
+    // Create feedback request notification when appointment is completed (non-blocking)
+    if (result.appointmentCompleted && result.appointment) {
+      try {
+        await createFeedbackRequestNotification({
+          patientId: result.queueEntry.patient.id,
+          hospitalId: result.queueEntry.hospitalId,
+          appointmentId: result.queueEntry.appointmentId,
+          appointmentDate: result.appointment.appointmentDate,
+          departmentName: result.appointment.department.name,
+        });
+      } catch (notificationError) {
+        console.error('Failed to create feedback request notification:', notificationError);
+        // Don't fail status update if notification fails
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -2444,6 +2502,19 @@ export const cancelPatientQueueEntry = async (req, res, next) => {
         newDoctorLoad,
       };
     });
+
+    // Create queue cancellation notification (non-blocking)
+    try {
+      await createQueueCancellationNotification({
+        patientId: result.queueEntry.patient.id,
+        hospitalId: result.queueEntry.hospitalId,
+        ticketNumber: result.queueEntry.ticketNumber,
+        departmentName: result.queueEntry.department.name,
+      });
+    } catch (notificationError) {
+      console.error('Failed to create queue cancellation notification:', notificationError);
+      // Don't fail cancellation if notification fails
+    }
 
     res.status(200).json({
       success: true,

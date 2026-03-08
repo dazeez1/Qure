@@ -223,17 +223,10 @@ async function getCurrentQueue(patientId) {
  */
 async function getUpcomingAppointments(patientId) {
   try {
-    const now = new Date();
-
     const appointments = await prisma.appointment.findMany({
       where: {
         patientId,
-        appointmentDate: {
-          gte: now, // Future appointments only
-        },
-        status: {
-          in: ['BOOKED', 'CHECKED_IN', 'MOVED_TO_QUEUE', 'IN_CONSULTATION'],
-        },
+        status: 'BOOKED', // Only BOOKED appointments
       },
       include: {
         hospital: {
@@ -249,40 +242,14 @@ async function getUpcomingAppointments(patientId) {
             shortCode: true,
           },
         },
-        queueEntry: {
-          where: {
-            status: {
-              notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'], // Only active queue entries
-            },
-          },
-          select: {
-            id: true,
-            status: true,
-            assignedDoctor: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
       },
       orderBy: {
         appointmentDate: 'asc', // Earliest first
       },
-      take: 10, // Limit to 10 upcoming appointments
+      take: 3, // Limit to 3 upcoming appointments
     });
 
-    // Filter out appointments that have active queue entries
-    // If appointment has an active queue entry, it means patient has already checked in
-    // and should not appear in "upcoming appointments"
-    const filteredAppointments = appointments.filter((apt) => {
-      // Exclude if there's an active queue entry (patient has already checked in)
-      return !apt.queueEntry || apt.queueEntry.length === 0;
-    });
-
-    return filteredAppointments.map((apt) => ({
+    return appointments.map((apt) => ({
       id: apt.id,
       appointmentDate: apt.appointmentDate,
       status: apt.status,
@@ -298,66 +265,40 @@ async function getUpcomingAppointments(patientId) {
 }
 
 /**
- * Get patient notifications (announcements)
+ * Get patient notifications
  */
 async function getPatientNotifications(patientId) {
   try {
-    // Get patient's hospital from most recent appointment or active queue entry
-    const recentAppointment = await prisma.appointment.findFirst({
+    // Get patient notifications with pagination
+    const notifications = await prisma.patientNotification.findMany({
       where: {
         patientId,
-      },
-      select: {
-        hospitalId: true,
-      },
-      orderBy: {
-        appointmentDate: 'desc',
-      },
-    });
-
-    const activeQueueEntry = await prisma.queueEntry.findFirst({
-      where: {
-        patientId,
-        status: {
-          in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
-        },
-      },
-      select: {
-        hospitalId: true,
-      },
-    });
-
-    const hospitalId = activeQueueEntry?.hospitalId || recentAppointment?.hospitalId;
-
-    if (!hospitalId) {
-      return [];
-    }
-
-    // Get recent announcements for patient audience
-    const announcements = await prisma.announcement.findMany({
-      where: {
-        hospitalId,
-        audience: {
-          in: ['PATIENT', 'BOTH'],
-        },
       },
       select: {
         id: true,
+        type: true,
         title: true,
         content: true,
+        category: true,
+        priority: true,
+        isRead: true,
         createdAt: true,
       },
       orderBy: {
         createdAt: 'desc',
       },
-      take: 5, // Limit to 5 most recent
+      take: 20, // Show 20 most recent
     });
 
-    return announcements.map((ann) => ({
-      id: ann.id,
-      title: ann.title,
-      content: ann.content,
-      createdAt: ann.createdAt,
+    return notifications.map((notif) => ({
+      id: notif.id,
+      type: notif.type,
+      title: notif.title,
+      content: notif.content,
+      category: notif.category,
+      priority: notif.priority,
+      isRead: notif.isRead,
+      createdAt: notif.createdAt,
     }));
   } catch (error) {
     console.error('Error getting patient notifications:', error);

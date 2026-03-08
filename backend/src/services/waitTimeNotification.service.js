@@ -1,4 +1,5 @@
 import prisma from '../config/database.js';
+import { createPatientNotification } from './patientNotification.service.js';
 
 /**
  * Wait Time Notification Service
@@ -150,34 +151,16 @@ export async function checkAndNotifyWaitTimeChange(queueEntryId, currentWaitTime
     content += `\nTicket Number: ${queueEntry.ticketNumber}`;
     content += `\nStatus: ${queueEntry.status}`;
 
-    // Create in-app announcement for this specific patient
-    // We'll create a patient-specific announcement by including patient info in content
-    // Note: Announcements are hospital-wide, but we can make them patient-specific by including patient details
-    // For now, we'll create a general announcement but with patient-specific content
-    
-    // Actually, we need to think about this differently. Announcements are hospital-wide.
-    // For patient-specific notifications, we might need a different approach.
-    // But since the user asked for in-app notifications, and announcements are the in-app notification system,
-    // we'll create an announcement with audience PATIENT that includes patient-specific information.
-    
-    // However, to make it truly patient-specific, we could:
-    // 1. Create a patient-specific announcement (if the system supports it)
-    // 2. Or create a general announcement with patient info in the title/content
-    
-    // For now, let's create a patient-specific announcement by including the patient's name in the title
-    // This way, when the patient views their announcements, they'll see it's for them
-    
-    const announcement = await prisma.announcement.create({
-      data: {
-        hospitalId: queueEntry.hospitalId,
-        audience: 'PATIENT',
-        title: `${title} - ${queueEntry.patient.fullName}`,
-        content: content,
-        priority: priority,
-        isActive: true,
-        // Note: createdBy is optional, but we'll set it to null for system-generated notifications
-        createdBy: null,
-      },
+    // Create patient notification instead of announcement
+    await createPatientNotification({
+      patientId: queueEntry.patient.id,
+      hospitalId: queueEntry.hospitalId,
+      type: 'WAIT_TIME_UPDATE',
+      title: title,
+      content: content,
+      category: 'QUEUE',
+      priority: priority,
+      sendEmail: false, // Wait time updates are in-app only
     });
 
     // Update cache with new wait time and notification time
@@ -192,7 +175,6 @@ export async function checkAndNotifyWaitTimeChange(queueEntryId, currentWaitTime
     return { 
       notificationCreated: true, 
       reason: `Wait time changed from ${previousWaitTime} to ${currentWaitTime} minutes`,
-      announcementId: announcement.id,
     };
   } catch (error) {
     console.error('Error checking and notifying wait time change:', error);

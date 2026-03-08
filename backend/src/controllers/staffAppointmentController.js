@@ -1,6 +1,7 @@
 import { getStaffAppointments } from '../services/staffAppointment.service.js';
 import prisma from '../config/database.js';
 import { sendAnnouncement } from '../services/emailService.js';
+import { createAppointmentRescheduleNotification } from '../services/patientNotification.service.js';
 
 /**
  * Get staff appointments with filtering and pagination
@@ -612,6 +613,9 @@ export async function rescheduleAppointment(req, res) {
         }
       }
 
+      // Store old date for notification
+      const oldDate = appointment.appointmentDate;
+
       // Update appointment date
       const updatedAppointment = await tx.appointment.update({
         where: { id },
@@ -641,8 +645,24 @@ export async function rescheduleAppointment(req, res) {
         },
       });
 
-      return updatedAppointment;
+      return { updatedAppointment, oldDate, department: appointment.department };
     });
+
+    // Create reschedule notification (non-blocking)
+    // Note: No doctor is assigned at appointment reschedule time - doctors are assigned when checking into queue
+    try {
+      await createAppointmentRescheduleNotification({
+        patientId: result.updatedAppointment.patient.id,
+        hospitalId: result.updatedAppointment.hospitalId,
+        oldDate: result.oldDate,
+        newDate: result.updatedAppointment.appointmentDate,
+        departmentName: result.department.name,
+        doctorName: null, // No doctor assigned at appointment reschedule
+      });
+    } catch (notificationError) {
+      console.error('Failed to create reschedule notification:', notificationError);
+      // Don't fail reschedule if notification fails
+    }
 
     // Return success response
     return res.status(200).json({
@@ -994,23 +1014,23 @@ export async function sendAppointmentMessage(req, res) {
         // Don't fail the request if email fails
       }
 
-      // Create in-app announcement for patient
+      // Create in-app notification for patient
       try {
-        await tx.announcement.create({
-          data: {
-            hospitalId: appointment.hospitalId,
-            audience: 'PATIENT',
-            title: title,
-            content: fullMessage,
-            priority: 'NORMAL',
-            isActive: true,
-            createdBy: req.user.id,
-          },
+        const { createPatientNotification } = await import('../services/patientNotification.service.js');
+        await createPatientNotification({
+          patientId: appointment.patient.id,
+          hospitalId: appointment.hospitalId,
+          type: 'APPOINTMENT_MESSAGE',
+          title: title,
+          content: fullMessage,
+          category: 'ANNOUNCEMENT',
+          priority: 'NORMAL',
+          sendEmail: false, // Email already sent above
         });
         announcementCreated = true;
-      } catch (announcementError) {
-        console.error('Failed to create announcement:', announcementError);
-        // Don't fail the request if announcement creation fails
+      } catch (notificationError) {
+        console.error('Failed to create notification:', notificationError);
+        // Don't fail the request if notification creation fails
       }
 
       return {
