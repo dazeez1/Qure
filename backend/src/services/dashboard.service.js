@@ -268,16 +268,38 @@ export async function getDashboardOverview({ hospitalId, departmentId, search })
     inConsultationCount: occupancyMap.get(room.id) || 0,
   }));
 
-  // Calculate average wait time today
-  const waitingCount = queueCounts.WAITING + queueCounts.TRIAGE + queueCounts.CALLED;
-  const availableDoctors = doctorLoadSummary.filter(
-    (d) => d.isAvailable && d.currentActivePatients < d.maxConcurrentPatients
-  ).length;
+  // Calculate REAL average wait time today from completed entries
+  // This is the actual average time patients waited (from check-in to completion)
+  const completedEntriesToday = await prisma.queueEntry.findMany({
+    where: {
+      hospitalId,
+      status: 'COMPLETED',
+      updatedAt: {
+        gte: todayStart,
+        lte: todayEnd,
+      },
+      ...(departmentId && { departmentId }),
+    },
+    select: {
+      checkInTime: true,
+      updatedAt: true,
+    },
+  });
 
-  const averageWaitTimeToday =
-    availableDoctors > 0
-      ? Math.ceil(waitingCount / availableDoctors) * 15
-      : 0;
+  let averageWaitTimeToday = null;
+  if (completedEntriesToday.length > 0) {
+    const waitTimes = completedEntriesToday.map((entry) => {
+      const checkIn = new Date(entry.checkInTime);
+      const completed = new Date(entry.updatedAt);
+      const diffMs = completed.getTime() - checkIn.getTime();
+      return diffMs / (1000 * 60); // Convert to minutes
+    });
+
+    const totalWaitTime = waitTimes.reduce((sum, time) => sum + time, 0);
+    averageWaitTimeToday = Math.round((totalWaitTime / waitTimes.length) * 10) / 10; // Round to 1 decimal place
+  } else {
+    averageWaitTimeToday = 0; // No completed entries today
+  }
 
   return {
     hospitalName: hospital?.name || null,
