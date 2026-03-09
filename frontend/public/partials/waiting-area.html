@@ -1,0 +1,999 @@
+<div class="waiting-area-view">
+  <div class="waiting-area-header">
+    <h1 class="waiting-area-title">Waiting Area Management</h1>
+  </div>
+
+  <div class="waiting-area-filters">
+    <div class="filter-select-wrapper">
+      <select id="facility-filter" class="filter-select">
+        <option value="">Select Facility</option>
+      </select>
+    </div>
+    <div class="filter-select-wrapper">
+      <select id="floor-filter" class="filter-select">
+        <option value="">Select Floor</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="waiting-area-content">
+    <div class="waiting-area-list-container" id="waiting-area-list-container">
+      <div id="waiting-area-list" class="waiting-area-list">
+        <!-- Waiting area cards will be rendered here -->
+      </div>
+    </div>
+    <div class="waiting-area-details-sidebar" id="waiting-area-details-sidebar">
+      <div class="waiting-area-details-header">
+        <div class="header-top">
+          <h2 id="waiting-area-details-title" class="waiting-area-details-title">Select a waiting area</h2>
+          <button class="btn-my-patients-toggle" id="btn-my-patients-toggle" style="display: none;">
+            <span id="my-patients-toggle-text">My Patients</span>
+          </button>
+        </div>
+        <div class="waiting-area-occupancy-info" id="waiting-area-occupancy-info" style="display: none;">
+          <span class="occupancy-text" id="occupancy-text"></span>
+          <span class="critical-badge" id="critical-badge" style="display: none;">CRITICAL</span>
+        </div>
+      </div>
+      <div class="waiting-area-details-content">
+        <div class="waiting-area-patients-section">
+          <div class="patients-header">
+            <h3>Patients</h3>
+            <button class="btn-move-selected" id="btn-move-selected" style="display: none;">
+              Move (<span id="selected-count">0</span>)
+            </button>
+          </div>
+          <div id="waiting-area-patient-list" class="waiting-area-patient-list">
+            <!-- Patient list will be rendered here when an area is selected -->
+          </div>
+          <div id="patient-pagination" class="patient-pagination" style="display: none;">
+            <!-- Pagination controls will be rendered here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="waiting-area-actions">
+    <button id="add-waiting-area-btn" class="btn-add-waiting-area">
+      Add New Waiting Area
+    </button>
+  </div>
+</div>
+
+<!-- Add Waiting Area Modal -->
+<div class="modal-overlay" id="waiting-area-modal-overlay">
+  <div class="modal-card waiting-area-modal">
+    <div class="modal-header">
+      <h2>Add New Waiting Area</h2>
+      <button class="modal-close" id="waiting-area-modal-close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <form id="waiting-area-form">
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="waiting-area-name">Name <span class="required">*</span></label>
+          <input
+            type="text"
+            id="waiting-area-name"
+            name="name"
+            placeholder="e.g., Main Waiting Area"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="waiting-area-capacity">Capacity <span class="required">*</span></label>
+          <input
+            type="number"
+            id="waiting-area-capacity"
+            name="capacity"
+            placeholder="e.g., 50"
+            min="1"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="waiting-area-facility">Facility</label>
+          <input
+            type="text"
+            id="waiting-area-facility"
+            name="facility"
+            placeholder="e.g., Main Building"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="waiting-area-floor">Floor</label>
+          <input
+            type="text"
+            id="waiting-area-floor"
+            name="floor"
+            placeholder="e.g., Ground Floor"
+          />
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              id="waiting-area-is-default"
+              name="isDefault"
+            />
+            <span>Set as default waiting area</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="waiting-area-modal-cancel">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">
+          Create Waiting Area
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="delete-waiting-area-modal-overlay">
+  <div class="modal-card delete-modal">
+    <div class="modal-header">
+      <h2>Delete Waiting Area</h2>
+      <button class="modal-close" id="delete-modal-close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="delete-modal-text"></p>
+      <p class="delete-modal-description"></p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="delete-modal-cancel">
+        Cancel
+      </button>
+      <button type="button" class="btn btn-danger" id="delete-modal-confirm">
+        Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Waiting Area Page Styles - Scoped to prevent affecting other pages */
+  .waiting-area-view {
+    padding: 2rem;
+    height: 100%;
+    background-color: #f5f5f5;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .waiting-area-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+
+  .waiting-area-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .waiting-area-filters {
+    display: flex;
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+  }
+
+  .filter-select-wrapper {
+    position: relative;
+    flex: 1;
+    width: 50%;
+  }
+
+  .filter-select {
+    width: 100%;
+    padding: 1rem 1.2rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.6rem;
+    font-size: 1.4rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: white;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1.2rem center;
+    background-size: 1.2rem;
+  }
+
+  .filter-select:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 0.3rem rgba(14, 57, 149, 0.1);
+  }
+
+  .filter-select:hover {
+    border-color: var(--color-primary-blue);
+  }
+
+  .waiting-area-content {
+    background: white;
+    border-radius: 0.8rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    flex: 1;
+    display: flex;
+    gap: 2rem;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .waiting-area-list-container {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    max-height: calc(4 * (160px + 1.6rem)); /* Show 4 cards, then scroll */
+  }
+
+  .waiting-area-map-container {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .map-placeholder {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 1.6rem;
+    padding: 4rem;
+  }
+
+  .waiting-area-details-sidebar {
+    flex: 0 0 400px;
+    background: white;
+    border-left: 2px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .waiting-area-details-header {
+    padding: 1.6rem;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .waiting-area-details-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .btn-my-patients-toggle {
+    padding: 0.5rem 1rem;
+    background-color: #f3f4f6;
+    color: var(--color-text-primary);
+    border: 2px solid #e5e7eb;
+    border-radius: 0.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .btn-my-patients-toggle:hover {
+    background-color: #e5e7eb;
+    border-color: var(--color-primary-blue);
+  }
+
+  .btn-my-patients-toggle.active {
+    background-color: var(--color-primary-blue);
+    color: white;
+    border-color: var(--color-primary-blue);
+  }
+
+  .waiting-area-occupancy-info {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .occupancy-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .critical-badge {
+    background-color: #ff9800;
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 1.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .waiting-area-details-content {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .waiting-area-patients-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .patients-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .patients-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .btn-move-selected {
+    padding: 0.5rem 1rem;
+    background-color: var(--color-primary-blue);
+    color: white;
+    border: none;
+    border-radius: 0.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .btn-move-selected:hover:not(:disabled) {
+    background-color: #092d6e;
+  }
+
+  .btn-move-selected:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .waiting-area-patient-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    max-height: 100%;
+  }
+
+  .waiting-area-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.6rem;
+  }
+
+  .area-card {
+    padding: 1.2rem;
+    border-radius: 0.8rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+    border: 2px solid transparent;
+    overflow: hidden;
+    word-wrap: break-word;
+    height: fit-content;
+  }
+
+  .area-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .area-card-selected {
+    border: 3px solid var(--color-primary-blue);
+  }
+
+  .area-green {
+    background-color: #e6f6ed;
+  }
+
+  .area-green:hover {
+    border-color: #28a745;
+  }
+
+  .area-yellow {
+    background-color: #fff8e1;
+    border-left: 6px solid #ffb300;
+  }
+
+  .area-yellow:hover {
+    border-color: #ffb300;
+  }
+
+  .area-red {
+    background-color: #fdecea;
+  }
+
+  .area-red:hover {
+    border-color: #dc3545;
+  }
+
+  .area-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+  }
+
+  .area-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 1rem;
+  }
+
+  .area-card-occupancy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .area-card-actions {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+  }
+
+  .area-edit-btn,
+  .area-delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: color 0.2s;
+    border-radius: 0.4rem;
+  }
+
+  .area-edit-btn:hover {
+    color: var(--color-primary-blue);
+    background-color: rgba(14, 57, 149, 0.1);
+  }
+
+  .area-delete-btn:hover {
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+
+  .area-edit-btn .material-symbols-outlined,
+  .area-delete-btn .material-symbols-outlined {
+    font-size: 1.4rem;
+  }
+
+  .area-card-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+
+  .default-badge {
+    font-size: 1rem;
+    background: #0d6efd;
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 1rem;
+    margin-left: 0.6rem;
+    font-weight: 500;
+  }
+
+  .area-card-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .area-card-detail {
+    font-size: 1rem;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .area-card-detail strong {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+
+  .area-card-capacity {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .area-card-percentage {
+    font-size: 1rem;
+    color: #6b7280;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 8rem 2rem;
+    color: #9ca3af;
+    font-size: 1.6rem;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .patient-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 0.6rem;
+    border: 1px solid #e5e7eb;
+  }
+
+  .patient-item-checkbox {
+    width: 1.6rem;
+    height: 1.6rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .patient-item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .patient-item-name {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .patient-item-wait {
+    font-size: 1rem;
+    color: #6b7280;
+    white-space: nowrap;
+  }
+
+  .patient-item-area {
+    font-size: 0.9rem;
+    color: var(--color-primary-blue);
+    font-weight: 500;
+    margin-top: 0.2rem;
+  }
+
+  .patient-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 1.2rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .pagination-btn {
+    padding: 0.5rem 1rem;
+    background-color: white;
+    color: var(--color-text-primary);
+    border: 1px solid #e5e7eb;
+    border-radius: 0.6rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .pagination-btn:hover:not(:disabled) {
+    background-color: #f3f4f6;
+    border-color: var(--color-primary-blue);
+  }
+
+  .pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .pagination-info {
+    font-size: 1rem;
+    color: #6b7280;
+  }
+
+  .patient-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  .move-area-btn {
+    padding: 0.5rem 1rem;
+    background-color: var(--color-primary-blue);
+    color: white;
+    border: none;
+    border-radius: 0.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    white-space: nowrap;
+  }
+
+  .move-area-btn:hover:not(:disabled) {
+    background-color: #092d6e;
+  }
+
+  .move-area-btn:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 1.6rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .status-badge.waiting {
+    background-color: #10b981;
+    color: white;
+  }
+
+  .status-badge.triage {
+    background-color: #f59e0b;
+    color: white;
+  }
+
+  .status-badge.called {
+    background-color: #3b82f6;
+    color: white;
+  }
+
+  .status-badge.in-consultation {
+    background-color: #f97316;
+    color: white;
+  }
+
+  .status-badge.completed {
+    background-color: #6366f1;
+    color: white;
+  }
+
+  .status-badge.no-show {
+    background-color: #6b7280;
+    color: white;
+  }
+
+  .status-badge.cancelled {
+    background-color: #ef4444;
+    color: white;
+  }
+
+  /* Move Modal Select Styles */
+  .move-modal-select {
+    width: 100%;
+    padding: 1rem 1.2rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: white;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1.2rem center;
+    background-size: 1.2rem;
+  }
+
+  .move-modal-select:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 0.3rem rgba(14, 57, 149, 0.1);
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+  }
+
+  .modal-card {
+    background-color: white;
+    border-radius: 0.8rem;
+    width: 90%;
+    max-width: 40rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .modal-header h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: color 0.2s;
+  }
+
+  .modal-close:hover {
+    color: var(--color-text-primary);
+  }
+
+  .modal-body {
+    padding: 2rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.6rem;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0.8rem;
+  }
+
+  .form-group .required {
+    color: #ef4444;
+  }
+
+  .form-group input[type="text"],
+  .form-group input[type="number"] {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    transition: border-color 0.2s;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 0.2rem rgba(14, 57, 149, 0.1);
+  }
+
+  .checkbox-group {
+    margin-top: 1.6rem;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    width: 1.8rem;
+    height: 1.8rem;
+    cursor: pointer;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1.2rem;
+    padding: 2rem;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 0.6rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .btn-primary {
+    background-color: var(--color-primary-blue);
+    color: white;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #092d6e;
+  }
+
+  .btn-secondary {
+    background-color: #f3f4f6;
+    color: var(--color-text-primary);
+  }
+
+  .btn-secondary:hover {
+    background-color: #e5e7eb;
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-danger {
+    background-color: #ef4444;
+    color: white;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background-color: #dc2626;
+  }
+
+  .delete-modal-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 1rem;
+  }
+
+  .delete-modal-description {
+    font-size: 1rem;
+    color: #6b7280;
+    line-height: 1.6;
+  }
+
+  .waiting-area-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+
+  .btn-add-waiting-area {
+    background-color: var(--color-primary-blue);
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .btn-add-waiting-area:hover {
+    background-color: #092d6e;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(14, 57, 149, 0.3);
+  }
+
+  .btn-add-waiting-area:active {
+    transform: translateY(0);
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .waiting-area-view {
+      padding: 1.5rem;
+    }
+
+    .waiting-area-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1.5rem;
+    }
+
+    .waiting-area-title {
+      font-size: 2rem;
+    }
+
+    .waiting-area-filters {
+      flex-direction: column;
+    }
+
+    .filter-select-wrapper {
+      width: 100%;
+    }
+
+    .filter-select {
+      width: 100%;
+    }
+
+    .waiting-area-list {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+

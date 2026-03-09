@@ -1,0 +1,90 @@
+<div class="dashboard-view">
+  <!-- Top Control Bar -->
+  <div class="dashboard-controls">
+    <div class="dashboard-controls-left">
+      <div class="hospital-name-display">
+        <span class="material-symbols-outlined hospital-icon">local_hospital</span>
+        <span id="hospital-name-text">Hospital Name</span>
+      </div>
+      <div class="select-wrapper">
+        <select id="department-select" class="dashboard-select">
+          <option>Select Department</option>
+        </select>
+      </div>
+    </div>
+    <div class="dashboard-controls-right">
+      <div class="dashboard-search">
+        <span class="material-symbols-outlined">search</span>
+        <input type="text" placeholder="Search name or ticket" id="dashboard-search-input" />
+      </div>
+      <button class="btn-add-staff">Add Staff</button>
+      <button class="btn-export-data">Export Data</button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="dashboard-summary-cards">
+    <div class="summary-card">
+      <div class="summary-label">Current Queue Length</div>
+      <div class="summary-value" id="metric-queue-length">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Avg. Wait Time</div>
+      <div class="summary-value" id="metric-avg-wait">0 mins</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">No Shows Today</div>
+      <div class="summary-value" id="metric-no-shows">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Occupancy</div>
+      <div class="summary-value" id="metric-occupancy">0%</div>
+    </div>
+  </div>
+
+  <!-- Queue Section -->
+  <div class="dashboard-queue-announcement-wrapper">
+    <div class="dashboard-queue-section">
+      <div class="queue-section-header">
+        <h2 class="queue-section-title">Queue</h2>
+        <button class="btn-call-next">Call Next</button>
+      </div>
+      <div class="queue-table-wrapper">
+        <table class="dashboard-queue-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Ticket #</th>
+              <th>Department</th>
+              <th>Status</th>
+              <th>Wait time</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-queue-body">
+            <tr class="empty-queue-row">
+              <td colspan="5" class="empty-queue-message">No queue entries</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Announcement Panel -->
+    <div class="dashboard-announcement-panel">
+      <div class="announcement-tabs">
+        <button class="announcement-tab active" data-tab="patient">Patient</button>
+        <button class="announcement-tab" data-tab="staff">Staff</button>
+      </div>
+      <div class="announcement-content">
+        <textarea
+          id="announcement-textarea"
+          class="announcement-textarea"
+          placeholder="Write announcement..."
+          rows="12"
+        ></textarea>
+        <button class="btn-create-announcement">Create Announcement</button>
+      </div>
+    </div>
+  </div>
+</div>
+

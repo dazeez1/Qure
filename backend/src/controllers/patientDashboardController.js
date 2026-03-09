@@ -48,11 +48,14 @@ export const getPatientDashboard = async (req, res, next) => {
 
 /**
  * Get current queue entry for patient
+ * When patient has multiple active queues, returns the one closest to finishing
+ * (lowest estimated wait time - e.g. IN_CONSULTATION or CALLED first)
  */
 async function getCurrentQueue(patientId) {
   try {
-    // Find active queue entry
-    const queueEntry = await prisma.queueEntry.findFirst({
+    const { getWaitTimeForEntry } = await import('../services/waitTime.service.js');
+
+    const queueEntries = await prisma.queueEntry.findMany({
       where: {
         patientId,
         status: {
@@ -68,22 +71,33 @@ async function getCurrentQueue(patientId) {
           },
         },
       },
-      orderBy: {
-        checkInTime: 'desc',
-      },
     });
 
-    if (!queueEntry) {
+    if (!queueEntries.length) {
       return null;
     }
 
-    const { getWaitTimeForEntry } = await import('../services/waitTime.service.js');
-    const { waitMins, position, waitTimeDisplay } = await getWaitTimeForEntry({
-      hospitalId: queueEntry.hospitalId,
-      departmentId: queueEntry.departmentId,
-      sequenceNumber: queueEntry.sequenceNumber,
-      status: queueEntry.status,
+    // Compute wait time for each entry and pick the one closest to finishing
+    const entriesWithWait = await Promise.all(
+      queueEntries.map(async (entry) => {
+        const { waitMins, position, waitTimeDisplay } = await getWaitTimeForEntry({
+          hospitalId: entry.hospitalId,
+          departmentId: entry.departmentId,
+          sequenceNumber: entry.sequenceNumber,
+          status: entry.status,
+        });
+        return { entry, waitMins, position, waitTimeDisplay };
+      })
+    );
+
+    // Sort by estimated wait ascending (closest to finishing first)
+    entriesWithWait.sort((a, b) => {
+      const aMins = a.waitMins ?? Infinity;
+      const bMins = b.waitMins ?? Infinity;
+      return aMins - bMins;
     });
+
+    const { entry: queueEntry, waitMins, position, waitTimeDisplay } = entriesWithWait[0];
 
     return {
       ticketNumber: queueEntry.ticketNumber,
