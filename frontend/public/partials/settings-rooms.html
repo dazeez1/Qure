@@ -1,0 +1,457 @@
+<div class="settings-rooms">
+  <!-- Header with Add Button -->
+  <div class="rooms-header">
+    <button type="button" class="btn btn-primary" id="add-room-btn">
+      Add New Room
+    </button>
+  </div>
+
+  <!-- Rooms Table -->
+  <div class="rooms-table-container">
+    <table class="rooms-table" id="rooms-table">
+      <thead>
+        <tr>
+          <th>Room Name</th>
+          <th>Department</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rooms-table-body">
+        <!-- Table rows will be rendered here dynamically -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Room Modal -->
+<div class="modal-overlay" id="add-room-modal" style="display: none;">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">Add New Room</h3>
+      <button type="button" class="modal-close-btn" id="close-add-modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <form id="add-room-form" class="modal-form">
+      <div class="form-group">
+        <label for="add-room-name" class="form-label">Room Name <span class="required">*</span></label>
+        <input
+          type="text"
+          id="add-room-name"
+          name="roomName"
+          class="form-input"
+          placeholder="Enter room name (e.g., Room 101)"
+          required
+        />
+        <span class="error-message" id="add-room-name-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="add-room-department" class="form-label">Department <span class="required">*</span></label>
+        <select id="add-room-department" name="departmentId" class="form-select" required>
+          <option value="">Select a department</option>
+          <!-- Departments will be populated dynamically -->
+        </select>
+        <span class="error-message" id="add-room-department-error"></span>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="cancel-add-room-btn">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" id="save-add-room-btn">
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Room Modal -->
+<div class="modal-overlay" id="edit-room-modal" style="display: none;">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Room</h3>
+      <button type="button" class="modal-close-btn" id="close-edit-modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <form id="edit-room-form" class="modal-form">
+      <input type="hidden" id="edit-room-id" name="roomId" />
+      
+      <div class="form-group">
+        <label for="edit-room-name" class="form-label">Room Name <span class="required">*</span></label>
+        <input
+          type="text"
+          id="edit-room-name"
+          name="roomName"
+          class="form-input"
+          placeholder="Enter room name (e.g., Room 101)"
+          required
+        />
+        <span class="error-message" id="edit-room-name-error"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-room-status" class="form-label">Status</label>
+        <select id="edit-room-status" name="isActive" class="form-select">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="cancel-edit-room-btn">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary" id="save-edit-room-btn">
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .settings-rooms {
+    width: 100%;
+  }
+
+  .rooms-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 1.2rem;
+  }
+
+  .rooms-table-container {
+    background: #fff;
+    border-radius: 1.6rem;
+    padding: 1.2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+  }
+
+  .rooms-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .rooms-table thead {
+    background-color: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
+  .rooms-table th {
+    padding: 0.8rem 1.2rem;
+    text-align: left;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .rooms-table td {
+    padding: 0.8rem 1.2rem;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+  }
+
+  .rooms-table tbody tr:hover {
+    background-color: #f9fafb;
+  }
+
+  .rooms-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 2rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    user-select: none;
+  }
+
+  .status-badge.active {
+    background-color: #d1fae5;
+    color: #065f46;
+  }
+
+  .status-badge.inactive {
+    background-color: #f3f4f6;
+    color: #6b7280;
+  }
+
+  .status-badge:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+  }
+
+  .action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.4rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+  }
+
+  .action-btn:hover {
+    background-color: #f3f4f6;
+    color: var(--color-primary-blue);
+  }
+
+  .action-btn.edit-btn:hover {
+    color: #059669;
+  }
+
+  .action-btn.delete-btn:hover {
+    color: #dc2626;
+  }
+
+  .action-btn .material-symbols-outlined {
+    font-size: 1.8rem;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1.6rem;
+  }
+
+  .modal-container {
+    background: #fff;
+    border-radius: 1.2rem;
+    width: 100%;
+    max-width: 42rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+
+  .modal-container-small {
+    max-width: 36rem;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 1.6rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .modal-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .modal-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem;
+    border-radius: 0.4rem;
+    color: #6b7280;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-close-btn:hover {
+    background-color: #f3f4f6;
+    color: var(--color-text-primary);
+  }
+
+  .modal-close-btn .material-symbols-outlined {
+    font-size: 2rem;
+  }
+
+  .modal-form {
+    padding: 1.6rem;
+  }
+
+  .modal-body {
+    padding: 1.6rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.2rem;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .required {
+    color: #dc2626;
+  }
+
+  .form-input,
+  .form-select {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.6rem;
+    font-size: 1.2rem;
+    color: var(--color-text-primary);
+    background-color: #fff;
+    transition: border-color 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .form-input:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: var(--color-primary-blue);
+    box-shadow: 0 0 0 3px rgba(15, 82, 186, 0.1);
+  }
+
+  .form-input.error,
+  .form-select.error {
+    border-color: #dc2626;
+  }
+
+  .error-message {
+    display: block;
+    font-size: 1.2rem;
+    color: #dc2626;
+    margin-top: 0.4rem;
+    min-height: 1.6rem;
+  }
+
+  .form-hint {
+    display: block;
+    font-size: 1.2rem;
+    color: #6b7280;
+    margin-top: 0.4rem;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.8rem;
+    padding: 1.2rem 1.6rem;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 1.2rem;
+  }
+
+  .btn {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 0.8rem;
+    font-size: 1.2rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background-color: var(--color-primary-blue);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #092d6e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 82, 186, 0.3);
+  }
+
+  .btn-primary:disabled {
+    background-color: #d1d5db;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn-secondary {
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+
+  .btn-secondary:hover {
+    background-color: #e5e7eb;
+    border-color: #d1d5db;
+  }
+
+  .btn-danger {
+    background-color: #dc2626;
+    color: #fff;
+  }
+
+  .btn-danger:hover {
+    background-color: #b91c1c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .rooms-header {
+      justify-content: flex-start;
+    }
+
+    .rooms-header .btn {
+      width: 100%;
+    }
+
+    .rooms-table-container {
+      padding: 1.6rem;
+      overflow-x: auto;
+    }
+
+    .rooms-table {
+      min-width: 600px;
+    }
+
+    .modal-container {
+      margin: 1rem;
+      max-width: calc(100% - 2rem);
+    }
+
+    .modal-actions {
+      flex-direction: column-reverse;
+    }
+
+    .modal-actions .btn {
+      width: 100%;
+    }
+  }
+</style>
+
