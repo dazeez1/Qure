@@ -44,7 +44,8 @@ const corsOptions = {
       'http://localhost:5173',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173',
-      process.env.FRONTEND_URL, // Vercel frontend URL
+      'https://qure-frontend.vercel.app',
+      process.env.FRONTEND_URL,
     ].filter(Boolean); // Remove undefined values
     
     // Allow if origin is in allowed list or if in development

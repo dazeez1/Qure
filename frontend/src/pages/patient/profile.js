@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { apiGet, apiPatch } from '../../utils/apiClient.js';
+import { apiGet, apiPatch, getApiBaseUrl } from '../../utils/apiClient.js';
 import { getAuthUser, isAuthenticated, clearAuth, getAuthToken, setAuthUser } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { displayAvatar } from '../../utils/avatar.js';
@@ -239,9 +239,7 @@ async function handleAvatarUpload(file) {
       return;
     }
 
-    const BASE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-
-    const response = await fetch(`${BASE_API_URL}/patient/avatar`, {
+    const response = await fetch(`${getApiBaseUrl()}/patient/avatar`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

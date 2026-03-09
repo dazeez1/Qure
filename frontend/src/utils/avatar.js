@@ -3,6 +3,8 @@
  * Handles displaying patient avatars consistently across the application
  */
 
+import { getApiBaseUrl } from './apiClient.js';
+
 /**
  * Display avatar or initials in an element
  * @param {HTMLElement} element - The element to display avatar in
@@ -22,12 +24,7 @@ export function displayAvatar(element, avatarUrl, fullName) {
     // For backward compatibility, handle local uploads too
     let imageSrc = avatarUrl;
     if (!avatarUrl.startsWith('http://') && !avatarUrl.startsWith('https://')) {
-      // Legacy local upload path - prepend backend URL
-      const BASE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-      const API_BASE = BASE_API_URL.endsWith('/api') 
-        ? BASE_API_URL.replace('/api', '') 
-        : BASE_API_URL.replace(/\/api$/, '') || 'http://localhost:5001';
-      
+      const API_BASE = new URL(getApiBaseUrl()).origin;
       if (avatarUrl.startsWith('/uploads/')) {
         imageSrc = `${API_BASE}${avatarUrl}`;
       } else {

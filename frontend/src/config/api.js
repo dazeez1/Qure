@@ -11,8 +11,9 @@
  * with relative paths instead of direct fetch() calls.
  */
 
-// Internal use only - apiClient.js uses this
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+import { getApiBaseUrl } from '../utils/apiClient.js';
+
+export const API_BASE_URL = getApiBaseUrl();
 
 /**
  * API Endpoints Reference (for documentation only)
