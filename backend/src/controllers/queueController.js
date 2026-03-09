@@ -1303,10 +1303,15 @@ export const getStaffQueue = async (req, res, next) => {
         },
       });
       if (user.currentActivePatients !== liveActiveCount) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { currentActivePatients: liveActiveCount },
-        });
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { currentActivePatients: liveActiveCount },
+          });
+        } catch (error) {
+          // Non-critical: log and continue so queue response still succeeds
+          console.error('Error syncing doctor currentActivePatients in getStaffQueue:', error);
+        }
       }
       doctorLoadSync = {
         currentActivePatients: liveActiveCount,
@@ -1716,12 +1721,17 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         },
       });
       if (newActiveCount !== doctor.currentActivePatients) {
-        await tx.user.update({
-          where: { id: doctor.id },
-          data: {
-            currentActivePatients: newActiveCount,
-          },
-        });
+        try {
+          await tx.user.update({
+            where: { id: doctor.id },
+            data: {
+              currentActivePatients: newActiveCount,
+            },
+          });
+        } catch (error) {
+          // Non-critical: if load sync fails, do not block status change
+          console.error('Error updating doctor currentActivePatients in updateQueueEntryStatus:', error);
+        }
       }
 
       // Update department average consultation time when consultation completes
