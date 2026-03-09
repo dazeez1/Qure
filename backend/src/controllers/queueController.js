@@ -1424,8 +1424,9 @@ export const updateQueueEntryStatus = async (req, res, next) => {
       });
     }
 
-    // Wrap in transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction (with extended timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find queue entry
       const queueEntry = await tx.queueEntry.findUnique({
         where: { id },
@@ -1696,8 +1697,9 @@ export const updateQueueEntryStatus = async (req, res, next) => {
 
       // Update appointment status to COMPLETED when queue entry is completed
       let appointmentCompleted = false;
+      let completedAppointment = null;
       if (newStatus === 'COMPLETED' && queueEntry.appointmentId) {
-        await tx.appointment.update({
+        completedAppointment = await tx.appointment.update({
           where: { id: queueEntry.appointmentId },
           data: {
             status: 'COMPLETED',
@@ -1752,18 +1754,10 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         doctorLoadUpdated: newActiveCount !== doctor.currentActivePatients,
         newDoctorLoad: newActiveCount,
         appointmentCompleted,
-        appointment: appointmentCompleted ? await tx.appointment.findUnique({
-          where: { id: queueEntry.appointmentId },
-          include: {
-            department: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        }) : null,
+        appointment: appointmentCompleted ? completedAppointment : null,
       };
-    });
+    },
+    { timeout: 15000 });
 
     // Create queue status change notification for important status changes (non-blocking)
     if (['TRIAGE', 'CALLED', 'IN_CONSULTATION', 'COMPLETED'].includes(result.newStatus)) {
