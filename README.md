@@ -2,8 +2,6 @@
 
 A comprehensive multi-hospital SaaS healthcare queue management system that streamlines patient appointments, queue management, and hospital operations.
 
-![Qure Logo](frontend/public/images/Vector%20(3).png)
-
 ##  Table of Contents
 
 - [Overview](#overview)
@@ -307,40 +305,23 @@ Watch the comprehensive 5-minute demo showcasing the core functionalities of Qur
 The demo covers:
 - Patient appointment booking and management
 - Real-time queue management and status updates
+- Staff security
 - Staff dashboard and queue operations
 - Doctor assignment and consultation workflow
 - Notification system (in-app and email)
-- Analytics and reporting features
-- Multi-hospital isolation and scoping
 
 > **Note**: The demo focuses on core functionalities rather than sign-up and sign-in processes.
 
 ##  Live Deployment
 
-**Frontend (Vercel)**: [Your Vercel Deployment URL]
-**Backend API (Render)**: [Your Render Deployment URL]
-**API Health Check**: [Your Render URL]/health
-
-*Note: Update these URLs with your actual deployment links after deployment*
+**Frontend (Vercel)**: [[https://qure-frontend.vercel.app/](https://qure-frontend.vercel.app/)]
+**Backend API (Render)**: [[https://qure-vbfm.onrender.com](https://qure-vbfm.onrender.com)]
+**API Health Check**: [https://qure-vbfm.onrender.com/health](https://qure-vbfm.onrender.com/health)]
 
 ##  Related Files
 
 ### Documentation
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete deployment guide for Vercel and Render
-- [VERCEL_TROUBLESHOOTING.md](./VERCEL_TROUBLESHOOTING.md) - Vercel deployment troubleshooting
 - [Analysis.md](./Analysis.md) - Project analysis and objectives evaluation
-
-### Configuration Files
-- `backend/render.yaml` - Render deployment configuration
-- `frontend/vercel.json` - Vercel deployment configuration
-- `backend/prisma/schema.prisma` - Database schema definition
-- `frontend/vite.config.js` - Vite build configuration
-
-### Key Source Files
-- `backend/src/app.js` - Express application entry point
-- `backend/src/config/database.js` - Prisma database client
-- `frontend/src/utils/apiClient.js` - API client wrapper
-- `frontend/src/utils/auth.js` - Authentication utilities
 
 ##  Analysis
 
