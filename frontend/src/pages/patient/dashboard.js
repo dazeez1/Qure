@@ -5,7 +5,8 @@
 
 'use strict';
 
-import { apiGet, apiPatch, apiDelete } from '../../utils/apiClient.js';
+import { io } from 'socket.io-client';
+import { apiGet, apiPatch, apiDelete, getApiBaseUrl } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { confirmCancelAppointment, confirmCancelQueue, showConfirmModal } from '../../utils/modal.js';
@@ -146,24 +147,9 @@ function renderCurrentQueue(queueData) {
   // Display queue number (e.g., "C-012")
   queueNumber.textContent = queueData.ticketNumber || '-';
   
-  // Display ETA - sync with queue table display
-  // When status is WAITING, CALLED, or IN_CONSULTATION, show "<1 min"
-  // These correspond to "waiting", "next", "now serving" in the queue table
-  const status = queueData.status;
-  let etaDisplay = '';
-  
-  if (status === 'WAITING' || status === 'CALLED' || status === 'IN_CONSULTATION') {
-    // Show "<1 min" for these statuses to match queue table
-    etaDisplay = '< 1 min';
-  } else if (queueData.waitTimeDisplay) {
-    // Use backend-provided waitTimeDisplay if available
-    etaDisplay = queueData.waitTimeDisplay;
-  } else {
-    // Fallback to calculated estimatedWaitMinutes
-    const etaMinutes = queueData.estimatedWaitMinutes;
-    etaDisplay = formatWaitTime(etaMinutes);
-  }
-  
+  // Use backend wait time: waitTimeDisplay (Now Serving, Next, Preparing, X mins, Ready now, >120 mins) or format estimatedWaitMinutes
+  const etaDisplay = queueData.waitTimeDisplay
+    || (queueData.estimatedWaitMinutes != null ? formatWaitTime(queueData.estimatedWaitMinutes) : 'Calculating...');
   queueEta.textContent = etaDisplay;
 }
 
@@ -680,7 +666,10 @@ async function loadDashboard() {
 
     const data = result.data || {};
 
-    // Render data
+    const hospitalId = data.currentQueue?.hospitalId
+      || data.upcomingAppointments?.[0]?.hospital?.id;
+    if (hospitalId) ensurePatientQueueSocket(hospitalId);
+
     renderCurrentQueue(data.currentQueue);
     renderAppointments(data.upcomingAppointments || []);
     renderNotifications(data.notifications || []);
@@ -965,6 +954,18 @@ if (clearAllBtn) {
     if (confirmed) {
       await clearAllReadNotifications();
     }
+  });
+}
+
+let patientQueueSocket = null;
+
+function ensurePatientQueueSocket(hospitalId) {
+  if (!hospitalId || patientQueueSocket) return;
+  const socketUrl = new URL(getApiBaseUrl()).origin;
+  patientQueueSocket = io(socketUrl);
+  patientQueueSocket.emit('joinHospital', hospitalId);
+  patientQueueSocket.on('queue:update', () => {
+    loadDashboard();
   });
 }
 

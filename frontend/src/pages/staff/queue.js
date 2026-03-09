@@ -5,8 +5,9 @@
 
 'use strict';
 
-import { apiGet, apiPatch, apiPost } from '../../utils/apiClient.js';
-import { getAuthUser, isAuthenticated } from '../../utils/auth.js';
+import { io } from 'socket.io-client';
+import { apiGet, apiPatch, apiPost, getApiBaseUrl } from '../../utils/apiClient.js';
+import { getAuthUser, getAuthToken, isAuthenticated, setAuthUser } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { showConfirmModal } from '../../utils/modal.js';
 import { initPage, cleanupPage, addButtonListener, addListener, addScopedDocumentListener } from '../../utils/pageLifecycle.js';
@@ -21,9 +22,12 @@ let pollingInterval = null;
 let waitTimePollingInterval = null; // Separate interval for wait time updates
 let currentQueueEntryId = null; // For room assignment
 let availableRooms = [];
+let completedTodayCount = 0; // From API; used in summary when completed rows are hidden
 let waitingAreas = []; // Store waiting areas with occupancy
 let waitTimeCache = new Map(); // Cache wait times by entry ID
 let waitTimeSSEConnections = new Map(); // Map of active SSE connections by entry ID
+let queueSocket = null;
+let lastQueueFetchTime = 0; // Skip duplicate refetch when socket fires right after our own action
 
 // DOM Elements
 let queueTableBody;
@@ -470,15 +474,37 @@ async function fetchQueue(showLoading = true) {
 
     if (result.success && result.data) {
       queueData = result.data.queueEntries || [];
+      completedTodayCount = result.data.completedTodayCount ?? 0;
       const pagination = result.data.pagination || {};
       currentPage = pagination.page || 1;
       totalPages = pagination.totalPages || 1;
       await renderQueueTable();
       updateSummary();
       updatePaginationButtons();
-      
-      // Fetch doctor load info if doctor
-      if (isDoctor) {
+      lastQueueFetchTime = Date.now();
+
+      if (isDoctor && result.data.user) {
+        const u = getAuthUser();
+        if (u) {
+          setAuthUser({
+            ...u,
+            currentActivePatients: result.data.user.currentActivePatients,
+            maxConcurrentPatients: result.data.user.maxConcurrentPatients,
+          });
+          user = getAuthUser(); // keep in-memory user in sync so badge and rest of page see latest
+        }
+        // Update Active Patients badge immediately from this response (no refresh needed)
+        if (doctorLoadBadge) {
+          const current = result.data.user.currentActivePatients ?? 0;
+          const max = result.data.user.maxConcurrentPatients ?? 3;
+          doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
+          doctorLoadBadge.title = 'Active patients = CALLED + IN CONSULTATION. Decreases when you complete, no-show, or cancel.';
+          doctorLoadBadge.classList.remove('hidden');
+          doctorLoadCache.data = { current, max };
+          doctorLoadCache.timestamp = Date.now();
+        }
+        await fetchDoctorLoad(true);
+      } else if (isDoctor) {
         await fetchDoctorLoad();
       }
 
@@ -586,7 +612,7 @@ async function renderQueueTable() {
           </div>
         </td>
         <td>${ticketNumber}</td>
-        <td>
+        <td class="status-cell">
           ${getStatusBadge(status)}
         </td>
         <td>
@@ -784,13 +810,15 @@ function canUpdateStatus(entry) {
  */
 function getStatusBadge(status) {
   const statusUpper = (status || '').toUpperCase();
-  
+  const badgeStyle = 'background-color: #10b981; color: #fff; padding: 0.3rem 0.6rem; border-radius: 0.4rem; font-size: 1rem; font-weight: 600;';
+  const badgeStyleBlue = 'background-color: #3b82f6; color: #fff; padding: 0.3rem 0.6rem; border-radius: 0.4rem; font-size: 1rem; font-weight: 600;';
+  const badgeStyleGray = 'background-color: #6b7280; color: #fff; padding: 0.3rem 0.6rem; border-radius: 0.4rem; font-size: 1rem; font-weight: 600;';
   if (statusUpper === 'IN_CONSULTATION') {
-    return '<span class="status-badge now-serving" style="background-color: #10b981; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 1.2rem; font-weight: 600;">Now Serving</span>';
+    return `<span class="status-badge now-serving" style="${badgeStyle}">Now Serving</span>`;
   } else if (statusUpper === 'CALLED') {
-    return '<span class="status-badge next" style="background-color: #3b82f6; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 1.2rem; font-weight: 600;">Next</span>';
+    return `<span class="status-badge next" style="${badgeStyleBlue}">Next</span>`;
   } else if (statusUpper === 'WAITING' || statusUpper === 'TRIAGE') {
-    return '<span class="status-badge waiting" style="background-color: #6b7280; color: #fff; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 1.2rem; font-weight: 600;">Waiting</span>';
+    return `<span class="status-badge waiting" style="${badgeStyleGray}">Waiting</span>`;
   } else {
     return `<span class="status-badge ${status.toLowerCase().replace('_', '-')}">${formatStatus(status)}</span>`;
   }
@@ -971,9 +999,9 @@ async function handleCallNext() {
   }
 
   try {
-    // Find next patient in queue (WAITING or TRIAGE)
-    const nextEntry = queueData.find(entry => 
-      entry.assignedDoctor && 
+    // Next = first in line (backend returns queue sorted by priority DESC, sequenceNumber ASC)
+    const nextEntry = queueData.find(entry =>
+      entry.assignedDoctor &&
       entry.assignedDoctor.id === user.id &&
       (entry.status === 'WAITING' || entry.status === 'TRIAGE')
     );
@@ -983,7 +1011,6 @@ async function handleCallNext() {
       return;
     }
 
-    // Transition to CALLED
     await updateQueueStatus(nextEntry.id, 'CALLED');
   } finally {
     // Re-enable button
@@ -1019,8 +1046,8 @@ async function handleStatusUpdate(entryId, currentStatus, roomId = null, buttonE
   } else if (actualStatus === 'TRIAGE') {
     nextStatus = 'CALLED';
   } else if (actualStatus === 'CALLED') {
-    // Show room modal for IN_CONSULTATION
-    await openRoomModal(entryId);
+    // Show inline room dropdown for this consultation
+    await showRoomDropdown(entryId, buttonEl);
     return;
   } else if (actualStatus === 'IN_CONSULTATION') {
     // Complete the consultation
@@ -1034,7 +1061,8 @@ async function handleStatusUpdate(entryId, currentStatus, roomId = null, buttonE
 }
 
 /**
- * Update queue entry status with retry logic
+ * Update queue entry status with retry logic.
+ * @returns {Promise<boolean>} true if the API reported success, false otherwise (throws on network error after retries).
  */
 async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null, retryCount = 0) {
   const MAX_RETRIES = 2;
@@ -1068,6 +1096,7 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
       if (isDoctor) {
         await fetchDoctorLoad(true);
       }
+      return true;
     } else {
       // Retry on failure if retries remaining
       if (retryCount < MAX_RETRIES && response.status >= 500) {
@@ -1075,6 +1104,7 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
         return updateQueueStatus(entryId, status, roomId, buttonEl, retryCount + 1);
       }
       toast.error(result.message || 'Failed to update status');
+      return false;
     }
   } catch (error) {
     console.error('Error updating status:', error);
@@ -1084,6 +1114,7 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
       return updateQueueStatus(entryId, status, roomId, buttonEl, retryCount + 1);
     }
     toast.error('Failed to update status');
+    throw error;
   } finally {
     // Re-enable button after API call
     if (buttonEl) {
@@ -1099,100 +1130,143 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
 }
 
 /**
- * Open room modal
+ * Get available rooms for a department (excluding currently occupied)
+ * @param {string} departmentId
+ * @returns {Promise<Array<{id: string, name: string}>>}
  */
-async function openRoomModal(entryId) {
-  currentQueueEntryId = entryId;
-  
-  // Always re-query room modal elements to ensure they're found
-  // This handles cases where the modal wasn't in DOM during initialization
-  roomModalOverlay = document.getElementById('room-modal-overlay');
-  roomList = document.getElementById('room-list');
-  roomModalConfirm = document.getElementById('room-modal-confirm');
-  roomModalCancel = document.getElementById('room-modal-cancel');
-  roomModalClose = document.getElementById('room-modal-close');
-  
-  // If still not found, wait a bit and try again (for dynamic loading)
-  if (!roomModalOverlay) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    roomModalOverlay = document.getElementById('room-modal-overlay');
-    roomList = document.getElementById('room-list');
-    roomModalConfirm = document.getElementById('room-modal-confirm');
-    roomModalCancel = document.getElementById('room-modal-cancel');
-    roomModalClose = document.getElementById('room-modal-close');
+async function getAvailableRoomsForDepartment(departmentId) {
+  const response = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=false`);
+  const result = await response.json();
+  let rooms = (result.success && result.data?.rooms) ? result.data.rooms : [];
+  if (rooms.length === 0) {
+    const inactiveRes = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=true`);
+    const inactiveResult = await inactiveRes.json();
+    if (inactiveResult.success && inactiveResult.data?.rooms) {
+      rooms = inactiveResult.data.rooms;
+    }
   }
-  
-  // Final check - if modal still not found, show error
-  if (!roomModalOverlay) {
-    console.error('Room modal overlay not found in DOM');
-    toast.error('Room selection modal not available. Please refresh the page.');
-    return;
+  const occupiedIds = new Set(
+    queueData
+      .filter(e => e.status === 'IN_CONSULTATION' && e.assignedRoom?.id)
+      .map(e => e.assignedRoom.id)
+  );
+  return rooms.filter(r => !occupiedIds.has(r.id));
+}
+
+let roomDropdownOutsideClickHandler = null;
+
+/**
+ * Close the inline room dropdown popover and remove outside-click listener
+ */
+function closeRoomDropdownPopover() {
+  const popover = document.getElementById('room-dropdown-popover');
+  if (popover) {
+    popover.remove();
   }
-  
+  if (roomDropdownOutsideClickHandler) {
+    document.removeEventListener('click', roomDropdownOutsideClickHandler, true);
+    roomDropdownOutsideClickHandler = null;
+  }
+}
+
+/**
+ * Show inline room dropdown for starting a consultation (per-entry room selection)
+ * @param {string} entryId
+ * @param {HTMLElement} [anchorEl] - Button to position dropdown under
+ */
+async function showRoomDropdown(entryId, anchorEl) {
   const entry = queueData.find(e => e.id === entryId);
   if (!entry) {
     toast.error('Queue entry not found');
     return;
   }
-
-  // Check for department ID in multiple possible locations
-  let departmentId = null;
-  if (entry.department && entry.department.id) {
-    departmentId = entry.department.id;
-  } else if (entry.departmentId) {
-    departmentId = entry.departmentId;
-  }
-
+  const departmentId = entry.department?.id || entry.departmentId;
   if (!departmentId) {
-    console.error('Department ID not found in entry:', entry);
     toast.error('Department info unavailable');
     return;
   }
 
-  console.log(`Using department ID: ${departmentId}`);
+  closeRoomDropdownPopover();
 
-  // Show loading state
-  if (roomList) {
-    roomList.innerHTML = '<div class="loading-message">Loading rooms...</div>';
-  }
-
-  // Fetch available rooms for the department
-  await fetchRooms(departmentId);
-
-  // Check if modal card exists
-  const modalCard = roomModalOverlay.querySelector('.modal-card');
-  if (!modalCard) {
-    console.error('Modal card not found inside overlay');
-    toast.error('Room modal error. Please refresh');
+  const rooms = await getAvailableRoomsForDepartment(departmentId);
+  if (rooms.length === 0) {
+    toast.error('No rooms available. All may be occupied or none configured.');
     return;
   }
-  
-  // Force show the modal - use requestAnimationFrame to ensure DOM is ready
-  requestAnimationFrame(() => {
-    roomModalOverlay.style.display = 'flex';
-    roomModalOverlay.style.zIndex = '10000';
-    
-    // Small delay to ensure display is set before adding active class
-    setTimeout(() => {
-      roomModalOverlay.classList.add('active');
-    }, 10);
-    
-    // Ensure modal card is visible and clickable
-    modalCard.style.position = 'relative';
-    modalCard.style.zIndex = '10001';
-    modalCard.style.display = 'block';
-    modalCard.style.visibility = 'visible';
-    modalCard.style.opacity = '1';
-    modalCard.style.pointerEvents = 'auto';
-    
-    // Ensure buttons are clickable
-    const buttons = modalCard.querySelectorAll('button');
-    buttons.forEach(btn => {
-      btn.style.pointerEvents = 'auto';
-      btn.style.zIndex = '10002';
-      btn.style.position = 'relative';
-    });
+
+  const popover = document.createElement('div');
+  popover.id = 'room-dropdown-popover';
+  popover.className = 'room-dropdown-popover';
+  popover.innerHTML = `
+    <div class="room-dropdown-content">
+      <label class="room-dropdown-label">Select room</label>
+      <div class="room-dropdown-select-wrap">
+        <select class="room-dropdown-select" id="room-dropdown-select" aria-label="Select room">
+          <option value="">Choose a room...</option>
+          ${rooms.map(r => `<option value="${r.id}">${(r.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</option>`).join('')}
+        </select>
+        <span class="room-dropdown-icon material-symbols-outlined" aria-hidden="true">keyboard_arrow_down</span>
+      </div>
+      <div class="room-dropdown-actions">
+        <button type="button" class="btn btn-secondary room-dropdown-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary room-dropdown-assign">Assign</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popover);
+
+  const rect = anchorEl ? anchorEl.getBoundingClientRect() : { bottom: 0, left: 0, width: 0 };
+  popover.style.position = 'fixed';
+  popover.style.top = `${rect.bottom + 6}px`;
+  popover.style.left = `${rect.left}px`;
+  popover.style.zIndex = '10000';
+
+  const selectEl = popover.querySelector('#room-dropdown-select');
+  const assignBtn = popover.querySelector('.room-dropdown-assign');
+  const cancelBtn = popover.querySelector('.room-dropdown-cancel');
+
+  const assign = async () => {
+    const roomId = selectEl?.value?.trim();
+    if (!roomId) {
+      toast.error('Please select a room');
+      return;
+    }
+    assignBtn.disabled = true;
+    assignBtn.textContent = 'Assigning...';
+    try {
+      const success = await updateQueueStatus(entryId, 'IN_CONSULTATION', roomId);
+      if (success) {
+        closeRoomDropdownPopover();
+      }
+    } catch (e) {
+      toast.error('Failed to assign room');
+    } finally {
+      assignBtn.disabled = false;
+      assignBtn.textContent = 'Assign';
+    }
+  };
+
+  const onCancel = (e) => {
+    e.stopPropagation();
+    closeRoomDropdownPopover();
+  };
+
+  assignBtn.addEventListener('click', assign);
+  cancelBtn.addEventListener('click', onCancel);
+  selectEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') assign();
   });
+
+  // Outside-click: close when clicking outside popover (use capture so we run before other handlers)
+  roomDropdownOutsideClickHandler = (e) => {
+    const pop = document.getElementById('room-dropdown-popover');
+    if (pop && !pop.contains(e.target) && !e.target.closest('.status-update-btn')) {
+      closeRoomDropdownPopover();
+    }
+  };
+  setTimeout(() => document.addEventListener('click', roomDropdownOutsideClickHandler, true), 0);
+  selectEl.focus();
 }
 
 /**
@@ -1820,11 +1894,14 @@ function changePage(delta) {
 function updateSummary() {
   if (!queueSummaryText) return;
 
-  const waiting = queueData.filter(e => e.status === 'WAITING').length;
+  const waiting = queueData.filter(e =>
+    ['WAITING', 'TRIAGE', 'CALLED'].includes(e.status)
+  ).length;
   const inProgress = queueData.filter(e => e.status === 'IN_CONSULTATION').length;
-  const completed = queueData.filter(e => e.status === 'COMPLETED').length;
+  // Use API count so "completed today" is correct even when completed rows are hidden
+  const completed = completedTodayCount;
 
-  queueSummaryText.textContent = 
+  queueSummaryText.textContent =
     `${waiting} patients waiting, ${inProgress} in progress, ${completed} completed today`;
 }
 
@@ -1860,21 +1937,24 @@ async function fetchDoctorLoad(forceRefresh = false) {
       if (cacheAge < doctorLoadCache.CACHE_DURATION) {
         const { current, max } = doctorLoadCache.data;
         doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
+        doctorLoadBadge.title = 'Active patients = CALLED + IN CONSULTATION. Decreases when you complete, no-show, or cancel.';
         doctorLoadBadge.classList.remove('hidden');
         return;
       }
     }
 
-    // Get doctor load from user object (from auth middleware)
-    if (user && user.currentActivePatients !== undefined && user.maxConcurrentPatients !== undefined) {
-      const current = user.currentActivePatients || 0;
-      const max = user.maxConcurrentPatients || 3;
+    // Get doctor load from latest auth user (so we see updates after setAuthUser in fetchQueue)
+    const currentUser = getAuthUser();
+    if (currentUser && currentUser.currentActivePatients !== undefined && currentUser.maxConcurrentPatients !== undefined) {
+      const current = currentUser.currentActivePatients || 0;
+      const max = currentUser.maxConcurrentPatients || 3;
       
       // Update cache
       doctorLoadCache.data = { current, max };
       doctorLoadCache.timestamp = Date.now();
       
       doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
+      doctorLoadBadge.title = 'Active patients = CALLED + IN CONSULTATION. Decreases when you complete, no-show, or cancel.';
       doctorLoadBadge.classList.remove('hidden');
     } else {
       // Fallback: fetch from API if user object doesn't have load info
@@ -1890,6 +1970,7 @@ async function fetchDoctorLoad(forceRefresh = false) {
         doctorLoadCache.timestamp = Date.now();
         
         doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
+        doctorLoadBadge.title = 'Active patients = CALLED + IN CONSULTATION. Decreases when you complete, no-show, or cancel.';
         doctorLoadBadge.classList.remove('hidden');
         
         // Update user object with load info
@@ -1904,6 +1985,7 @@ async function fetchDoctorLoad(forceRefresh = false) {
     if (doctorLoadCache.data) {
       const { current, max } = doctorLoadCache.data;
       doctorLoadBadge.textContent = `Active Patients: ${current} / ${max}`;
+      doctorLoadBadge.title = 'Active patients = CALLED + IN CONSULTATION. Decreases when you complete, no-show, or cancel.';
       doctorLoadBadge.classList.remove('hidden');
     }
   }
@@ -1911,10 +1993,9 @@ async function fetchDoctorLoad(forceRefresh = false) {
 
 /**
  * Start polling
- * Optimized with Page Visibility API to pause when tab is hidden
+ * When Socket.IO is connected, queue data is refreshed on queue:update; 30s polling runs only when socket is disconnected.
  */
 function startPolling() {
-  // Clear existing intervals
   if (pollingInterval) {
     clearInterval(pollingInterval);
   }
@@ -1922,24 +2003,43 @@ function startPolling() {
     clearInterval(waitTimePollingInterval);
   }
 
-  // Poll queue data every 30 seconds (without showing spinner)
-  // Only poll when page is visible
-  pollingInterval = setInterval(() => {
-    if (!document.hidden) {
-      fetchQueue(false); // Don't show spinner during automatic polling
-    }
-  }, 30000);
+  const user = getAuthUser();
+  if (user && user.hospitalId) {
+    const socketUrl = new URL(getApiBaseUrl()).origin;
+    queueSocket = io(socketUrl);
+    queueSocket.emit('joinHospital', user.hospitalId);
+    queueSocket.on('queue:update', () => {
+      if (document.hidden) return;
+      // Avoid double refetch when our own action (e.g. room assign) already triggered fetchQueue
+      if (Date.now() - lastQueueFetchTime < 1500) return;
+      fetchQueue(false);
+      updateWaitTimes();
+    });
+    queueSocket.on('connect', () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    });
+    queueSocket.on('disconnect', () => {
+      startQueuePollingFallback();
+    });
+  }
 
-  // Use SSE for real-time wait time updates (preferred) or fallback to polling
+  startQueuePollingFallback();
+
   startWaitTimeSSE();
-  
-  // Fallback polling every 15 seconds if SSE is not available
-  // Only poll when page is visible
   waitTimePollingInterval = setInterval(() => {
-    if (!document.hidden) {
-      updateWaitTimes(); // Update wait times without full refresh
-    }
-  }, 15000); // 15 seconds
+    if (!document.hidden) updateWaitTimes();
+  }, 15000);
+}
+
+function startQueuePollingFallback() {
+  if (pollingInterval) return;
+  pollingInterval = setInterval(() => {
+    if (queueSocket && queueSocket.connected) return;
+    if (!document.hidden) fetchQueue(false);
+  }, 30000);
 }
 
 /**
@@ -1954,7 +2054,10 @@ function stopPolling() {
     clearInterval(waitTimePollingInterval);
     waitTimePollingInterval = null;
   }
-  // Close all SSE connections
+  if (queueSocket) {
+    queueSocket.disconnect();
+    queueSocket = null;
+  }
   stopWaitTimeSSE();
 }
 
@@ -1974,7 +2077,11 @@ function startWaitTimeSSE() {
   activeEntries.forEach(entry => {
     try {
       // Create SSE connection
-      const eventSource = new EventSource(`/api/queue/${entry.id}/wait-time/stream`);
+      const token = getAuthToken();
+      const url = token
+        ? `${getApiBaseUrl()}/queue/${entry.id}/wait-time/stream?token=${encodeURIComponent(token)}`
+        : `${getApiBaseUrl()}/queue/${entry.id}/wait-time/stream`;
+      const eventSource = new EventSource(url);
 
       eventSource.onmessage = (event) => {
         try {

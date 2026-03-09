@@ -1,10 +1,14 @@
 import prisma from '../config/database.js';
-import { 
-  getConsultationTimeForDepartment, 
+import {
+  getConsultationTimeForDepartment,
   updateDepartmentAvgConsultationTime,
   storeDailyWaitTimeMetrics,
   getHistoricalWaitTimeAnalytics,
-  getHospitalHistoricalWaitTimeAnalytics
+  getHospitalHistoricalWaitTimeAnalytics,
+  calculateQueueWaitTime,
+  formatWaitTimeDisplay,
+  getCurrentServingSequence,
+  getActiveDoctorsCount,
 } from '../services/waitTime.service.js';
 import { 
   monitorWaitTimeForEntry,
@@ -15,6 +19,18 @@ import {
   createQueueCancellationNotification,
   createFeedbackRequestNotification,
 } from '../services/patientNotification.service.js';
+
+/**
+ * Emit real-time queue update to hospital room (Socket.IO).
+ * No-op if app has no io or hospitalId is missing. Preserves hospital isolation.
+ */
+export function emitQueueUpdate(app, hospitalId) {
+  if (!hospitalId) return;
+  try {
+    const io = app && typeof app.get === 'function' && app.get('io');
+    if (io) io.to(`hospital_${hospitalId}`).emit('queue:update', { hospitalId, type: 'QUEUE_UPDATED' });
+  } catch (_) { /* ignore */ }
+}
 
 /**
  * Get queue preview for public display (read-only)
@@ -91,103 +107,49 @@ export const getQueuePreview = async (req, res, next) => {
       },
     });
 
-    // Process queue entries and calculate estimatedWait for WAITING status
-    const processedEntries = await Promise.all(
-      queueEntries.map(async (entry) => {
-        // Mask patient name (show first name + last initial)
-        let maskedPatientName = 'Unknown';
-        if (entry.patient?.fullName) {
-          const nameParts = entry.patient.fullName.trim().split(' ');
-          if (nameParts.length >= 2) {
-            const firstName = nameParts[0];
-            const lastName = nameParts[nameParts.length - 1];
-            maskedPatientName = `${firstName} ${lastName.charAt(0).toUpperCase()}.`;
-          } else if (nameParts.length === 1) {
-            maskedPatientName = nameParts[0];
-          }
+    // Pre-fetch wait-time inputs per department (single engine)
+    const departmentIds = [...new Set(queueEntries.map(e => e.departmentId))];
+    const deptWaitInputs = new Map();
+    await Promise.all(departmentIds.map(async (departmentId) => {
+      const currentServingSequence = await getCurrentServingSequence(hospitalId, departmentId);
+      const activeDoctorsCount = await getActiveDoctorsCount(hospitalId, departmentId);
+      const consultationTime = await getConsultationTimeForDepartment(departmentId);
+      deptWaitInputs.set(departmentId, { currentServingSequence, activeDoctorsCount, consultationTime });
+    }));
+
+    const processedEntries = queueEntries.map((entry) => {
+      let maskedPatientName = 'Unknown';
+      if (entry.patient?.fullName) {
+        const nameParts = entry.patient.fullName.trim().split(' ');
+        if (nameParts.length >= 2) {
+          const firstName = nameParts[0];
+          const lastName = nameParts[nameParts.length - 1];
+          maskedPatientName = `${firstName} ${lastName.charAt(0).toUpperCase()}.`;
+        } else if (nameParts.length === 1) {
+          maskedPatientName = nameParts[0];
         }
+      }
 
-        // Calculate estimatedWait only for WAITING status
-        let estimatedWait = null;
-        let waitTimeDisplay = null;
-        
-        if (entry.status === 'IN_CONSULTATION') {
-          waitTimeDisplay = 'Now Serving';
-        } else if (entry.status === 'CALLED') {
-          waitTimeDisplay = 'Next';
-        } else if (entry.status === 'WAITING' || entry.status === 'TRIAGE') {
-          // Find the lowest sequenceNumber currently being served (IN_CONSULTATION)
-          const currentServingEntry = await prisma.queueEntry.findFirst({
-            where: {
-              hospitalId: hospitalId,
-              departmentId: entry.departmentId,
-              status: 'IN_CONSULTATION',
-            },
-            orderBy: {
-              sequenceNumber: 'asc',
-            },
-            select: {
-              sequenceNumber: true,
-            },
-          });
+      const inputs = deptWaitInputs.get(entry.departmentId) || { currentServingSequence: 0, activeDoctorsCount: 0, consultationTime: 15 };
+      const position = Math.max(0, entry.sequenceNumber - inputs.currentServingSequence);
+      const waitMins = calculateQueueWaitTime({
+        position,
+        activeDoctors: inputs.activeDoctorsCount,
+        consultationTime: inputs.consultationTime,
+      });
+      const waitTimeDisplay = formatWaitTimeDisplay(waitMins, entry.status);
+      const estimatedWait = waitMins != null ? waitMins : null;
 
-          const currentServingSequence = currentServingEntry?.sequenceNumber || 0;
-          
-          // Ensure position is never negative
-          const position = Math.max(0, entry.sequenceNumber - currentServingSequence);
-
-          // Count active doctors with capacity in the department
-          const availableDoctors = await prisma.user.findMany({
-            where: {
-              hospitalId: hospitalId,
-              departmentId: entry.departmentId,
-              role: 'STAFF',
-              staffRole: 'DOCTOR',
-              isActive: true,
-              isAvailable: true,
-            },
-            select: {
-              id: true,
-              currentActivePatients: true,
-              maxConcurrentPatients: true,
-            },
-          });
-
-          // Filter doctors with capacity
-          const doctorsWithCapacity = availableDoctors.filter(
-            (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
-          );
-
-          const activeDoctorsWithCapacity = doctorsWithCapacity.length;
-
-          // Calculate estimatedWait: ceil(position / activeDoctorsWithCapacity) * 15
-          if (activeDoctorsWithCapacity > 0 && position > 0) {
-            estimatedWait = Math.ceil(position / activeDoctorsWithCapacity) * 15;
-            
-            // Cap extremely large wait times (>120 mins)
-            if (estimatedWait > 120) {
-              waitTimeDisplay = '>120 mins';
-            } else {
-              waitTimeDisplay = `${estimatedWait} mins`;
-            }
-          } else if (position === 0) {
-            waitTimeDisplay = 'Ready now';
-          } else {
-            waitTimeDisplay = 'Calculating...';
-          }
-        }
-
-        return {
-          ticketNumber: entry.ticketNumber,
-          patientName: maskedPatientName,
-          patientId: entry.patient.id, // Include patientId for row highlighting (if authenticated)
-          departmentName: entry.department.name,
-          status: entry.status,
-          estimatedWait: estimatedWait, // Only for WAITING, null otherwise
-          waitTimeDisplay: waitTimeDisplay, // Formatted wait time display
-        };
-      })
-    );
+      return {
+        ticketNumber: entry.ticketNumber,
+        patientName: maskedPatientName,
+        patientId: entry.patient.id,
+        departmentName: entry.department.name,
+        status: entry.status,
+        estimatedWait,
+        waitTimeDisplay,
+      };
+    });
 
     // Return queue preview data
     res.status(200).json({
@@ -325,7 +287,7 @@ export const checkInToQueue = async (req, res, next) => {
           },
         });
 
-        sequenceNumber = todayQueueCount + 1;
+        sequenceNumber = todayQueueCount + 1 + attempts;
         ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
 
         // Check if this ticket number already exists (race condition check)
@@ -503,21 +465,14 @@ export const checkInToQueue = async (req, res, next) => {
       const activeDoctorsCount = doctorsWithCapacityForWait.length;
 
       if (activeDoctorsCount > 0) {
-        // Count waiting queue entries (including the one we just created)
-        const waitingCount = await tx.queueEntry.count({
-          where: {
-            hospitalId: appointment.hospitalId,
-            departmentId: appointment.departmentId,
-            status: {
-              in: ['WAITING', 'TRIAGE', 'CALLED'],
-            },
-          },
+        const currentServingSequence = await getCurrentServingSequence(appointment.hospitalId, appointment.departmentId, tx);
+        const position = Math.max(0, sequenceNumber - currentServingSequence);
+        estimatedWaitMinutes = calculateQueueWaitTime({
+          position,
+          activeDoctors: activeDoctorsCount,
+          consultationTime: avgConsultationTimeMinutes,
         });
-
-        const batches = Math.ceil(waitingCount / activeDoctorsCount);
-        estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
       }
-      // If activeDoctorsCount = 0, estimatedWaitMinutes remains null
 
       return {
         ticketNumber: ticketNumber,
@@ -561,7 +516,7 @@ export const checkInToQueue = async (req, res, next) => {
       }
     });
 
-    // Return success response
+    emitQueueUpdate(req.app, result.hospitalId);
     res.status(201).json({
       success: true,
       message: 'Checked in to queue successfully.',
@@ -749,7 +704,7 @@ export const checkInToQueueStaff = async (req, res, next) => {
           },
         });
 
-        sequenceNumber = todayQueueCount + 1;
+        sequenceNumber = todayQueueCount + 1 + attempts;
         ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
 
         // Check if this ticket number already exists (race condition check)
@@ -889,6 +844,15 @@ export const checkInToQueueStaff = async (req, res, next) => {
         },
       });
 
+      let estimatedWaitMinutes = null;
+      const currentServingSequence = await getCurrentServingSequence(appointment.hospitalId, appointment.departmentId, tx);
+      const activeDoctorsCount = await getActiveDoctorsCount(appointment.hospitalId, appointment.departmentId, tx);
+      const consultationTime = await getConsultationTimeForDepartment(appointment.departmentId);
+      if (activeDoctorsCount > 0) {
+        const position = Math.max(0, sequenceNumber - currentServingSequence);
+        estimatedWaitMinutes = calculateQueueWaitTime({ position, activeDoctors: activeDoctorsCount, consultationTime });
+      }
+
       return {
         ticketNumber: ticketNumber,
         assignedDoctor: assignedDoctorName,
@@ -896,15 +860,13 @@ export const checkInToQueueStaff = async (req, res, next) => {
         queueEntryId: queueEntry.id,
         hospitalId: appointment.hospitalId,
         departmentId: appointment.departmentId,
+        estimatedWaitMinutes,
       };
     });
 
     // Monitor wait time changes for all active entries in the department
-    // This will trigger notifications if wait times have changed significantly
-    // Do this asynchronously after the response is sent
     setImmediate(async () => {
       try {
-        // Get all active queue entries in the same department
         const activeEntries = await prisma.queueEntry.findMany({
           where: {
             hospitalId: result.hospitalId,
@@ -913,30 +875,25 @@ export const checkInToQueueStaff = async (req, res, next) => {
               in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
             },
           },
-          select: {
-            id: true,
-          },
+          select: { id: true },
         });
-
-        // Monitor wait time for each active entry (this will create notifications if needed)
-        // Use Promise.allSettled to avoid blocking if one fails
         await Promise.allSettled(
           activeEntries.map(entry => monitorWaitTimeForEntry(entry.id))
         );
       } catch (error) {
         console.error('Error monitoring wait time changes after staff check-in:', error);
-        // Don't throw - this is a background operation
       }
     });
 
-    // Return success response
+    emitQueueUpdate(req.app, result.hospitalId);
     res.status(201).json({
       success: true,
       message: 'Patient checked in to queue successfully.',
       data: {
         ticketNumber: result.ticketNumber,
         assignedDoctor: result.assignedDoctor,
-        waitingArea: result.waitingArea, // null if no default area or full capacity
+        waitingArea: result.waitingArea,
+        estimatedWaitMinutes: result.estimatedWaitMinutes,
       },
     });
   } catch (error) {
@@ -970,7 +927,7 @@ export const checkInToQueueStaff = async (req, res, next) => {
  *   - Admin: Returns hospital-wide queue entries (can filter by departmentId)
  * 
  * Order: Active entries (WAITING, TRIAGE, CALLED, IN_CONSULTATION) first,
- *       sorted by priority DESC, then sequenceNumber DESC.
+ *       sorted by priority DESC, then sequenceNumber ASC (first in line first; Call Next uses this order).
  *       Inactive entries (COMPLETED, CANCELLED, NO_SHOW) at bottom,
  *       sorted by checkInTime DESC.
  * 
@@ -1258,18 +1215,16 @@ export const getStaffQueue = async (req, res, next) => {
         inactiveStatuses.includes(entry.status)
       );
 
-      // Sort active entries: priority DESC, then sequenceNumber DESC
+      // Sort active entries: priority DESC (urgent first), then sequenceNumber ASC (first in line first)
+      // So "Call Next" and wait-time position align: first in list = next to be called.
+      const priorityOrder = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
       activeQueueEntries.sort((a, b) => {
-        const priorityOrder = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
         const priorityA = priorityOrder[a.priority] || 2;
         const priorityB = priorityOrder[b.priority] || 2;
-        
         if (priorityA !== priorityB) {
           return priorityB - priorityA; // DESC
         }
-        
-        // Same priority - sort by sequenceNumber DESC (newest first)
-        return (b.sequenceNumber || 0) - (a.sequenceNumber || 0);
+        return (a.sequenceNumber || 0) - (b.sequenceNumber || 0); // ASC = oldest / first in line first
       });
 
       // Sort inactive entries: checkInTime DESC (most recent first)
@@ -1296,86 +1251,25 @@ export const getStaffQueue = async (req, res, next) => {
         entriesByDepartment.get(key).push(entry);
       });
 
-      // Calculate wait time for all entries efficiently
+      // Calculate wait time for all entries using single wait-time engine
       const entriesWithWaitTime = await Promise.all(
         Array.from(entriesByDepartment.entries()).flatMap(async ([key, entries]) => {
           const firstEntry = entries[0];
           const hospitalId = firstEntry.hospitalId;
           const departmentId = firstEntry.departmentId;
 
-          // Find the lowest sequenceNumber currently being served (IN_CONSULTATION) - once per department
-          const currentServingEntry = await tx.queueEntry.findFirst({
-            where: {
-              hospitalId,
-              departmentId,
-              status: 'IN_CONSULTATION',
-            },
-            orderBy: {
-              sequenceNumber: 'asc',
-            },
-            select: {
-              sequenceNumber: true,
-            },
-          });
+          const currentServingSequence = await getCurrentServingSequence(hospitalId, departmentId, tx);
+          const activeDoctorsCount = await getActiveDoctorsCount(hospitalId, departmentId, tx);
+          const consultationTime = await getConsultationTimeForDepartment(departmentId);
 
-          const currentServingSequence = currentServingEntry?.sequenceNumber || 0;
-
-          // Count available doctors with capacity - once per department
-          const availableDoctors = await tx.user.findMany({
-            where: {
-              hospitalId,
-              departmentId,
-              role: 'STAFF',
-              staffRole: 'DOCTOR',
-              isActive: true,
-              isAvailable: true,
-            },
-            select: {
-              id: true,
-              currentActivePatients: true,
-              maxConcurrentPatients: true,
-            },
-          });
-
-          const doctorsWithCapacity = availableDoctors.filter(
-            (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
-          );
-          const availableDoctorsCount = doctorsWithCapacity.length;
-
-          // Calculate wait time for each entry in this department
           return entries.map(entry => {
-            let waitTimeDisplay = null;
-            let waitTimeMinutes = null;
-
-            if (entry.status === 'IN_CONSULTATION') {
-              waitTimeDisplay = 'Now Serving';
-            } else if (entry.status === 'CALLED') {
-              waitTimeDisplay = 'Next';
-            } else if (entry.status === 'WAITING' || entry.status === 'TRIAGE') {
-              // Calculate wait time based on queue position
-              // Ensure position is never negative
-              const position = Math.max(0, entry.sequenceNumber - currentServingSequence);
-
-              if (availableDoctorsCount > 0 && position > 0) {
-                waitTimeMinutes = Math.ceil(position / availableDoctorsCount) * 15;
-                
-                // Cap extremely large wait times (>120 mins)
-                if (waitTimeMinutes > 120) {
-                  waitTimeDisplay = '>120 mins';
-                } else {
-                  waitTimeDisplay = `${waitTimeMinutes} mins`;
-                }
-              } else if (position === 0) {
-                waitTimeDisplay = 'Ready now';
-              } else {
-                waitTimeDisplay = 'Calculating...';
-              }
-            }
-
+            const position = Math.max(0, entry.sequenceNumber - currentServingSequence);
+            const waitMins = calculateQueueWaitTime({ position, activeDoctors: activeDoctorsCount, consultationTime });
+            const waitTimeDisplay = formatWaitTimeDisplay(waitMins, entry.status);
             return {
               ...entry,
               waitTimeDisplay,
-              waitTimeMinutes,
+              waitTimeMinutes: waitMins,
             };
           });
         })
@@ -1384,29 +1278,66 @@ export const getStaffQueue = async (req, res, next) => {
       // Apply pagination to merged result
       const paginatedQueueEntries = entriesWithWaitTime.slice(skip, skip + limitNum);
 
+      // Count COMPLETED entries today (same scope as queue: hospital, optional department/doctor)
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      const completedWhere = { hospitalId: where.hospitalId, status: 'COMPLETED' };
+      if (where.assignedDoctorId) completedWhere.assignedDoctorId = where.assignedDoctorId;
+      if (where.departmentId) completedWhere.departmentId = where.departmentId;
+      completedWhere.checkInTime = { gte: startOfToday, lte: endOfToday };
+      const completedTodayCount = await tx.queueEntry.count({ where: completedWhere });
+
       return {
         queueEntries: paginatedQueueEntries,
         totalCount,
+        completedTodayCount,
       };
     });
+
+    // For doctors: sync currentActivePatients = count(CALLED + IN_CONSULTATION) for this doctor
+    let doctorLoadSync = null;
+    if (isDoctor && !isPrimary) {
+      const liveActiveCount = await prisma.queueEntry.count({
+        where: {
+          assignedDoctorId: user.id,
+          status: { in: ['CALLED', 'IN_CONSULTATION'] },
+        },
+      });
+      if (user.currentActivePatients !== liveActiveCount) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { currentActivePatients: liveActiveCount },
+        });
+      }
+      doctorLoadSync = {
+        currentActivePatients: liveActiveCount,
+        maxConcurrentPatients: user.maxConcurrentPatients ?? 3,
+      };
+    }
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(result.totalCount / limitNum);
 
+    const responseData = {
+      queueEntries: result.queueEntries,
+      completedTodayCount: result.completedTodayCount ?? 0,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        totalCount: result.totalCount,
+        totalPages: totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1,
+      },
+    };
+    if (doctorLoadSync) responseData.user = doctorLoadSync;
+
     res.status(200).json({
       success: true,
       message: 'Queue entries retrieved successfully.',
-      data: {
-        queueEntries: result.queueEntries,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          totalCount: result.totalCount,
-          totalPages: totalPages,
-          hasNextPage: pageNum < totalPages,
-          hasPreviousPage: pageNum > 1,
-        },
-      },
+      data: responseData,
     });
   } catch (error) {
     next(error);
@@ -1425,10 +1356,11 @@ export const getStaffQueue = async (req, res, next) => {
  * - CALLED → IN_CONSULTATION, CANCELLED
  * - IN_CONSULTATION → COMPLETED, NO_SHOW, CANCELLED
  * 
- * Load management:
- * - IN_CONSULTATION: increment currentActivePatients
- * - COMPLETED/NO_SHOW/CANCELLED (from IN_CONSULTATION): decrement currentActivePatients
- * 
+ * Load management (when do active patients start counting?):
+ * - Active patients = count of entries with status IN ('CALLED', 'IN_CONSULTATION') assigned to this doctor.
+ * - Count decreases when status changes to COMPLETED, NO_SHOW, or CANCELLED.
+ * - Capacity check for starting a new consultation: IN_CONSULTATION count must be < maxConcurrentPatients.
+ *
  * Requires: Assigned doctor only
  */
 export const updateQueueEntryStatus = async (req, res, next) => {
@@ -1675,24 +1607,20 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         assignedWaitingAreaId = null;
       }
 
-      // Load management logic
+      // Load management: active = CALLED + IN_CONSULTATION; capacity check uses IN_CONSULTATION only
       const doctor = queueEntry.assignedDoctor;
-      let updatedCurrentActivePatients = doctor.currentActivePatients;
+      const actualInConsultation = await tx.queueEntry.count({
+        where: {
+          assignedDoctorId: doctor.id,
+          status: 'IN_CONSULTATION',
+        },
+      });
 
-      // Increment when transitioning TO IN_CONSULTATION
+      // Capacity check: only allow starting IN_CONSULTATION if current in-room count < max
       if (newStatus === 'IN_CONSULTATION' && currentStatus !== 'IN_CONSULTATION') {
-        // Check if doctor is at capacity
-        if (doctor.currentActivePatients >= doctor.maxConcurrentPatients) {
+        if (actualInConsultation >= doctor.maxConcurrentPatients) {
           throw new Error('Doctor is at maximum capacity. Cannot start consultation.');
         }
-
-        updatedCurrentActivePatients = doctor.currentActivePatients + 1;
-      }
-
-      // Decrement when transitioning FROM IN_CONSULTATION to terminal states
-      if (currentStatus === 'IN_CONSULTATION' && 
-          ['COMPLETED', 'NO_SHOW', 'CANCELLED'].includes(newStatus)) {
-        updatedCurrentActivePatients = Math.max(0, doctor.currentActivePatients - 1);
       }
 
       // Build update data
@@ -1783,12 +1711,18 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         appointmentCompleted = true;
       }
 
-      // Update doctor load if it changed
-      if (updatedCurrentActivePatients !== doctor.currentActivePatients) {
+      // Recalculate active count (CALLED + IN_CONSULTATION) after this entry's status change
+      const newActiveCount = await tx.queueEntry.count({
+        where: {
+          assignedDoctorId: doctor.id,
+          status: { in: ['CALLED', 'IN_CONSULTATION'] },
+        },
+      });
+      if (newActiveCount !== doctor.currentActivePatients) {
         await tx.user.update({
           where: { id: doctor.id },
           data: {
-            currentActivePatients: updatedCurrentActivePatients,
+            currentActivePatients: newActiveCount,
           },
         });
       }
@@ -1808,8 +1742,8 @@ export const updateQueueEntryStatus = async (req, res, next) => {
         queueEntry: updatedQueueEntry,
         previousStatus: currentStatus,
         newStatus: newStatus,
-        doctorLoadUpdated: updatedCurrentActivePatients !== doctor.currentActivePatients,
-        newDoctorLoad: updatedCurrentActivePatients,
+        doctorLoadUpdated: newActiveCount !== doctor.currentActivePatients,
+        newDoctorLoad: newActiveCount,
         appointmentCompleted,
         appointment: appointmentCompleted ? await tx.appointment.findUnique({
           where: { id: queueEntry.appointmentId },
@@ -1857,6 +1791,7 @@ export const updateQueueEntryStatus = async (req, res, next) => {
       }
     }
 
+    emitQueueUpdate(req.app, result.queueEntry.hospitalId);
     res.status(200).json({
       success: true,
       message: `Queue entry status updated from ${result.previousStatus} to ${result.newStatus} successfully.`,
@@ -2074,23 +2009,8 @@ export const bulkUpdateQueueEntryStatus = async (req, res, next) => {
         };
       }
 
-      // Group entries by doctor for load decrement
-      const doctorLoadUpdates = new Map();
-
-      for (const entry of entriesToUpdate) {
-        // If transitioning from IN_CONSULTATION, decrement doctor load
-        if (entry.status === 'IN_CONSULTATION' && entry.assignedDoctorId) {
-          const doctorId = entry.assignedDoctorId;
-          if (!doctorLoadUpdates.has(doctorId)) {
-            doctorLoadUpdates.set(doctorId, {
-              doctorId,
-              currentLoad: entry.assignedDoctor.currentActivePatients,
-              decrementCount: 0,
-            });
-          }
-          doctorLoadUpdates.get(doctorId).decrementCount += 1;
-        }
-      }
+      // Collect doctor IDs that have entries in this batch (for recalculating active count)
+      const affectedDoctorIds = [...new Set(entriesToUpdate.map(e => e.assignedDoctorId).filter(Boolean))];
 
       // Update all queue entries
       const updateResult = await tx.queueEntry.updateMany({
@@ -2102,15 +2022,17 @@ export const bulkUpdateQueueEntryStatus = async (req, res, next) => {
         },
       });
 
-      // Update doctor loads (decrement for each IN_CONSULTATION → terminal transition)
-      for (const [doctorId, loadInfo] of doctorLoadUpdates.entries()) {
-        const newLoad = Math.max(0, loadInfo.currentLoad - loadInfo.decrementCount);
-        
+      // Recalculate active count (CALLED + IN_CONSULTATION) for each affected doctor
+      for (const doctorId of affectedDoctorIds) {
+        const newActiveCount = await tx.queueEntry.count({
+          where: {
+            assignedDoctorId: doctorId,
+            status: { in: ['CALLED', 'IN_CONSULTATION'] },
+          },
+        });
         await tx.user.update({
           where: { id: doctorId },
-          data: {
-            currentActivePatients: newLoad,
-          },
+          data: { currentActivePatients: newActiveCount },
         });
       }
 
@@ -2119,6 +2041,7 @@ export const bulkUpdateQueueEntryStatus = async (req, res, next) => {
       };
     });
 
+    emitQueueUpdate(req.app, user.hospitalId);
     res.status(200).json({
       success: true,
       message: `Bulk status update completed. ${result.updatedCount} queue entry(ies) updated to ${upperStatus}.`,
@@ -2241,122 +2164,32 @@ export const getPatientQueueStatus = async (req, res, next) => {
         };
       }
 
-      // Calculate positionInQueue
-      // Count entries that come before this patient in queue order
-      // Queue order: priority DESC, sequenceNumber ASC
-      // So count entries with:
-      // - Higher priority (priority > current priority)
-      // - OR same priority AND sequenceNumber < current sequenceNumber
-      // - OR same priority AND same sequenceNumber AND checkInTime < current checkInTime
-      const priorityOrder = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
-      const currentPriorityValue = priorityOrder[queueEntry.priority] || 2;
-
-      const entriesAhead = await tx.queueEntry.count({
-        where: {
-          hospitalId: queueEntry.hospitalId,
-          departmentId: queueEntry.departmentId,
-          status: {
-            in: ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'],
-          },
-          OR: [
-            // Higher priority
-            {
-              priority: {
-                in: Object.keys(priorityOrder).filter(
-                  (p) => priorityOrder[p] > currentPriorityValue
-                ),
-              },
-            },
-            // Same priority, earlier sequenceNumber
-            {
-              priority: queueEntry.priority,
-              sequenceNumber: {
-                lt: queueEntry.sequenceNumber,
-              },
-            },
-            // Same priority, same sequenceNumber, earlier checkInTime
-            {
-              priority: queueEntry.priority,
-              sequenceNumber: queueEntry.sequenceNumber,
-              checkInTime: {
-                lt: queueEntry.checkInTime,
-              },
-            },
-          ],
-        },
+      const currentServingSequence = await getCurrentServingSequence(queueEntry.hospitalId, queueEntry.departmentId, tx);
+      const activeDoctors = await getActiveDoctorsCount(queueEntry.hospitalId, queueEntry.departmentId, tx);
+      const consultationTime = await getConsultationTimeForDepartment(queueEntry.departmentId);
+      const position = Math.max(0, queueEntry.sequenceNumber - currentServingSequence);
+      const positionInQueue = position + 1;
+      const estimatedWaitMinutes = calculateQueueWaitTime({
+        position,
+        activeDoctors,
+        consultationTime,
       });
 
-      const positionInQueue = entriesAhead + 1; // Position is 1-indexed
-
-      // Calculate estimatedWaitMinutes (same formula as preview)
-      // Get department-specific consultation time (dynamic or default)
-      const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(queueEntry.departmentId);
-
-      // Count active available doctors with capacity (same logic as preview)
-      const availableDoctors = await tx.user.findMany({
-        where: {
-          hospitalId: queueEntry.hospitalId,
-          departmentId: queueEntry.departmentId,
-          role: 'STAFF',
-          staffRole: 'DOCTOR',
-          isActive: true,
-          isAvailable: true,
-        },
-        select: {
-          id: true,
-          currentActivePatients: true,
-          maxConcurrentPatients: true,
-        },
-      });
-
-      // Filter doctors with actual capacity
-      const doctorsWithCapacity = availableDoctors.filter(
-        (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
-      );
-
-      const activeDoctors = doctorsWithCapacity.length;
-
-      // Calculate estimated wait time
-      // Formula: ceil(waitingCount / activeDoctors) × avgConsultationTime
-      // If activeDoctors = 0 → estimatedWaitMinutes = null
-      let estimatedWaitMinutes = null;
-
-      if (activeDoctors > 0) {
-        // Count waiting queue entries (WAITING, TRIAGE, CALLED)
-        const waitingCount = await tx.queueEntry.count({
-          where: {
-            hospitalId: queueEntry.hospitalId,
-            departmentId: queueEntry.departmentId,
-            status: {
-              in: ['WAITING', 'TRIAGE', 'CALLED'],
-            },
-          },
-        });
-
-        const batches = Math.ceil(waitingCount / activeDoctors);
-        estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
-        
-        // Calculate confidence interval for patient queue status
-        const varianceFactor = Math.max(0.15, Math.min(0.30, (waitingCount / Math.max(activeDoctors, 1)) * 0.05));
+      let minWaitMinutes = null;
+      let maxWaitMinutes = null;
+      if (estimatedWaitMinutes !== null && estimatedWaitMinutes > 0) {
+        const varianceFactor = Math.max(0.15, Math.min(0.30, (position / Math.max(activeDoctors, 1)) * 0.05));
         const confidenceInterval = estimatedWaitMinutes * varianceFactor;
-        const minWaitMinutes = Math.max(0, Math.round(estimatedWaitMinutes - confidenceInterval));
-        const maxWaitMinutes = Math.round(estimatedWaitMinutes + confidenceInterval);
+        minWaitMinutes = Math.max(0, Math.round(estimatedWaitMinutes - confidenceInterval));
+        maxWaitMinutes = Math.round(estimatedWaitMinutes + confidenceInterval);
+      }
 
       return {
-        queueEntry: queueEntry,
-        positionInQueue: positionInQueue,
-        estimatedWaitMinutes: estimatedWaitMinutes,
-          minWaitMinutes: minWaitMinutes,
-          maxWaitMinutes: maxWaitMinutes,
-        };
-      }
-      
-      return {
-        queueEntry: queueEntry,
-        positionInQueue: positionInQueue,
-        estimatedWaitMinutes: null,
-        minWaitMinutes: null,
-        maxWaitMinutes: null,
+        queueEntry,
+        positionInQueue,
+        estimatedWaitMinutes,
+        minWaitMinutes,
+        maxWaitMinutes,
       };
     });
 
@@ -2487,30 +2320,12 @@ export const cancelPatientQueueEntry = async (req, res, next) => {
       let doctorLoadUpdated = false;
       let newDoctorLoad = null;
 
-      // If doctor was assigned and status was IN_CONSULTATION, decrement load
-      // But we block IN_CONSULTATION above, so this shouldn't happen
-      // Still, handle it defensively
-      if (queueEntry.assignedDoctorId && queueEntry.status === 'IN_CONSULTATION') {
-        const doctor = queueEntry.assignedDoctor;
-        if (doctor && doctor.currentActivePatients > 0) {
-          newDoctorLoad = Math.max(0, doctor.currentActivePatients - 1);
-          await tx.user.update({
-            where: { id: doctor.id },
-            data: {
-              currentActivePatients: newDoctorLoad,
-            },
-          });
-          doctorLoadUpdated = true;
-        }
-      }
-
-      // Update queue entry status to CANCELLED
       const updatedQueueEntry = await tx.queueEntry.update({
         where: { id },
         data: {
           status: 'CANCELLED',
-          assignedRoomId: null, // Clear room assignment
-          waitingAreaId: null, // Clear waiting area assignment
+          assignedRoomId: null,
+          waitingAreaId: null,
         },
         include: {
           patient: {
@@ -2531,10 +2346,30 @@ export const cancelPatientQueueEntry = async (req, res, next) => {
               id: true,
               firstName: true,
               lastName: true,
+              currentActivePatients: true,
             },
           },
         },
       });
+
+      // Recalculate active count (CALLED + IN_CONSULTATION) for the assigned doctor if any
+      if (queueEntry.assignedDoctorId) {
+        const newActiveCount = await tx.queueEntry.count({
+          where: {
+            assignedDoctorId: queueEntry.assignedDoctorId,
+            status: { in: ['CALLED', 'IN_CONSULTATION'] },
+          },
+        });
+        const doctor = queueEntry.assignedDoctor;
+        if (doctor && doctor.currentActivePatients !== newActiveCount) {
+          await tx.user.update({
+            where: { id: queueEntry.assignedDoctorId },
+            data: { currentActivePatients: newActiveCount },
+          });
+          doctorLoadUpdated = true;
+          newDoctorLoad = newActiveCount;
+        }
+      }
 
       // Update appointment status - keep as BOOKED if linked
       let appointmentUpdated = false;
@@ -2576,6 +2411,7 @@ export const cancelPatientQueueEntry = async (req, res, next) => {
       // Don't fail cancellation if notification fails
     }
 
+    emitQueueUpdate(req.app, result.queueEntry.hospitalId);
     res.status(200).json({
       success: true,
       message: 'Queue entry cancelled successfully.',
@@ -2747,40 +2583,21 @@ export const bulkReassignQueueEntries = async (req, res, next) => {
         throw new Error('All queue entries are already assigned to the specified doctor.');
       }
 
-      // Count IN_CONSULTATION entries that will be reassigned
-      const inConsultationEntries = entriesToReassign.filter(
-        entry => entry.status === 'IN_CONSULTATION'
-      );
-
-      // Check new doctor capacity
-      // Formula: currentActivePatients + inConsultationCount <= maxConcurrentPatients
-      const currentLoad = newDoctor.currentActivePatients;
-      const newLoadAfterReassign = currentLoad + inConsultationEntries.length;
-
-      if (newLoadAfterReassign > newDoctor.maxConcurrentPatients) {
+      // Check new doctor capacity: active = CALLED + IN_CONSULTATION
+      const currentNewDoctorActive = await tx.queueEntry.count({
+        where: {
+          assignedDoctorId: newDoctorId,
+          status: { in: ['CALLED', 'IN_CONSULTATION'] },
+        },
+      });
+      const movingCount = entriesToReassign.length;
+      if (currentNewDoctorActive + movingCount > newDoctor.maxConcurrentPatients) {
         throw new Error(
-          `New doctor capacity exceeded. Current load: ${currentLoad}/${newDoctor.maxConcurrentPatients}, ` +
-          `would become: ${newLoadAfterReassign}/${newDoctor.maxConcurrentPatients} after reassigning ${inConsultationEntries.length} IN_CONSULTATION entry(ies).`
+          `New doctor capacity exceeded. Would have ${currentNewDoctorActive + movingCount} active (CALLED + IN_CONSULTATION) vs max ${newDoctor.maxConcurrentPatients}.`
         );
       }
 
-      // Group old doctors by ID for load decrement
-      const oldDoctorLoadUpdates = new Map();
-
-      for (const entry of entriesToReassign) {
-        // If entry is IN_CONSULTATION and has an assigned doctor, decrement old doctor load
-        if (entry.status === 'IN_CONSULTATION' && entry.assignedDoctorId) {
-          const oldDoctorId = entry.assignedDoctorId;
-          if (!oldDoctorLoadUpdates.has(oldDoctorId)) {
-            oldDoctorLoadUpdates.set(oldDoctorId, {
-              doctorId: oldDoctorId,
-              currentLoad: entry.assignedDoctor.currentActivePatients,
-              decrementCount: 0,
-            });
-          }
-          oldDoctorLoadUpdates.get(oldDoctorId).decrementCount += 1;
-        }
-      }
+      const oldDoctorIds = [...new Set(entriesToReassign.map(e => e.assignedDoctorId).filter(Boolean))];
 
       // Update all queue entries
       const updateResult = await tx.queueEntry.updateMany({
@@ -2792,38 +2609,29 @@ export const bulkReassignQueueEntries = async (req, res, next) => {
         },
       });
 
-      // Decrement old doctor loads (for IN_CONSULTATION entries)
-      // Validate that current load is sufficient to prevent negative values
-      for (const [oldDoctorId, loadInfo] of oldDoctorLoadUpdates.entries()) {
-        // Validate that current load is sufficient (for better error reporting)
-        if (loadInfo.currentLoad < loadInfo.decrementCount) {
-          throw new Error(
-            `Data inconsistency detected: Doctor ${oldDoctorId} has load ${loadInfo.currentLoad} but needs to decrement ${loadInfo.decrementCount}.`
-          );
-        }
-        
-        // Use Math.max(0, ...) as additional safety net to prevent negative load
-        const newLoad = Math.max(0, loadInfo.currentLoad - loadInfo.decrementCount);
-        
-        await tx.user.update({
-          where: { id: oldDoctorId },
-          data: {
-            currentActivePatients: newLoad,
+      // Recalculate active count (CALLED + IN_CONSULTATION) for each affected doctor
+      for (const doctorId of oldDoctorIds) {
+        const newActiveCount = await tx.queueEntry.count({
+          where: {
+            assignedDoctorId: doctorId,
+            status: { in: ['CALLED', 'IN_CONSULTATION'] },
           },
         });
-      }
-
-      // Increment new doctor load (for IN_CONSULTATION entries)
-      if (inConsultationEntries.length > 0) {
-        const newLoad = currentLoad + inConsultationEntries.length;
-        
         await tx.user.update({
-          where: { id: newDoctorId },
-          data: {
-            currentActivePatients: newLoad,
-          },
+          where: { id: doctorId },
+          data: { currentActivePatients: newActiveCount },
         });
       }
+      const newDoctorActiveCount = await tx.queueEntry.count({
+        where: {
+          assignedDoctorId: newDoctorId,
+          status: { in: ['CALLED', 'IN_CONSULTATION'] },
+        },
+      });
+      await tx.user.update({
+        where: { id: newDoctorId },
+        data: { currentActivePatients: newDoctorActiveCount },
+      });
 
       return {
         updatedCount: updateResult.count,
@@ -2831,6 +2639,7 @@ export const bulkReassignQueueEntries = async (req, res, next) => {
       };
     });
 
+    emitQueueUpdate(req.app, user.hospitalId);
     res.status(200).json({
       success: true,
       message: `Bulk reassignment completed. ${result.updatedCount} queue entry(ies) reassigned to ${result.newDoctorName}.`,
@@ -3023,6 +2832,7 @@ export const bulkAssignWaitingArea = async (req, res, next) => {
       };
     });
 
+    emitQueueUpdate(req.app, user.hospitalId);
     res.status(200).json({
       success: true,
       message: `Bulk waiting area assignment completed. ${result.updatedCount} queue entry(ies) assigned to ${result.waitingAreaName}.`,
@@ -3806,6 +3616,7 @@ export const updateQueuePriority = async (req, res, next) => {
     // Audit log
     console.log(`[AUDIT] User ${user.id} (${user.email}) updated priority of queue entry ${id} to ${upperPriority}.`);
 
+    emitQueueUpdate(req.app, result.hospitalId);
     return res.status(200).json({
       success: true,
       message: 'Priority updated successfully.',
@@ -3898,55 +3709,15 @@ export const getQueueEntryWaitTime = async (req, res, next) => {
       });
     }
 
-    // Get department-specific consultation time
+    const currentServingSequence = await getCurrentServingSequence(queueEntry.hospitalId, queueEntry.departmentId);
+    const activeDoctors = await getActiveDoctorsCount(queueEntry.hospitalId, queueEntry.departmentId);
     const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(queueEntry.departmentId);
-
-    // Count active available doctors with capacity
-    const availableDoctors = await prisma.user.findMany({
-      where: {
-        hospitalId: queueEntry.hospitalId,
-        departmentId: queueEntry.departmentId,
-        role: 'STAFF',
-        staffRole: 'DOCTOR',
-        isActive: true,
-        isAvailable: true,
-      },
-      select: {
-        id: true,
-        currentActivePatients: true,
-        maxConcurrentPatients: true,
-      },
+    const position = Math.max(0, queueEntry.sequenceNumber - currentServingSequence);
+    const estimatedWaitMinutes = calculateQueueWaitTime({
+      position,
+      activeDoctors,
+      consultationTime: avgConsultationTimeMinutes,
     });
-
-    const doctorsWithCapacity = availableDoctors.filter(
-      (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
-    );
-
-    const activeDoctors = doctorsWithCapacity.length;
-
-    let estimatedWaitMinutes = null;
-
-    // Count waiting queue entries (WAITING, TRIAGE, CALLED) - needed for both calculation and variance
-    const waitingCount = await prisma.queueEntry.count({
-      where: {
-        hospitalId: queueEntry.hospitalId,
-        departmentId: queueEntry.departmentId,
-        status: {
-          in: ['WAITING', 'TRIAGE', 'CALLED'],
-        },
-      },
-    });
-
-    if (activeDoctors > 0 && waitingCount > 0) {
-      const batches = Math.ceil(waitingCount / activeDoctors);
-      estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
-    } else if (activeDoctors === 0) {
-      // No active doctors - wait time cannot be calculated
-      estimatedWaitMinutes = null;
-    } else if (waitingCount === 0) {
-      // No one waiting - immediate service
-      estimatedWaitMinutes = 0;
-    }
 
     // Monitor wait time changes for this queue entry
     // This will create notifications if significant changes are detected
@@ -3960,12 +3731,10 @@ export const getQueueEntryWaitTime = async (req, res, next) => {
       }
     });
 
-    // Calculate confidence interval
     let minWaitMinutes = null;
     let maxWaitMinutes = null;
-    if (estimatedWaitMinutes !== null) {
-      // Variance factor: ±20% base, increases with queue size and decreases with doctor count
-      const varianceFactor = Math.max(0.15, Math.min(0.30, (waitingCount / Math.max(activeDoctors, 1)) * 0.05));
+    if (estimatedWaitMinutes !== null && estimatedWaitMinutes > 0) {
+      const varianceFactor = Math.max(0.15, Math.min(0.30, (position / Math.max(activeDoctors, 1)) * 0.05));
       const confidenceInterval = estimatedWaitMinutes * varianceFactor;
       minWaitMinutes = Math.max(0, Math.round(estimatedWaitMinutes - confidenceInterval));
       maxWaitMinutes = Math.round(estimatedWaitMinutes + confidenceInterval);
@@ -3980,7 +3749,7 @@ export const getQueueEntryWaitTime = async (req, res, next) => {
         maxWaitMinutes,
         avgConsultationTimeMinutes,
         activeDoctors,
-        waitingCount: waitingCount || 0,
+        position,
         lastUpdated: new Date().toISOString(),
       },
     });

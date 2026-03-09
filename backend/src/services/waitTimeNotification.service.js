@@ -219,50 +219,14 @@ export async function monitorWaitTimeForEntry(queueEntryId) {
       return { notificationCreated: false, reason: 'Queue entry not in active status' };
     }
 
-    // Calculate current wait time (same logic as getQueueEntryWaitTime)
-    const { getConsultationTimeForDepartment } = await import('./waitTime.service.js');
-    const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(queueEntry.departmentId);
-
-    // Count active available doctors with capacity
-    const availableDoctors = await prisma.user.findMany({
-      where: {
-        hospitalId: queueEntry.hospitalId,
-        departmentId: queueEntry.departmentId,
-        role: 'STAFF',
-        staffRole: 'DOCTOR',
-        isActive: true,
-        isAvailable: true,
-      },
-      select: {
-        id: true,
-        currentActivePatients: true,
-        maxConcurrentPatients: true,
-      },
+    const { getWaitTimeForEntry } = await import('./waitTime.service.js');
+    const { waitMins } = await getWaitTimeForEntry({
+      hospitalId: queueEntry.hospitalId,
+      departmentId: queueEntry.departmentId,
+      sequenceNumber: queueEntry.sequenceNumber,
+      status: queueEntry.status,
     });
-
-    const doctorsWithCapacity = availableDoctors.filter(
-      (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
-    );
-
-    const activeDoctors = doctorsWithCapacity.length;
-
-    let currentWaitTime = null;
-
-    if (activeDoctors > 0) {
-      // Count waiting queue entries (WAITING, TRIAGE, CALLED)
-      const waitingCount = await prisma.queueEntry.count({
-        where: {
-          hospitalId: queueEntry.hospitalId,
-          departmentId: queueEntry.departmentId,
-          status: {
-            in: ['WAITING', 'TRIAGE', 'CALLED'],
-          },
-        },
-      });
-
-      const batches = Math.ceil(waitingCount / activeDoctors);
-      currentWaitTime = batches * avgConsultationTimeMinutes;
-    }
+    const currentWaitTime = waitMins;
 
     // Check and notify if significant change
     return await checkAndNotifyWaitTimeChange(queueEntryId, currentWaitTime);

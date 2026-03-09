@@ -9,6 +9,9 @@ import { toast } from './toast.js';
 
 const BASE_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+/** Base API URL for use in EventSource etc. (no trailing slash) */
+export const getApiBaseUrl = () => BASE_API_URL;
+
 /**
  * Make an authenticated API request
  * Automatically includes Authorization header if token exists

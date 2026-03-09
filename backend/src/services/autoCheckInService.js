@@ -1,5 +1,5 @@
 import prisma from '../config/database.js';
-import { checkInToQueue } from '../controllers/queueController.js';
+import { emitQueueUpdate } from '../controllers/queueController.js';
 
 /**
  * Auto-check-in service
@@ -8,7 +8,7 @@ import { checkInToQueue } from '../controllers/queueController.js';
  * This service should be called periodically (e.g., every 5 minutes) via a cron job
  * or scheduled task runner.
  */
-export async function processAutoCheckIn() {
+export async function processAutoCheckIn(app = null) {
   try {
     const now = new Date();
     
@@ -80,10 +80,9 @@ export async function processAutoCheckIn() {
     // Process each appointment
     for (const appointment of appointmentsToCheckIn) {
       try {
-        // Create a mock request object for the checkInToQueue function
-        // We'll need to extract the core logic or create a service function
         await autoCheckInAppointment(appointment);
         successCount++;
+        if (app && appointment.hospitalId) emitQueueUpdate(app, appointment.hospitalId);
         console.log(`[Auto-Check-In] Successfully checked in appointment ${appointment.id} for patient ${appointment.patient.fullName}`);
       } catch (error) {
         errorCount++;
@@ -159,9 +158,8 @@ async function autoCheckInAppointment(appointment) {
     let attempts = 0;
     const maxAttempts = 10;
 
-    // Retry logic to handle race conditions
+    // Retry logic to handle race conditions: try next sequence number on collision
     while (attempts < maxAttempts) {
-      // Count queue entries for this department today
       const todayQueueCount = await tx.queueEntry.count({
         where: {
           departmentId: appointment.departmentId,
@@ -173,10 +171,9 @@ async function autoCheckInAppointment(appointment) {
         },
       });
 
-      sequenceNumber = todayQueueCount + 1;
+      sequenceNumber = todayQueueCount + 1 + attempts;
       ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
 
-      // Check if this ticket number already exists (race condition check)
       const existingTicket = await tx.queueEntry.findFirst({
         where: {
           hospitalId: appointment.hospitalId,
@@ -186,11 +183,9 @@ async function autoCheckInAppointment(appointment) {
       });
 
       if (!existingTicket) {
-        // Ticket number is available, break out of loop
         break;
       }
 
-      // Ticket number exists, try next number
       attempts++;
       if (attempts >= maxAttempts) {
         throw new Error('Failed to generate unique ticket number after multiple attempts');
@@ -222,16 +217,8 @@ async function autoCheckInAppointment(appointment) {
     if (doctorsWithCapacity.length > 0) {
       // Assign to doctor with lowest currentActivePatients
       assignedDoctor = doctorsWithCapacity[0];
-      
-      // Update doctor's currentActivePatients
-      await tx.user.update({
-        where: { id: assignedDoctor.id },
-        data: {
-          currentActivePatients: {
-            increment: 1,
-          },
-        },
-      });
+      // Do NOT increment currentActivePatients here - only IN_CONSULTATION counts.
+      // Increment happens in updateQueueEntryStatus when status → IN_CONSULTATION.
     }
 
     // Create QueueEntry

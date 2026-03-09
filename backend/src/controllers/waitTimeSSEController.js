@@ -5,7 +5,12 @@
  */
 
 import prisma from '../config/database.js';
-import { getConsultationTimeForDepartment } from '../services/waitTime.service.js';
+import {
+  getConsultationTimeForDepartment,
+  getCurrentServingSequence,
+  getActiveDoctorsCount,
+  calculateQueueWaitTime,
+} from '../services/waitTime.service.js';
 import { authenticatePatient } from '../middleware/patientAuthMiddleware.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 
@@ -92,59 +97,25 @@ export const streamWaitTime = async (req, res) => {
           return;
         }
 
-        // Get department-specific consultation time
+        const currentServingSequence = await getCurrentServingSequence(queueEntry.hospitalId, queueEntry.departmentId);
+        const activeDoctors = await getActiveDoctorsCount(queueEntry.hospitalId, queueEntry.departmentId);
         const avgConsultationTimeMinutes = await getConsultationTimeForDepartment(queueEntry.departmentId);
-
-        // Count active available doctors with capacity
-        const availableDoctors = await prisma.user.findMany({
-          where: {
-            hospitalId: queueEntry.hospitalId,
-            departmentId: queueEntry.departmentId,
-            role: 'STAFF',
-            staffRole: 'DOCTOR',
-            isActive: true,
-            isAvailable: true,
-          },
-          select: {
-            id: true,
-            currentActivePatients: true,
-            maxConcurrentPatients: true,
-          },
+        const position = Math.max(0, queueEntry.sequenceNumber - currentServingSequence);
+        const estimatedWaitMinutes = calculateQueueWaitTime({
+          position,
+          activeDoctors,
+          consultationTime: avgConsultationTimeMinutes,
         });
 
-        const doctorsWithCapacity = availableDoctors.filter(
-          (doctor) => doctor.currentActivePatients < doctor.maxConcurrentPatients
-        );
-
-        const activeDoctors = doctorsWithCapacity.length;
-
-        let estimatedWaitMinutes = null;
         let minWaitMinutes = null;
         let maxWaitMinutes = null;
-
-        if (activeDoctors > 0) {
-          // Count waiting queue entries (WAITING, TRIAGE, CALLED)
-          const waitingCount = await prisma.queueEntry.count({
-            where: {
-              hospitalId: queueEntry.hospitalId,
-              departmentId: queueEntry.departmentId,
-              status: {
-                in: ['WAITING', 'TRIAGE', 'CALLED'],
-              },
-            },
-          });
-
-          const batches = Math.ceil(waitingCount / activeDoctors);
-          estimatedWaitMinutes = batches * avgConsultationTimeMinutes;
-
-          // Calculate confidence interval
-          const varianceFactor = Math.max(0.15, Math.min(0.30, (waitingCount / Math.max(activeDoctors, 1)) * 0.05));
+        if (estimatedWaitMinutes !== null && estimatedWaitMinutes > 0) {
+          const varianceFactor = Math.max(0.15, Math.min(0.30, (position / Math.max(activeDoctors, 1)) * 0.05));
           const confidenceInterval = estimatedWaitMinutes * varianceFactor;
           minWaitMinutes = Math.max(0, Math.round(estimatedWaitMinutes - confidenceInterval));
           maxWaitMinutes = Math.round(estimatedWaitMinutes + confidenceInterval);
         }
 
-        // Send update
         res.write(`data: ${JSON.stringify({
           type: 'update',
           data: {
@@ -154,7 +125,7 @@ export const streamWaitTime = async (req, res) => {
             maxWaitMinutes,
             avgConsultationTimeMinutes,
             activeDoctors,
-            waitingCount: waitingCount || 0,
+            position,
             lastUpdated: new Date().toISOString(),
           },
         })}\n\n`);

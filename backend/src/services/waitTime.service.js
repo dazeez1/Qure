@@ -2,7 +2,12 @@ import prisma from '../config/database.js';
 
 /**
  * Wait Time Service
- * 
+ *
+ * ETA/wait time is never stored in the database. It is always computed on demand from:
+ * - position = sequenceNumber - currentServingSequence
+ * - activeDoctors, department consultation time
+ * So when the queue moves (complete, no-show, cancel, call next), every refetch recalculates ETAs.
+ *
  * Handles:
  * - Dynamic average consultation time calculation
  * - Historical wait time metrics
@@ -10,6 +15,125 @@ import prisma from '../config/database.js';
  */
 
 const DEFAULT_CONSULTATION_TIME = 15; // Fallback if no data
+const WAIT_CAP_MINUTES = 120;
+
+/**
+ * Single wait-time engine (position-based).
+ * "How long until THIS patient is served?"
+ * @param {{ position: number, activeDoctors: number, consultationTime: number }} params
+ * @returns {number} Estimated wait in minutes (0 = ready now; callers may display ">120 mins" when > 120)
+ */
+export function calculateQueueWaitTime({ position, activeDoctors, consultationTime }) {
+  const pos = Math.max(0, position);
+  if (pos <= 0) return 0;
+  if (activeDoctors <= 0) return null;
+  return Math.ceil(pos / activeDoctors) * consultationTime;
+}
+
+/**
+ * Format wait time for display using status labels.
+ * IN_CONSULTATION → "Now Serving", CALLED → "Next", TRIAGE → "Preparing",
+ * WAITING with 0 → "Ready now", else "X mins"; >120 → ">120 mins"
+ * @param {number|null} waitMins - From calculateQueueWaitTime
+ * @param {string} status - Queue entry status
+ * @returns {string}
+ */
+export function formatWaitTimeDisplay(waitMins, status) {
+  if (status === 'IN_CONSULTATION') return 'Now Serving';
+  if (status === 'CALLED') return 'Next';
+  if (status === 'TRIAGE') return 'Preparing';
+  if (waitMins === null || waitMins === undefined) return 'Calculating...';
+  if (waitMins <= 0) return 'Ready now';
+  if (waitMins > WAIT_CAP_MINUTES) return '>120 mins';
+  return `${Math.round(waitMins)} mins`;
+}
+
+const PRIORITY_ORDER = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
+
+/**
+ * Get current serving sequence for position-based wait time.
+ * - If anyone is IN_CONSULTATION: use the lowest sequenceNumber in IN_CONSULTATION (who we're serving).
+ * - If no one is IN_CONSULTATION: use the sequenceNumber of the first in line (priority DESC, then
+ *   sequenceNumber ASC) so the first in line has position 0 and wait times are correct.
+ * @param {string} hospitalId
+ * @param {string} departmentId
+ * @param {import('@prisma/client').PrismaClient} [tx=prisma]
+ */
+export async function getCurrentServingSequence(hospitalId, departmentId, tx = prisma) {
+  const client = tx || prisma;
+  const inConsultation = await client.queueEntry.findFirst({
+    where: {
+      hospitalId,
+      departmentId,
+      status: 'IN_CONSULTATION',
+    },
+    orderBy: { sequenceNumber: 'asc' },
+    select: { sequenceNumber: true },
+  });
+  if (inConsultation) return inConsultation.sequenceNumber;
+  const active = await client.queueEntry.findMany({
+    where: {
+      hospitalId,
+      departmentId,
+      status: { in: ['WAITING', 'TRIAGE', 'CALLED'] },
+    },
+    select: { sequenceNumber: true, priority: true },
+  });
+  if (active.length === 0) return 0;
+  active.sort((a, b) => {
+    const pa = PRIORITY_ORDER[a.priority] ?? 2;
+    const pb = PRIORITY_ORDER[b.priority] ?? 2;
+    if (pa !== pb) return pb - pa; // higher priority first
+    return (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0); // lower sequence first
+  });
+  return active[0].sequenceNumber ?? 0;
+}
+
+/**
+ * Get count of active doctors with capacity in a department.
+ * @param {string} hospitalId
+ * @param {string} departmentId
+ * @param {import('@prisma/client').PrismaClient} [tx=prisma]
+ */
+export async function getActiveDoctorsCount(hospitalId, departmentId, tx = prisma) {
+  const client = tx || prisma;
+  const doctors = await client.user.findMany({
+    where: {
+      hospitalId,
+      departmentId,
+      role: 'STAFF',
+      staffRole: 'DOCTOR',
+      isActive: true,
+      isAvailable: true,
+    },
+    select: {
+      currentActivePatients: true,
+      maxConcurrentPatients: true,
+    },
+  });
+  const withCapacity = doctors.filter(
+    d => (d.currentActivePatients ?? 0) < (d.maxConcurrentPatients ?? 3)
+  );
+  return withCapacity.length;
+}
+
+/**
+ * Compute wait time for one queue entry using the single engine.
+ * Fetches currentServingSequence, activeDoctorsCount, consultationTime; returns wait and display.
+ * @param {{ hospitalId: string, departmentId: string, sequenceNumber: number, status: string }} entry
+ * @param {import('@prisma/client').PrismaClient} [tx=prisma]
+ * @returns {Promise<{ waitMins: number|null, position: number, waitTimeDisplay: string }>}
+ */
+export async function getWaitTimeForEntry(entry, tx = prisma) {
+  const { hospitalId, departmentId, sequenceNumber, status } = entry;
+  const currentServingSequence = await getCurrentServingSequence(hospitalId, departmentId, tx);
+  const position = Math.max(0, sequenceNumber - currentServingSequence);
+  const activeDoctors = await getActiveDoctorsCount(hospitalId, departmentId, tx);
+  const consultationTime = await getConsultationTimeForDepartment(departmentId);
+  const waitMins = calculateQueueWaitTime({ position, activeDoctors, consultationTime });
+  const waitTimeDisplay = formatWaitTimeDisplay(waitMins, status);
+  return { waitMins: waitMins ?? null, position, waitTimeDisplay };
+}
 
 /**
  * Calculate average consultation time for a department from historical data

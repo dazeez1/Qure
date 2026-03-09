@@ -1,4 +1,6 @@
+import http from 'http';
 import express from 'express';
+import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import compression from 'compression';
@@ -94,8 +96,26 @@ app.use(notFoundHandler);
 // Global error handler (must be last)
 app.use(errorHandler);
 
+// Create HTTP server and attach Socket.IO
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.FRONTEND_URL || '*',
+  },
+});
+
+io.on('connection', (socket) => {
+  socket.on('joinHospital', (hospitalId) => {
+    if (hospitalId) {
+      socket.join(`hospital_${hospitalId}`);
+    }
+  });
+});
+
+app.set('io', io);
+
 // Start server
-app.listen(PORT, async () => {
+httpServer.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
   
@@ -122,7 +142,7 @@ async function startAutoCheckInScheduler() {
     // Then run every 5 minutes
     setInterval(async () => {
       try {
-        const result = await processAutoCheckIn();
+        const result = await processAutoCheckIn(app);
         if (result.success) {
           console.log(`[Auto-Check-In] Processed ${result.processed} appointments: ${result.successful} successful, ${result.errors} errors`);
         }

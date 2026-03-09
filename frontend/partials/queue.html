@@ -436,6 +436,15 @@
     border-bottom: 1px solid var(--color-border-light);
   }
 
+  .queue-table td.status-cell {
+    font-size: 1rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .queue-table td.status-cell .status-badge {
+    font-size: 1rem;
+  }
+
   .queue-table tbody tr:hover {
     background-color: var(--color-background-gray-lighter);
   }
@@ -972,6 +981,67 @@
     opacity: 0.5;
     }
 
+  /* Inline room dropdown (per consultation) */
+  .room-dropdown-popover {
+    background: var(--color-background-primary, #fff);
+    border-radius: 0.6rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    padding: 1rem 1.2rem;
+    min-width: 220px;
+  }
+  .room-dropdown-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  .room-dropdown-label {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--color-text-secondary, #6b7280);
+  }
+  .room-dropdown-select-wrap {
+    position: relative;
+    display: block;
+  }
+  .room-dropdown-select {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 2.2rem 0.6rem 0.8rem;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 0.4rem;
+    font-size: 1.2rem;
+    background: var(--color-background-primary, #fff);
+    color: var(--color-text-primary, #111);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+  .room-dropdown-select:focus {
+    outline: none;
+    border-color: var(--color-primary-blue, #6366f1);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+  .room-dropdown-icon {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 1.4rem;
+    color: var(--color-text-secondary, #6b7280);
+  }
+  .room-dropdown-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.8rem;
+    margin-top: 0.2rem;
+  }
+  .room-dropdown-actions .btn {
+    padding: 0.5rem 1rem;
+    font-size: 1.2rem;
+  }
 
   @media (max-width: 768px) {
     .queue-header {

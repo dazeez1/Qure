@@ -5,13 +5,16 @@
 
 'use strict';
 
-import { apiGet, apiPost, apiPatch } from '../../utils/apiClient.js';
+import { io } from 'socket.io-client';
+import { apiGet, apiPost, apiPatch, getApiBaseUrl } from '../../utils/apiClient.js';
 import { getAuthUser, clearAuth, isAuthenticated, getAuthToken } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { cleanupPage } from '../../utils/pageLifecycle.js';
 
 const PAGE_ID = 'dashboard';
 let viewLoadedHandler = null;
+let dashboardPollingIntervalId = null;
+let queueSocket = null;
 
 /**
  * Close all open modals
@@ -152,22 +155,47 @@ async function initializeDashboard() {
   initializeAnnouncementTabs();
   setupAnnouncementCreateButton();
 
-  // Set up auto-refresh every 15 seconds (keeps filters applied)
+  // Real-time queue updates via Socket.IO
+  if (currentUser && currentUser.hospitalId) {
+    const socketUrl = new URL(getApiBaseUrl()).origin;
+    queueSocket = io(socketUrl);
+    queueSocket.emit('joinHospital', currentUser.hospitalId);
+    queueSocket.on('queue:update', () => {
+      const departmentFilter = document.getElementById('department-select');
+      const searchInput = document.getElementById('dashboard-search-input');
+      const depId = (departmentFilter && departmentFilter.value) || '';
+      const search = (searchInput && searchInput.value.trim()) || '';
+      fetchDashboardSummary(depId, search);
+      fetchQueueEntries(depId, search);
+    });
+    queueSocket.on('connect', () => {
+      if (dashboardPollingIntervalId) {
+        clearInterval(dashboardPollingIntervalId);
+        dashboardPollingIntervalId = null;
+      }
+    });
+    queueSocket.on('disconnect', () => {
+      startDashboardPollingFallback();
+    });
+  }
+
+  // Fallback polling when Socket.IO is not connected (15s)
+  startDashboardPollingFallback();
+}
+
+function startDashboardPollingFallback() {
+  if (dashboardPollingIntervalId) return;
   const departmentFilter = document.getElementById('department-select');
   const searchInput = document.getElementById('dashboard-search-input');
-  
-  setInterval(() => {
-    // Check verification status before each auto-refresh
+  dashboardPollingIntervalId = setInterval(() => {
+    if (queueSocket && queueSocket.connected) return;
     const refreshUser = getAuthUser();
     if (refreshUser && refreshUser.role === 'STAFF' && !refreshUser.isPrimary && !refreshUser.isVerified) {
-      // User became unverified - redirect
       window.location.href = '/staff/verify-access.html';
       return;
     }
-    
-    const depId = departmentFilter.value || '';
-    const search = searchInput.value.trim();
-    
+    const depId = (departmentFilter && departmentFilter.value) || '';
+    const search = (searchInput && searchInput.value.trim()) || '';
     fetchDashboardSummary(depId, search);
     fetchQueueEntries(depId, search);
   }, 15000);

@@ -49,13 +49,24 @@ router.get('/preview', getQueuePreview);
 router.post('/check-in', authenticatePatient, checkInToQueue);
 
 /**
+ * Allow token in query for SSE (EventSource cannot send Authorization header)
+ */
+const allowTokenInQuery = (req, res, next) => {
+  if (!req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+};
+
+/**
  * GET /api/queue/:id/wait-time/stream
  * Stream real-time wait time updates via SSE
  * Requires: STAFF/ADMIN (same hospital) or Patient (owns entry)
  * Note: Must come before other /:id routes
  * Supports both patient and staff authentication
+ * Token may be passed as ?token= for EventSource compatibility
  */
-router.get('/:id/wait-time/stream', authenticatePatientOrStaff, streamWaitTime);
+router.get('/:id/wait-time/stream', allowTokenInQuery, authenticatePatientOrStaff, streamWaitTime);
 
 /**
  * GET /api/queue/:id/wait-time
