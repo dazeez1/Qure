@@ -192,8 +192,9 @@ export const checkInToQueue = async (req, res, next) => {
       });
     }
 
-    // Wrap entire logic in Prisma transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap entire logic in Prisma transaction (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find appointment and validate
       const appointment = await tx.appointment.findUnique({
         where: { id: appointmentId },
@@ -603,8 +604,9 @@ export const checkInToQueueStaff = async (req, res, next) => {
       });
     }
 
-    // Wrap entire logic in Prisma transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap entire logic in Prisma transaction (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find appointment and validate
       const appointment = await tx.appointment.findUnique({
         where: { id: appointmentId },
@@ -862,7 +864,8 @@ export const checkInToQueueStaff = async (req, res, next) => {
         departmentId: appointment.departmentId,
         estimatedWaitMinutes,
       };
-    });
+    },
+    { timeout: 15000 });
 
     // Monitor wait time changes for all active entries in the department
     setImmediate(async () => {
@@ -1919,8 +1922,9 @@ export const bulkUpdateQueueEntryStatus = async (req, res, next) => {
       });
     }
 
-    // Wrap entire operation in transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap entire operation in transaction (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find all queue entries
       const queueEntries = await tx.queueEntry.findMany({
         where: {
@@ -2040,7 +2044,8 @@ export const bulkUpdateQueueEntryStatus = async (req, res, next) => {
       return {
         updatedCount: updateResult.count,
       };
-    });
+    },
+    { timeout: 15000 });
 
     emitQueueUpdate(req.app, user.hospitalId);
     res.status(200).json({
@@ -2114,8 +2119,9 @@ export const getPatientQueueStatus = async (req, res, next) => {
       });
     }
 
-    // Wrap read operations in transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap read operations in transaction (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find active queue entry for patient
       const queueEntry = await tx.queueEntry.findFirst({
         where: {
@@ -2192,7 +2198,8 @@ export const getPatientQueueStatus = async (req, res, next) => {
         minWaitMinutes,
         maxWaitMinutes,
       };
-    });
+    },
+    { timeout: 15000 });
 
     // Monitor wait time changes for patient's queue entry
     // This will create notifications if significant changes are detected

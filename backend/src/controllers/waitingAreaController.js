@@ -67,8 +67,9 @@ export const createWaitingArea = async (req, res, next) => {
       });
     }
 
-    // Wrap in transaction for atomicity (especially for isDefault handling)
-    const waitingArea = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction for atomicity (especially for isDefault handling, extend timeout for hosted DB latency)
+    const waitingArea = await prisma.$transaction(
+      async (tx) => {
       // Check composite uniqueness (hospitalId + name)
       const existingWaitingArea = await tx.waitingArea.findFirst({
         where: {
@@ -109,7 +110,8 @@ export const createWaitingArea = async (req, res, next) => {
           isDefault: shouldBeDefault,
         },
       });
-    });
+    },
+    { timeout: 15000 });
 
     res.status(201).json({
       success: true,
@@ -277,8 +279,9 @@ export const updateWaitingArea = async (req, res, next) => {
       });
     }
 
-    // Wrap in transaction for atomicity
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction for atomicity (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find waiting area and verify ownership
       const waitingArea = await tx.waitingArea.findUnique({
         where: { id },
@@ -398,7 +401,8 @@ export const updateWaitingArea = async (req, res, next) => {
       });
 
       return updatedWaitingArea;
-    });
+    },
+    { timeout: 15000 });
 
     res.status(200).json({
       success: true,

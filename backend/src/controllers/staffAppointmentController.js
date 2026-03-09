@@ -162,8 +162,9 @@ export async function cancelAppointmentStaff(req, res) {
 
     const { id } = req.params;
 
-    // Wrap in transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find appointment
       const appointment = await tx.appointment.findUnique({
         where: { id },
@@ -248,7 +249,8 @@ export async function cancelAppointmentStaff(req, res) {
       });
 
       return updatedAppointment;
-    });
+    },
+    { timeout: 15000 });
 
     // Return success response
     return res.status(200).json({

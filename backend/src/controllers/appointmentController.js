@@ -388,8 +388,9 @@ export const rescheduleAppointment = async (req, res, next) => {
       });
     }
 
-    // Wrap in transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find appointment
       const appointment = await tx.appointment.findUnique({
         where: { id },
@@ -507,7 +508,8 @@ export const rescheduleAppointment = async (req, res, next) => {
       });
 
       return { updatedAppointment, oldDate, department: appointment.department };
-    });
+    },
+    { timeout: 15000 });
 
     // Create reschedule notification (non-blocking)
     // Note: No doctor is assigned at appointment reschedule time - doctors are assigned when checking into queue

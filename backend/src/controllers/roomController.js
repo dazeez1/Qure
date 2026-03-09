@@ -56,8 +56,9 @@ export const createRoom = async (req, res, next) => {
       });
     }
 
-    // Wrap in transaction
-    const room = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction (extend timeout for hosted DB latency)
+    const room = await prisma.$transaction(
+      async (tx) => {
       // Validate department ownership (belongs to admin's hospital)
       const department = await tx.department.findFirst({
         where: {
@@ -110,7 +111,8 @@ export const createRoom = async (req, res, next) => {
       });
 
       return newRoom;
-    });
+    },
+    { timeout: 15000 });
 
     res.status(201).json({
       success: true,
@@ -278,8 +280,9 @@ export const updateRoom = async (req, res, next) => {
       });
     }
 
-    // Wrap in transaction
-    const room = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction (extend timeout for hosted DB latency)
+    const room = await prisma.$transaction(
+      async (tx) => {
       // Find room and validate ownership
       const existingRoom = await tx.room.findUnique({
         where: { id },
@@ -359,7 +362,8 @@ export const updateRoom = async (req, res, next) => {
       });
 
       return updatedRoom;
-    });
+    },
+    { timeout: 15000 });
 
     res.status(200).json({
       success: true,

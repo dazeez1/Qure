@@ -110,8 +110,9 @@ export async function processAutoCheckIn(app = null) {
  * Extracted core logic from checkInToQueue for use in scheduled jobs
  */
 async function autoCheckInAppointment(appointment) {
-  // Use the same transaction logic as manual check-in
-  return await prisma.$transaction(async (tx) => {
+  // Use the same transaction logic as manual check-in (extend timeout for hosted DB latency)
+  return await prisma.$transaction(
+    async (tx) => {
     // Validate appointment status = BOOKED
     if (appointment.status !== 'BOOKED') {
       throw new Error(`Cannot auto-check-in. Appointment status is ${appointment.status}.`);
@@ -286,5 +287,6 @@ async function autoCheckInAppointment(appointment) {
       assignedWaitingArea,
       ticketNumber,
     };
-  });
+  },
+  { timeout: 15000 });
 }

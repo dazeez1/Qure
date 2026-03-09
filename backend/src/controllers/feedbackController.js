@@ -52,8 +52,9 @@ export const createPatientFeedback = async (req, res, next) => {
       });
     }
 
-    // Wrap in transaction
-    const result = await prisma.$transaction(async (tx) => {
+    // Wrap in transaction (extend timeout for hosted DB latency)
+    const result = await prisma.$transaction(
+      async (tx) => {
       // Find appointment and verify ownership
       const appointment = await tx.appointment.findUnique({
         where: { id: appointmentId },
@@ -138,7 +139,8 @@ export const createPatientFeedback = async (req, res, next) => {
       });
 
       return feedback;
-    });
+    },
+    { timeout: 15000 });
 
     res.status(201).json({
       success: true,
