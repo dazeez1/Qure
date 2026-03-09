@@ -665,6 +665,7 @@ async function loadDashboard() {
     }
 
     const data = result.data || {};
+    latestDashboardData = data;
 
     const hospitalId = data.currentQueue?.hospitalId
       || data.upcomingAppointments?.[0]?.hospital?.id;
@@ -699,14 +700,19 @@ if (viewQueueBtn) {
   viewQueueBtn.addEventListener('click', async () => {
     try {
       // Get hospitalId from current queue or appointments
-      const response = await apiGet('/patient/dashboard');
-      if (!response.ok) {
-        throw new Error('Failed to get hospital information');
+      let data = latestDashboardData;
+      if (!data) {
+        const response = await apiGet('/patient/dashboard');
+        if (!response.ok) {
+          throw new Error('Failed to get hospital information');
+        }
+        const result = await response.json();
+        data = result.data || {};
+        latestDashboardData = data;
       }
-      
-      const result = await response.json();
-      const currentQueue = result.data?.currentQueue;
-      const appointments = result.data?.upcomingAppointments || [];
+
+      const currentQueue = data.currentQueue;
+      const appointments = data.upcomingAppointments || [];
       
       let hospitalId = null;
       
@@ -754,14 +760,19 @@ if (liveQueueBtn) {
   liveQueueBtn.addEventListener('click', async () => {
     try {
       // Get hospitalId from current queue or appointments
-      const response = await apiGet('/patient/dashboard');
-      if (!response.ok) {
-        throw new Error('Failed to get hospital information');
+      let data = latestDashboardData;
+      if (!data) {
+        const response = await apiGet('/patient/dashboard');
+        if (!response.ok) {
+          throw new Error('Failed to get hospital information');
+        }
+        const result = await response.json();
+        data = result.data || {};
+        latestDashboardData = data;
       }
-      
-      const result = await response.json();
-      const currentQueue = result.data?.currentQueue;
-      const appointments = result.data?.upcomingAppointments || [];
+
+      const currentQueue = data.currentQueue;
+      const appointments = data.upcomingAppointments || [];
       
       let hospitalId = null;
       
@@ -958,6 +969,7 @@ if (clearAllBtn) {
 }
 
 let patientQueueSocket = null;
+let latestDashboardData = null;
 
 function ensurePatientQueueSocket(hospitalId) {
   if (!hospitalId || patientQueueSocket) return;

@@ -114,11 +114,8 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    // Get appointments and existing feedbacks in parallel
-    const [appointmentsResponse, feedbacksResponse] = await Promise.all([
-      apiGet('/patient/appointments?status=COMPLETED'),
-      apiGet('/patient/appointments'), // Get all appointments to check for feedback
-    ]);
+    // Get completed appointments (backend already marks which have feedback)
+    const appointmentsResponse = await apiGet('/patient/appointments?status=COMPLETED');
 
     if (!appointmentsResponse.ok) {
       throw new Error('Failed to load appointments');
@@ -126,17 +123,6 @@ async function loadCompletedAppointments() {
 
     const appointmentsResult = await appointmentsResponse.json();
     const appointments = appointmentsResult.data?.appointments || [];
-
-    // Get appointments that already have feedback
-    const appointmentsWithFeedback = new Set();
-    if (feedbacksResponse.ok) {
-      const allAppointments = await feedbacksResponse.json();
-      const allApts = allAppointments.data?.appointments || [];
-      
-      // Check which appointments have feedback by trying to get feedback for each
-      // We'll filter by checking if appointment has been used for feedback
-      // Since we can't directly query, we'll need to check after getting feedback list
-    }
 
     const select = document.getElementById('appointment-select');
     if (!select) return;

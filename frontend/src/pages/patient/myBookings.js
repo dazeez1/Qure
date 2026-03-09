@@ -39,6 +39,7 @@ let currentPage = 1;
 const limit = 10;
 let totalPages = 1;
 let totalCount = 0;
+let latestAppointments = [];
 
 // DOM elements
 const appointmentsTableBody = document.getElementById('appointments-table-body');
@@ -158,6 +159,9 @@ async function loadAppointments(page = 1) {
     totalPages = paginationData.totalPages;
     totalCount = paginationData.totalCount;
 
+    // Cache latest page of appointments for quick lookup (e.g. reschedule)
+    latestAppointments = Array.isArray(appointments) ? appointments : [];
+
     // Render appointments
     renderAppointments(appointments);
 
@@ -274,6 +278,15 @@ async function handleReschedule(appointmentId) {
  * Get appointment data for reschedule
  */
 async function getAppointmentsForReschedule(appointmentId) {
+  // First, try to find the appointment in the latest loaded page to avoid extra network calls
+  if (latestAppointments && latestAppointments.length > 0) {
+    const match = latestAppointments.filter((apt) => apt.id === appointmentId);
+    if (match.length > 0) {
+      return match;
+    }
+  }
+
+  // Fallback: fetch all appointments if not found in current page
   try {
     const response = await apiGet('/patient/appointments');
     if (!response.ok) {

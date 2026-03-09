@@ -17,12 +17,18 @@ let currentHospitalId = null;
 
 // Get hospitalId from URL params or patient's active queue entry
 async function getHospitalId() {
+  // If we've already resolved hospitalId in this session, reuse it
+  if (currentHospitalId) {
+    return currentHospitalId;
+  }
+
   // Check URL params first
   const urlParams = new URLSearchParams(window.location.search);
   const hospitalIdFromUrl = urlParams.get('hospitalId');
   
   if (hospitalIdFromUrl) {
-    return hospitalIdFromUrl;
+    currentHospitalId = hospitalIdFromUrl;
+    return currentHospitalId;
   }
 
   // If patient is logged in, try to get hospitalId from their active queue entry
@@ -38,19 +44,22 @@ async function getHospitalId() {
           const result = await response.json();
           const currentQueue = result.data?.currentQueue;
           if (currentQueue && currentQueue.hospitalId) {
-            return currentQueue.hospitalId;
+            currentHospitalId = currentQueue.hospitalId;
+            return currentHospitalId;
           }
           
           // If no active queue, try to get from most recent appointment
           const appointments = result.data?.upcomingAppointments || [];
           if (appointments.length > 0 && appointments[0].hospital?.id) {
-            return appointments[0].hospital.id;
+            currentHospitalId = appointments[0].hospital.id;
+            return currentHospitalId;
           }
           
           // Also try to get from any appointment's hospitalId
           for (const apt of appointments) {
             if (apt.hospital?.id) {
-              return apt.hospital.id;
+              currentHospitalId = apt.hospital.id;
+              return currentHospitalId;
             }
           }
         }
