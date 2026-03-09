@@ -314,9 +314,9 @@ The demo covers:
 
 ##  Live Deployment
 
-**Frontend (Vercel)**: [[https://qure-frontend.vercel.app/](https://qure-frontend.vercel.app/)]
-**Backend API (Render)**: [[https://qure-vbfm.onrender.com](https://qure-vbfm.onrender.com)]
-**API Health Check**: [https://qure-vbfm.onrender.com/health](https://qure-vbfm.onrender.com/health)]
+- **Frontend (Vercel)**: [[https://qure-frontend.vercel.app/](https://qure-frontend.vercel.app/)]
+- **Backend API (Render)**: [[https://qure-vbfm.onrender.com](https://qure-vbfm.onrender.com)]
+- **API Health Check**: [https://qure-vbfm.onrender.com/health](https://qure-vbfm.onrender.com/health)]
 
 ##  Related Files
 
