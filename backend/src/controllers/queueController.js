@@ -1153,148 +1153,145 @@ export const getStaffQueue = async (req, res, next) => {
     const activeStatuses = ['WAITING', 'TRIAGE', 'CALLED', 'IN_CONSULTATION'];
     const inactiveStatuses = ['COMPLETED', 'CANCELLED', 'NO_SHOW'];
 
-    // Use transaction for findMany + count
-    const result = await prisma.$transaction(async (tx) => {
-      // Fetch all queue entries matching filters (without pagination for proper sorting)
-      // We'll split into active/inactive after fetching
-      const allQueueEntries = await tx.queueEntry.findMany({
-        where,
-        include: {
-          patient: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              phone: true,
-              dateOfBirth: true,
-              gender: true,
-              avatarUrl: true,
-            },
-          },
-          appointment: {
-            select: {
-              id: true,
-              appointmentDate: true,
-              reason: true,
-            },
-          },
-          department: {
-            select: {
-              id: true,
-              name: true,
-              shortCode: true,
-            },
-          },
-          assignedDoctor: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          assignedRoom: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          waitingArea: {
-            select: {
-              id: true,
-              name: true,
-            },
+    // Fetch all queue entries matching filters (without pagination for proper sorting)
+    // We'll split into active/inactive after fetching
+    const allQueueEntries = await prisma.queueEntry.findMany({
+      where,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            dateOfBirth: true,
+            gender: true,
+            avatarUrl: true,
           },
         },
-      });
-
-      // Split entries into active and inactive groups
-      const activeQueueEntries = allQueueEntries.filter((entry) =>
-        activeStatuses.includes(entry.status)
-      );
-      const inactiveQueueEntries = allQueueEntries.filter((entry) =>
-        inactiveStatuses.includes(entry.status)
-      );
-
-      // Sort active entries: priority DESC (urgent first), then sequenceNumber ASC (first in line first)
-      // So "Call Next" and wait-time position align: first in list = next to be called.
-      const priorityOrder = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
-      activeQueueEntries.sort((a, b) => {
-        const priorityA = priorityOrder[a.priority] || 2;
-        const priorityB = priorityOrder[b.priority] || 2;
-        if (priorityA !== priorityB) {
-          return priorityB - priorityA; // DESC
-        }
-        return (a.sequenceNumber || 0) - (b.sequenceNumber || 0); // ASC = oldest / first in line first
-      });
-
-      // Sort inactive entries: checkInTime DESC (most recent first)
-      inactiveQueueEntries.sort((a, b) => {
-        const timeA = new Date(a.checkInTime || 0).getTime();
-        const timeB = new Date(b.checkInTime || 0).getTime();
-        return timeB - timeA; // DESC
-      });
-
-      // Only return active entries (filter out COMPLETED, CANCELLED, NO_SHOW)
-      // Queue view should show only active flow
-      const sortedQueueEntries = activeQueueEntries;
-
-      // Get total count (only active entries)
-      const totalCount = sortedQueueEntries.length;
-
-      // Group entries by department for efficient wait time calculation
-      const entriesByDepartment = new Map();
-      sortedQueueEntries.forEach(entry => {
-        const key = `${entry.hospitalId}-${entry.departmentId}`;
-        if (!entriesByDepartment.has(key)) {
-          entriesByDepartment.set(key, []);
-        }
-        entriesByDepartment.get(key).push(entry);
-      });
-
-      // Calculate wait time for all entries using single wait-time engine
-      const entriesWithWaitTime = await Promise.all(
-        Array.from(entriesByDepartment.entries()).flatMap(async ([key, entries]) => {
-          const firstEntry = entries[0];
-          const hospitalId = firstEntry.hospitalId;
-          const departmentId = firstEntry.departmentId;
-
-          const currentServingSequence = await getCurrentServingSequence(hospitalId, departmentId, tx);
-          const activeDoctorsCount = await getActiveDoctorsCount(hospitalId, departmentId, tx);
-          const consultationTime = await getConsultationTimeForDepartment(departmentId);
-
-          return entries.map(entry => {
-            const position = Math.max(0, entry.sequenceNumber - currentServingSequence);
-            const waitMins = calculateQueueWaitTime({ position, activeDoctors: activeDoctorsCount, consultationTime });
-            const waitTimeDisplay = formatWaitTimeDisplay(waitMins, entry.status);
-            return {
-              ...entry,
-              waitTimeDisplay,
-              waitTimeMinutes: waitMins,
-            };
-          });
-        })
-      ).then(results => results.flat());
-
-      // Apply pagination to merged result
-      const paginatedQueueEntries = entriesWithWaitTime.slice(skip, skip + limitNum);
-
-      // Count COMPLETED entries today (same scope as queue: hospital, optional department/doctor)
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      const endOfToday = new Date();
-      endOfToday.setHours(23, 59, 59, 999);
-      const completedWhere = { hospitalId: where.hospitalId, status: 'COMPLETED' };
-      if (where.assignedDoctorId) completedWhere.assignedDoctorId = where.assignedDoctorId;
-      if (where.departmentId) completedWhere.departmentId = where.departmentId;
-      completedWhere.checkInTime = { gte: startOfToday, lte: endOfToday };
-      const completedTodayCount = await tx.queueEntry.count({ where: completedWhere });
-
-      return {
-        queueEntries: paginatedQueueEntries,
-        totalCount,
-        completedTodayCount,
-      };
+        appointment: {
+          select: {
+            id: true,
+            appointmentDate: true,
+            reason: true,
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+            shortCode: true,
+          },
+        },
+        assignedDoctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        assignedRoom: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        waitingArea: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
+
+    // Split entries into active and inactive groups
+    const activeQueueEntries = allQueueEntries.filter((entry) =>
+      activeStatuses.includes(entry.status)
+    );
+    const inactiveQueueEntries = allQueueEntries.filter((entry) =>
+      inactiveStatuses.includes(entry.status)
+    );
+
+    // Sort active entries: priority DESC (urgent first), then sequenceNumber ASC (first in line first)
+    // So "Call Next" and wait-time position align: first in list = next to be called.
+    const priorityOrder = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
+    activeQueueEntries.sort((a, b) => {
+      const priorityA = priorityOrder[a.priority] || 2;
+      const priorityB = priorityOrder[b.priority] || 2;
+      if (priorityA !== priorityB) {
+        return priorityB - priorityA; // DESC
+      }
+      return (a.sequenceNumber || 0) - (b.sequenceNumber || 0); // ASC = oldest / first in line first
+    });
+
+    // Sort inactive entries: checkInTime DESC (most recent first)
+    inactiveQueueEntries.sort((a, b) => {
+      const timeA = new Date(a.checkInTime || 0).getTime();
+      const timeB = new Date(b.checkInTime || 0).getTime();
+      return timeB - timeA; // DESC
+    });
+
+    // Only return active entries (filter out COMPLETED, CANCELLED, NO_SHOW)
+    // Queue view should show only active flow
+    const sortedQueueEntries = activeQueueEntries;
+
+    // Get total count (only active entries)
+    const totalCount = sortedQueueEntries.length;
+
+    // Group entries by department for efficient wait time calculation
+    const entriesByDepartment = new Map();
+    sortedQueueEntries.forEach(entry => {
+      const key = `${entry.hospitalId}-${entry.departmentId}`;
+      if (!entriesByDepartment.has(key)) {
+        entriesByDepartment.set(key, []);
+      }
+      entriesByDepartment.get(key).push(entry);
+    });
+
+    // Calculate wait time for all entries using single wait-time engine
+    const entriesWithWaitTime = await Promise.all(
+      Array.from(entriesByDepartment.entries()).flatMap(async ([key, entries]) => {
+        const firstEntry = entries[0];
+        const hospitalId = firstEntry.hospitalId;
+        const departmentId = firstEntry.departmentId;
+
+        const currentServingSequence = await getCurrentServingSequence(hospitalId, departmentId);
+        const activeDoctorsCount = await getActiveDoctorsCount(hospitalId, departmentId);
+        const consultationTime = await getConsultationTimeForDepartment(departmentId);
+
+        return entries.map(entry => {
+          const position = Math.max(0, entry.sequenceNumber - currentServingSequence);
+          const waitMins = calculateQueueWaitTime({ position, activeDoctors: activeDoctorsCount, consultationTime });
+          const waitTimeDisplay = formatWaitTimeDisplay(waitMins, entry.status);
+          return {
+            ...entry,
+            waitTimeDisplay,
+            waitTimeMinutes: waitMins,
+          };
+        });
+      })
+    ).then(results => results.flat());
+
+    // Apply pagination to merged result
+    const paginatedQueueEntries = entriesWithWaitTime.slice(skip, skip + limitNum);
+
+    // Count COMPLETED entries today (same scope as queue: hospital, optional department/doctor)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const completedWhere = { hospitalId: where.hospitalId, status: 'COMPLETED' };
+    if (where.assignedDoctorId) completedWhere.assignedDoctorId = where.assignedDoctorId;
+    if (where.departmentId) completedWhere.departmentId = where.departmentId;
+    completedWhere.checkInTime = { gte: startOfToday, lte: endOfToday };
+    const completedTodayCount = await prisma.queueEntry.count({ where: completedWhere });
+
+    const result = {
+      queueEntries: paginatedQueueEntries,
+      totalCount,
+      completedTodayCount,
+    };
 
     // For doctors: sync currentActivePatients = count(CALLED + IN_CONSULTATION) for this doctor
     let doctorLoadSync = null;

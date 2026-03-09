@@ -1,4 +1,5 @@
 import prisma from '../config/database.js';
+import { getCache, setCache } from '../utils/cache.js';
 
 /**
  * Get all hospitals (public endpoint)
@@ -8,6 +9,16 @@ import prisma from '../config/database.js';
  */
 export const getHospitals = async (req, res, next) => {
   try {
+    const cacheKey = 'public:hospitals';
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        success: true,
+        message: 'Hospitals retrieved successfully (cache)',
+        data: cached,
+      });
+    }
+
     // Get all hospitals that have at least one active department
     const hospitals = await prisma.hospital.findMany({
       where: {
@@ -29,6 +40,9 @@ export const getHospitals = async (req, res, next) => {
       },
     });
 
+    // Cache for 60 seconds – hospitals change infrequently
+    setCache(cacheKey, hospitals, 60 * 1000);
+
     res.status(200).json({
       success: true,
       message: 'Hospitals retrieved successfully',
@@ -48,6 +62,16 @@ export const getHospitals = async (req, res, next) => {
 export const getHospitalDepartments = async (req, res, next) => {
   try {
     const { hospitalId } = req.params;
+
+    const cacheKey = `public:hospital:${hospitalId}:departments`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        success: true,
+        message: 'Departments retrieved successfully (cache)',
+        data: cached,
+      });
+    }
 
     // Verify hospital exists
     const hospital = await prisma.hospital.findUnique({
@@ -78,6 +102,9 @@ export const getHospitalDepartments = async (req, res, next) => {
         name: 'asc',
       },
     });
+
+    // Cache departments per hospital for 60 seconds
+    setCache(cacheKey, departments, 60 * 1000);
 
     res.status(200).json({
       success: true,

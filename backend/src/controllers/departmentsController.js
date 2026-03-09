@@ -1,4 +1,5 @@
 import prisma from '../config/database.js';
+import { getCache, setCache, invalidateCacheByPrefix } from '../utils/cache.js';
 
 /**
  * Get All Departments
@@ -15,6 +16,18 @@ export const getDepartments = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'No hospital associated with your account.',
+      });
+    }
+
+    const cacheKey = `settings:departments:${user.hospitalId}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        success: true,
+        message: 'Departments retrieved successfully',
+        data: {
+          departments: cached,
+        },
       });
     }
 
@@ -35,6 +48,9 @@ export const getDepartments = async (req, res, next) => {
         createdAt: 'desc',
       },
     });
+
+    // Cache departments for this hospital briefly (30 seconds)
+    setCache(cacheKey, departments, 30 * 1000);
 
     // Return departments
     res.status(200).json({
@@ -160,6 +176,9 @@ export const createDepartment = async (req, res, next) => {
         updatedAt: true,
       },
     });
+
+    // Invalidate cached departments for this hospital
+    invalidateCacheByPrefix(`settings:departments:${user.hospitalId}`);
 
     // Return created department
     res.status(201).json({
@@ -325,6 +344,9 @@ export const updateDepartment = async (req, res, next) => {
       },
     });
 
+    // Invalidate cached departments for this hospital
+    invalidateCacheByPrefix(`settings:departments:${user.hospitalId}`);
+
     // Return updated department
     res.status(200).json({
       success: true,
@@ -481,6 +503,9 @@ export const deleteDepartment = async (req, res, next) => {
     await prisma.department.delete({
       where: { id },
     });
+
+    // Invalidate cached departments for this hospital
+    invalidateCacheByPrefix(`settings:departments:${user.hospitalId}`);
 
     // Return success
     res.status(200).json({
