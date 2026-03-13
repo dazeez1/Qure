@@ -147,51 +147,24 @@ async function autoCheckInAppointment(appointment) {
       throw new Error('Patient already has an active queue entry for this appointment.');
     }
 
-    // Generate department-based daily ticket number
-    // Use a retry mechanism to handle concurrent check-ins
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    // Generate department-based ticket number
+    // Format: {SHORT_CODE}-{SEQUENCE_NUMBER} (e.g., CAR-001, CAR-002)
+    // Use global max sequenceNumber for this hospital + department (never reuse tickets)
+    const lastEntry = await tx.queueEntry.findFirst({
+      where: {
+        departmentId: appointment.departmentId,
+        hospitalId: appointment.hospitalId,
+      },
+      orderBy: {
+        sequenceNumber: 'desc',
+      },
+      select: {
+        sequenceNumber: true,
+      },
+    });
 
-    let sequenceNumber;
-    let ticketNumber;
-    let attempts = 0;
-    const maxAttempts = 10;
-
-    // Retry logic to handle race conditions: try next sequence number on collision
-    while (attempts < maxAttempts) {
-      const todayQueueCount = await tx.queueEntry.count({
-        where: {
-          departmentId: appointment.departmentId,
-          hospitalId: appointment.hospitalId,
-          checkInTime: {
-            gte: todayStart,
-            lte: todayEnd,
-          },
-        },
-      });
-
-      sequenceNumber = todayQueueCount + 1 + attempts;
-      ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
-
-      const existingTicket = await tx.queueEntry.findFirst({
-        where: {
-          hospitalId: appointment.hospitalId,
-          departmentId: appointment.departmentId,
-          ticketNumber: ticketNumber,
-        },
-      });
-
-      if (!existingTicket) {
-        break;
-      }
-
-      attempts++;
-      if (attempts >= maxAttempts) {
-        throw new Error('Failed to generate unique ticket number after multiple attempts');
-      }
-    }
+    const sequenceNumber = (lastEntry?.sequenceNumber || 0) + 1;
+    const ticketNumber = `${appointment.department.shortCode}-${String(sequenceNumber).padStart(3, '0')}`;
 
     // Auto-assign doctor (same logic as manual check-in)
     const availableDoctors = await tx.user.findMany({
