@@ -312,11 +312,12 @@ export async function getDashboardOverview({ hospitalId, departmentId, search })
         getConsultationTimeForDepartment(first.departmentId),
       ]);
 
+      const effectiveDoctors = Math.max(1, activeDoctorsCount);
       for (const entry of entries) {
         const position = positionMap.get(entry.id) ?? 0;
         const waitMins = calculateQueueWaitTime({
           position,
-          activeDoctors: activeDoctorsCount,
+          activeDoctors: effectiveDoctors,
           consultationTime,
         });
         if (waitMins != null) {

@@ -145,11 +145,11 @@ async function initializeDashboard() {
   // Setup add staff button (same logic as invite staff)
   setupAddStaffButton();
 
-  // Fetch dashboard data on initialization
-  await fetchDashboardSummary();
-  
-  // Fetch queue entries separately
-  await fetchQueueEntries();
+  // Fetch dashboard data on initialization (use dropdown value so doctor's dept is passed)
+  const departmentFilter = document.getElementById('department-select');
+  const initialDepId = (departmentFilter && departmentFilter.value) || '';
+  await fetchDashboardSummary(initialDepId);
+  await fetchQueueEntries(initialDepId);
   
   // Initialize announcement tabs and create button (immediately, no delay)
   initializeAnnouncementTabs();
@@ -255,10 +255,12 @@ async function populateDepartments() {
   const doctorDepartmentId = isDoctor ? currentUser.departmentId : null;
 
   dropdown.innerHTML = '';
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = isDoctor ? 'My Department' : 'Select Department';
-  dropdown.appendChild(placeholder);
+  if (!isDoctor) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select Department';
+    dropdown.appendChild(placeholder);
+  }
 
   try {
     const response = await apiGet('/settings/departments');
