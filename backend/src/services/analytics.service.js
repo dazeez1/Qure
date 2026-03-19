@@ -7,9 +7,10 @@ import prisma from '../config/database.js';
  * @param {Object} params - Parameters object
  * @param {string} params.hospitalId - Hospital ID (required)
  * @param {number} params.days - Number of days to analyze (default: 7)
+ * @param {string} [params.departmentId] - Optional department filter
  * @returns {Promise<Object>} - Object with labels and data arrays
  */
-export async function getDailyTrends({ hospitalId, days = 7 }) {
+export async function getDailyTrends({ hospitalId, days = 7, departmentId }) {
   // Validate hospitalId
   if (!hospitalId) {
     throw new Error('hospitalId is required');
@@ -33,6 +34,7 @@ export async function getDailyTrends({ hospitalId, days = 7 }) {
   const queueEntries = await prisma.queueEntry.findMany({
     where: {
       hospitalId,
+      ...(departmentId ? { departmentId } : {}),
       createdAt: {
         gte: startDate,
       },
@@ -94,9 +96,10 @@ export async function getDailyTrends({ hospitalId, days = 7 }) {
  * @param {Object} params - Parameters object
  * @param {string} params.hospitalId - Hospital ID (required)
  * @param {number} params.days - Number of days to analyze (default: 7)
+ * @param {string} [params.departmentId] - Optional department filter
  * @returns {Promise<Object>} - Object with labels (24 hours) and data arrays
  */
-export async function getPeakHours({ hospitalId, days = 7 }) {
+export async function getPeakHours({ hospitalId, days = 7, departmentId }) {
   // Validate hospitalId
   if (!hospitalId) {
     throw new Error('hospitalId is required');
@@ -121,6 +124,7 @@ export async function getPeakHours({ hospitalId, days = 7 }) {
   const queueEntries = await prisma.queueEntry.findMany({
     where: {
       hospitalId,
+      ...(departmentId ? { departmentId } : {}),
       checkInTime: {
         gte: startDate,
       },

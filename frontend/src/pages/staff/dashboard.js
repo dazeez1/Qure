@@ -18,7 +18,11 @@ let queueSocket = null;
 
 const CACHE_KEY_DASHBOARD = 'qure_dashboard_cache';
 const CACHE_KEY_QUEUE = 'qure_queue_cache';
+const CACHE_KEY_ANALYTICS = 'qure_analytics_cache';
 const CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+let analyticsRefreshTimeoutId = null;
+let lastAnalyticsFetchAt = 0;
+const ANALYTICS_REFRESH_THROTTLE_MS = 15000;
 
 /**
  * Close all open modals
@@ -129,6 +133,7 @@ function renderFromCache() {
   try {
     const dashboardCached = sessionStorage.getItem(CACHE_KEY_DASHBOARD);
     const queueCached = sessionStorage.getItem(CACHE_KEY_QUEUE);
+    const analyticsCached = sessionStorage.getItem(CACHE_KEY_ANALYTICS);
     const now = Date.now();
 
     if (dashboardCached) {
@@ -144,7 +149,189 @@ function renderFromCache() {
         renderQueueTable(data);
       }
     }
+    if (analyticsCached) {
+      const { data, ts } = JSON.parse(analyticsCached);
+      if (now - ts < CACHE_MAX_AGE_MS && data) {
+        renderAnalytics(data.dailyTrends, data.peakHours);
+      }
+    }
   } catch (_) { /* ignore parse errors */ }
+}
+
+function getSelectedAnalyticsDays() {
+  const select = document.getElementById('analytics-days-select');
+  const days = parseInt(select?.value || '7', 10);
+  return Number.isNaN(days) ? 7 : days;
+}
+
+function aggregateToWeekdays(dailyTrends) {
+  const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const bucket = new Map(weekdayOrder.map(day => [day, 0]));
+  const labels = dailyTrends?.labels || [];
+  const values = dailyTrends?.data || [];
+  labels.forEach((label, index) => {
+    if (!bucket.has(label)) return;
+    bucket.set(label, (bucket.get(label) || 0) + (values[index] || 0));
+  });
+  return {
+    labels: weekdayOrder,
+    data: weekdayOrder.map(day => bucket.get(day) || 0),
+  };
+}
+
+function escapeAttr(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function renderDailyTrendsChart(dailyTrends) {
+  const chartEl = document.getElementById('analytics-daily-chart');
+  if (!chartEl) return;
+  const weekly = aggregateToWeekdays(dailyTrends);
+  const labels = weekly.labels;
+  const values = weekly.data;
+  if (labels.length === 0 || values.length === 0) {
+    chartEl.innerHTML = '<div class="analytics-empty">No daily trend data</div>';
+    return;
+  }
+
+  const width = 520;
+  const height = 220;
+  const padding = { top: 16, right: 16, bottom: 44, left: 34 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const maxValue = Math.max(...values, 1);
+  const barGap = 12;
+  const barWidth = Math.floor((chartWidth - (barGap * (labels.length - 1))) / labels.length);
+
+  const bars = values.map((value, idx) => {
+    const x = padding.left + idx * (barWidth + barGap);
+    const barH = Math.round((value / maxValue) * chartHeight);
+    const y = padding.top + (chartHeight - barH);
+    const label = labels[idx];
+    return `
+      <rect x="${x}" y="${y}" width="${barWidth}" height="${barH}" fill="#1d4ed8" rx="4">
+        <title>${escapeAttr(label)}: ${value}</title>
+      </rect>
+      <text x="${x + barWidth / 2}" y="${height - 16}" text-anchor="middle" class="analytics-axis-label">${escapeHtml(label)}</text>
+      <text x="${x + barWidth / 2}" y="${Math.max(y - 6, 10)}" text-anchor="middle" class="analytics-value-label">${value}</text>
+    `;
+  }).join('');
+
+  chartEl.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" class="analytics-svg" aria-label="Daily Queue Trends chart">
+      <line x1="${padding.left}" y1="${padding.top + chartHeight}" x2="${width - padding.right}" y2="${padding.top + chartHeight}" class="analytics-axis-line"/>
+      ${bars}
+    </svg>
+  `;
+}
+
+function renderPeakHoursChart(peakHours) {
+  const chartEl = document.getElementById('analytics-peak-chart');
+  if (!chartEl) return;
+  const labels = peakHours?.labels || [];
+  const values = peakHours?.data || [];
+  if (labels.length === 0 || values.length === 0) {
+    chartEl.innerHTML = '<div class="analytics-empty">No peak hour data</div>';
+    return;
+  }
+
+  const width = 520;
+  const height = 220;
+  const padding = { top: 16, right: 16, bottom: 44, left: 34 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const maxValue = Math.max(...values, 1);
+  const stepX = chartWidth / (values.length - 1 || 1);
+  const points = values.map((value, idx) => {
+    const x = padding.left + idx * stepX;
+    const y = padding.top + (chartHeight - (value / maxValue) * chartHeight);
+    return { x, y, value, label: labels[idx] };
+  });
+  const polyline = points.map(p => `${p.x},${p.y}`).join(' ');
+  const markers = [0, 6, 12, 18, 23];
+  const markerLabels = ['00:00', '06:00', '12:00', '18:00', '23:00'];
+
+  chartEl.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" class="analytics-svg" aria-label="Peak Hours chart">
+      <line x1="${padding.left}" y1="${padding.top + chartHeight}" x2="${width - padding.right}" y2="${padding.top + chartHeight}" class="analytics-axis-line"/>
+      <polyline points="${polyline}" fill="none" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      ${points.map(p => `
+        <circle cx="${p.x}" cy="${p.y}" r="2.5" fill="#b45309">
+          <title>${escapeAttr(p.label || '00:00')}: ${p.value}</title>
+        </circle>
+      `).join('')}
+      ${markers.map((m, idx) => {
+        const x = padding.left + m * stepX;
+        return `<text x="${x}" y="${height - 16}" text-anchor="middle" class="analytics-axis-label">${markerLabels[idx]}</text>`;
+      }).join('')}
+    </svg>
+  `;
+}
+
+function renderAnalytics(dailyTrends, peakHours) {
+  renderDailyTrendsChart(dailyTrends);
+  renderPeakHoursChart(peakHours);
+}
+
+async function fetchAnalytics(days = 7, departmentId = '') {
+  try {
+    const depQuery = departmentId ? `&departmentId=${encodeURIComponent(departmentId)}` : '';
+    const [dailyResponse, peakResponse] = await Promise.all([
+      apiGet(`/staff/analytics/daily-trends?days=${days}${depQuery}`),
+      apiGet(`/staff/analytics/peak-hours?days=${days}${depQuery}`),
+    ]);
+
+    const [dailyResult, peakResult] = await Promise.all([
+      dailyResponse.json(),
+      peakResponse.json(),
+    ]);
+
+    if (!dailyResponse.ok || !dailyResult.success) {
+      throw new Error(dailyResult.message || 'Failed to load daily trends');
+    }
+    if (!peakResponse.ok || !peakResult.success) {
+      throw new Error(peakResult.message || 'Failed to load peak hours');
+    }
+
+    renderAnalytics(dailyResult.data, peakResult.data);
+    lastAnalyticsFetchAt = Date.now();
+    try {
+      sessionStorage.setItem(
+        CACHE_KEY_ANALYTICS,
+        JSON.stringify({
+          data: { dailyTrends: dailyResult.data, peakHours: peakResult.data },
+          ts: Date.now(),
+        })
+      );
+    } catch (_) { /* ignore */ }
+  } catch (error) {
+    console.error('Analytics fetch error:', error);
+  }
+}
+
+function queueAnalyticsRefresh(departmentId = '') {
+  const now = Date.now();
+  if (now - lastAnalyticsFetchAt < ANALYTICS_REFRESH_THROTTLE_MS) return;
+  if (analyticsRefreshTimeoutId) clearTimeout(analyticsRefreshTimeoutId);
+  analyticsRefreshTimeoutId = setTimeout(() => {
+    fetchAnalytics(getSelectedAnalyticsDays(), departmentId);
+    analyticsRefreshTimeoutId = null;
+  }, 1200);
+}
+
+function setupAnalyticsControls() {
+  const select = document.getElementById('analytics-days-select');
+  if (!select) return;
+  select.addEventListener('change', () => {
+    const days = getSelectedAnalyticsDays();
+    const departmentFilter = document.getElementById('department-select');
+    const depId = (departmentFilter && departmentFilter.value) || '';
+    fetchAnalytics(days, depId);
+  });
 }
 
 function updateDoctorDropdownFromContext(userContext) {
@@ -191,6 +378,7 @@ async function initializeDashboard() {
 
   // Setup add staff button (same logic as invite staff)
   setupAddStaffButton();
+  setupAnalyticsControls();
 
   // Fetch dashboard + queue in parallel (doctors: pass '' – backend uses user.departmentId)
   const departmentFilter = document.getElementById('department-select');
@@ -198,6 +386,7 @@ async function initializeDashboard() {
   await Promise.all([
     fetchDashboardSummary(initialDepId),
     fetchQueueEntries(initialDepId),
+    fetchAnalytics(getSelectedAnalyticsDays(), initialDepId),
   ]);
   
   // Initialize announcement tabs and create button (immediately, no delay)
@@ -216,6 +405,7 @@ async function initializeDashboard() {
       const search = (searchInput && searchInput.value.trim()) || '';
       fetchDashboardSummary(depId, search);
       fetchQueueEntries(depId, search);
+      queueAnalyticsRefresh(depId);
     });
     queueSocket.on('connect', () => {
       if (dashboardPollingIntervalId) {
@@ -247,6 +437,7 @@ function startDashboardPollingFallback() {
     const search = (searchInput && searchInput.value.trim()) || '';
     fetchDashboardSummary(depId, search);
     fetchQueueEntries(depId, search);
+    queueAnalyticsRefresh(depId);
   }, 15000);
 }
 
@@ -345,6 +536,7 @@ async function populateDepartments() {
         const depId = dropdown.value || '';
         fetchDashboardSummary(depId);
         fetchQueueEntries(depId);
+        fetchAnalytics(getSelectedAnalyticsDays(), depId);
       });
     }
   } catch (error) {

@@ -86,5 +86,32 @@
       </div>
     </div>
   </div>
+
+  <div class="dashboard-analytics-section">
+    <div class="analytics-header">
+      <h2 class="analytics-title">Analytics</h2>
+      <div class="select-wrapper">
+        <select id="analytics-days-select" class="dashboard-select">
+          <option value="7" selected>Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+        </select>
+      </div>
+    </div>
+    <div class="analytics-grid">
+      <div class="analytics-card">
+        <div class="analytics-card-title">Daily Queue Trends (Mon-Sun)</div>
+        <div id="analytics-daily-chart" class="analytics-chart">
+          <div class="analytics-empty">Loading trends...</div>
+        </div>
+      </div>
+      <div class="analytics-card">
+        <div class="analytics-card-title">Peak Hours</div>
+        <div id="analytics-peak-chart" class="analytics-chart">
+          <div class="analytics-empty">Loading peak hours...</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 

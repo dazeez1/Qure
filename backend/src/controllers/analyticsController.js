@@ -1,4 +1,5 @@
 import { getDailyTrends, getPeakHours } from '../services/analytics.service.js';
+import prisma from '../config/database.js';
 
 /**
  * Get Daily Trends Controller
@@ -50,8 +51,35 @@ export const getDailyTrendsController = async (req, res, next) => {
       }
     }
 
+    // Role-based scope:
+    // doctor => own department only, admin/primary => all or selected filter
+    const isDoctor = user.role === 'STAFF' && user.staffRole === 'DOCTOR' && !user.isPrimary;
+    let effectiveDepartmentId;
+    if (isDoctor) {
+      effectiveDepartmentId = user.departmentId;
+    } else if (req.query.departmentId) {
+      const department = await prisma.department.findFirst({
+        where: {
+          id: req.query.departmentId,
+          hospitalId,
+        },
+        select: { id: true },
+      });
+      if (!department) {
+        return res.status(404).json({
+          success: false,
+          message: 'Department not found or does not belong to your hospital.',
+        });
+      }
+      effectiveDepartmentId = req.query.departmentId;
+    }
+
     // Call service function
-    const result = await getDailyTrends({ hospitalId, days });
+    const result = await getDailyTrends({
+      hospitalId,
+      days,
+      departmentId: effectiveDepartmentId,
+    });
 
     return res.status(200).json({
       success: true,
@@ -125,8 +153,35 @@ export const getPeakHoursController = async (req, res, next) => {
       }
     }
 
+    // Role-based scope:
+    // doctor => own department only, admin/primary => all or selected filter
+    const isDoctor = user.role === 'STAFF' && user.staffRole === 'DOCTOR' && !user.isPrimary;
+    let effectiveDepartmentId;
+    if (isDoctor) {
+      effectiveDepartmentId = user.departmentId;
+    } else if (req.query.departmentId) {
+      const department = await prisma.department.findFirst({
+        where: {
+          id: req.query.departmentId,
+          hospitalId,
+        },
+        select: { id: true },
+      });
+      if (!department) {
+        return res.status(404).json({
+          success: false,
+          message: 'Department not found or does not belong to your hospital.',
+        });
+      }
+      effectiveDepartmentId = req.query.departmentId;
+    }
+
     // Call service function
-    const result = await getPeakHours({ hospitalId, days });
+    const result = await getPeakHours({
+      hospitalId,
+      days,
+      departmentId: effectiveDepartmentId,
+    });
 
     return res.status(200).json({
       success: true,
