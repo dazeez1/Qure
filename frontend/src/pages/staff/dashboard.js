@@ -7,7 +7,7 @@
 
 import { io } from 'socket.io-client';
 import { apiGet, apiPost, apiPatch, getApiBaseUrl } from '../../utils/apiClient.js';
-import { getAuthUser, clearAuth, isAuthenticated, getAuthToken } from '../../utils/auth.js';
+import { getAuthUser, setAuthUser, clearAuth, isAuthenticated, getAuthToken } from '../../utils/auth.js';
 import { toast } from '../../utils/toast.js';
 import { cleanupPage } from '../../utils/pageLifecycle.js';
 
@@ -15,6 +15,10 @@ const PAGE_ID = 'dashboard';
 let viewLoadedHandler = null;
 let dashboardPollingIntervalId = null;
 let queueSocket = null;
+
+const CACHE_KEY_DASHBOARD = 'qure_dashboard_cache';
+const CACHE_KEY_QUEUE = 'qure_queue_cache';
+const CACHE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Close all open modals
@@ -121,6 +125,48 @@ window.addEventListener('beforeunload', () => {
 // DASHBOARD VIEW INITIALIZATION
 // ============================================
 
+function renderFromCache() {
+  try {
+    const dashboardCached = sessionStorage.getItem(CACHE_KEY_DASHBOARD);
+    const queueCached = sessionStorage.getItem(CACHE_KEY_QUEUE);
+    const now = Date.now();
+
+    if (dashboardCached) {
+      const { data, ts } = JSON.parse(dashboardCached);
+      if (now - ts < CACHE_MAX_AGE_MS && data) {
+        renderDashboardMetrics(data);
+        renderHospitalName(data.hospitalName);
+      }
+    }
+    if (queueCached) {
+      const { data, ts } = JSON.parse(queueCached);
+      if (now - ts < CACHE_MAX_AGE_MS && data) {
+        renderQueueTable(data);
+      }
+    }
+  } catch (_) { /* ignore parse errors */ }
+}
+
+function updateDoctorDropdownFromContext(userContext) {
+  if (!userContext || !userContext.isDoctor || !userContext.departmentId) return;
+  const dropdown = document.getElementById('department-select');
+  if (!dropdown) return;
+
+  dropdown.innerHTML = '';
+  const option = document.createElement('option');
+  option.value = userContext.departmentId;
+  option.textContent = userContext.departmentName || 'My Department';
+  dropdown.appendChild(option);
+  dropdown.value = userContext.departmentId;
+  dropdown.disabled = true;
+  dropdown.title = 'Doctors see only their department';
+
+  const currentUser = getAuthUser();
+  if (currentUser && currentUser.departmentId !== userContext.departmentId) {
+    setAuthUser({ ...currentUser, departmentId: userContext.departmentId });
+  }
+}
+
 async function initializeDashboard() {
   // Double-check verification status before making any API calls
   const currentUser = getAuthUser();
@@ -130,10 +176,11 @@ async function initializeDashboard() {
     return;
   }
 
-  // Load stored hospital name immediately (before API call)
+  // Load stored hospital name and render from cache immediately for fast perceived load
   loadStoredHospitalName();
-  
-  // Populate department dropdown on load
+  renderFromCache();
+
+  // Populate department dropdown first (doctors get correct dept from API userContext when dashboard loads)
   await populateDepartments();
 
   // Wire up search input with debounce
@@ -145,11 +192,13 @@ async function initializeDashboard() {
   // Setup add staff button (same logic as invite staff)
   setupAddStaffButton();
 
-  // Fetch dashboard data on initialization (use dropdown value so doctor's dept is passed)
+  // Fetch dashboard + queue in parallel (doctors: pass '' – backend uses user.departmentId)
   const departmentFilter = document.getElementById('department-select');
   const initialDepId = (departmentFilter && departmentFilter.value) || '';
-  await fetchDashboardSummary(initialDepId);
-  await fetchQueueEntries(initialDepId);
+  await Promise.all([
+    fetchDashboardSummary(initialDepId),
+    fetchQueueEntries(initialDepId),
+  ]);
   
   // Initialize announcement tabs and create button (immediately, no delay)
   initializeAnnouncementTabs();
@@ -340,9 +389,21 @@ async function fetchDashboardSummary(departmentId = '', search = '') {
     }
 
     const data = result.data;
-    renderDashboardMetrics(data);
+    const { userContext, ...metricsData } = data;
+
+    if (userContext) {
+      updateDoctorDropdownFromContext(userContext);
+    }
+
+    renderDashboardMetrics(metricsData);
     renderHospitalName(data.hospitalName);
-    // Queue table is handled separately by fetchQueueEntries()
+
+    try {
+      sessionStorage.setItem(
+        CACHE_KEY_DASHBOARD,
+        JSON.stringify({ data: metricsData, ts: Date.now() })
+      );
+    } catch (_) { /* ignore */ }
   } catch (error) {
     // Check if it's a verification error
     if (error.message?.includes('access code') || error.message?.includes('Access denied')) {
@@ -375,14 +436,11 @@ function renderDashboardMetrics(data) {
     noShowsEl.textContent = data.noShowsToday || 0;
   }
 
-  // Average Wait Time
+  // Average Wait Time (always show; 0 if null/undefined)
   const avgWaitEl = document.getElementById('metric-avg-wait');
   if (avgWaitEl) {
-    if (data.averageWaitTimeToday !== null && data.averageWaitTimeToday !== undefined) {
-      avgWaitEl.textContent = `${data.averageWaitTimeToday} mins`;
-    } else {
-      avgWaitEl.textContent = '0 mins';
-    }
+    const avg = data.averageWaitTimeToday ?? 0;
+    avgWaitEl.textContent = `${avg} mins`;
   }
 
   // Occupancy Calculation from waitingAreaStats
@@ -478,8 +536,14 @@ async function fetchQueueEntries(departmentId = '', search = '') {
       throw new Error(result.message || 'Failed to load queue entries');
     }
 
-    // Response structure: { success: true, data: { queueEntries: [...], pagination: {...} } }
     renderQueueTable(result.data);
+
+    try {
+      sessionStorage.setItem(
+        CACHE_KEY_QUEUE,
+        JSON.stringify({ data: result.data, ts: Date.now() })
+      );
+    } catch (_) { /* ignore */ }
   } catch (error) {
     // Check if it's a verification error
     if (error.message?.includes('access code') || error.message?.includes('Access denied')) {

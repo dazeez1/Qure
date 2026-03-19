@@ -373,15 +373,35 @@ export const getStaffDashboard = async (req, res) => {
       ? user.departmentId
       : queryDepartmentId || undefined;
 
-    const dashboardData = await getDashboardOverview({
-      hospitalId,
-      departmentId: effectiveDepartmentId,
-      search,
-    });
+    const [dashboardData, department] = await Promise.all([
+      getDashboardOverview({
+        hospitalId,
+        departmentId: effectiveDepartmentId,
+        search,
+      }),
+      isDoctor && user.departmentId
+        ? prisma.department.findUnique({
+            where: { id: user.departmentId },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const response = {
+      ...dashboardData,
+      userContext:
+        isDoctor && user.departmentId
+          ? {
+              departmentId: user.departmentId,
+              departmentName: department?.name ?? null,
+              isDoctor: true,
+            }
+          : undefined,
+    };
 
     return res.status(200).json({
       success: true,
-      data: dashboardData,
+      data: response,
     });
   } catch (error) {
     console.error('[Dashboard Error]', error);
