@@ -22,6 +22,10 @@ let pollingInterval = null;
 let waitTimePollingInterval = null; // Separate interval for wait time updates
 let currentQueueEntryId = null; // For room assignment
 let availableRooms = [];
+/** Rooms that are active + unoccupied; used by Assign Room modal list */
+let roomPickerSourceRooms = [];
+/** Selected room id in Assign Room modal */
+let roomModalSelectedId = null;
 let completedTodayCount = 0; // From API; used in summary when completed rows are hidden
 let waitingAreas = []; // Store waiting areas with occupancy
 let waitTimeCache = new Map(); // Cache wait times by entry ID
@@ -340,6 +344,21 @@ function setupEventListeners() {
   if (roomModalConfirmEl) {
     cleanupFunctions.push(
       addButtonListener(roomModalConfirmEl, PAGE_ID, handleRoomAssign)
+    );
+  }
+  const roomModalAutoAssignEl = document.getElementById('room-modal-auto-assign');
+  if (roomModalAutoAssignEl) {
+    cleanupFunctions.push(
+      addButtonListener(roomModalAutoAssignEl, PAGE_ID, handleRoomModalAutoAssign)
+    );
+  }
+  const roomSearchInputEl = document.getElementById('room-search-input');
+  if (roomSearchInputEl) {
+    cleanupFunctions.push(
+      addListener(PAGE_ID, roomSearchInputEl, 'input', () => {
+        roomModalSelectedId = null;
+        paintStaffRoomModalList();
+      })
     );
   }
   if (roomModalOverlayEl) {
@@ -1130,27 +1149,91 @@ async function updateQueueStatus(entryId, status, roomId = null, buttonEl = null
 }
 
 /**
- * Get available rooms for a department (excluding currently occupied)
+ * Escape text for safe HTML insertion
+ * @param {unknown} text
+ * @returns {string}
+ */
+function escapeHtml(text) {
+  if (text == null) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * @param {{ name?: string, department?: { name?: string, shortCode?: string } }} room
+ * @param {string} query
+ * @returns {boolean}
+ */
+function roomMatchesSearch(room, query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return true;
+  const name = (room.name || '').toLowerCase();
+  const deptName = (room.department?.name || '').toLowerCase();
+  const shortCode = (room.department?.shortCode || '').toLowerCase();
+  return name.includes(q) || deptName.includes(q) || shortCode.includes(q);
+}
+
+/**
+ * Room title in picker: name only (no department shortCode prefix)
+ * @param {{ name?: string }} room
+ * @returns {string}
+ */
+function formatRoomDisplayName(room) {
+  const nm = (room.name || '').trim();
+  return nm || 'Room';
+}
+
+/**
+ * Active rooms only, not currently occupied (from local queue snapshot)
  * @param {string} departmentId
  * @returns {Promise<Array<{id: string, name: string}>>}
  */
 async function getAvailableRoomsForDepartment(departmentId) {
-  const response = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=false`);
+  const response = await apiGet(
+    `/rooms?departmentId=${encodeURIComponent(departmentId)}&includeInactive=false`
+  );
   const result = await response.json();
-  let rooms = (result.success && result.data?.rooms) ? result.data.rooms : [];
-  if (rooms.length === 0) {
-    const inactiveRes = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=true`);
-    const inactiveResult = await inactiveRes.json();
-    if (inactiveResult.success && inactiveResult.data?.rooms) {
-      rooms = inactiveResult.data.rooms;
-    }
-  }
+  const rooms = result.success && result.data?.rooms ? result.data.rooms : [];
   const occupiedIds = new Set(
     queueData
       .filter(e => e.status === 'IN_CONSULTATION' && e.assignedRoom?.id)
       .map(e => e.assignedRoom.id)
   );
-  return rooms.filter(r => !occupiedIds.has(r.id));
+  return rooms.filter(r => r.isActive !== false && !occupiedIds.has(r.id));
+}
+
+/**
+ * @param {object} room
+ * @param {boolean} isSelected
+ * @param {(roomId: string) => void} onSelect
+ * @returns {HTMLDivElement}
+ */
+function createRoomPickerRowElement(room, isSelected, onSelect) {
+  const row = document.createElement('div');
+  row.className = `room-picker-row${isSelected ? ' selected' : ''}`;
+  row.setAttribute('role', 'option');
+  row.setAttribute('data-room-id', room.id);
+  row.tabIndex = 0;
+  const roomTitle = formatRoomDisplayName(room);
+  const deptName = room.department?.name || '';
+  row.innerHTML = `
+    <div class="room-picker-main">
+      <span class="room-picker-code">${escapeHtml(roomTitle)}</span>
+      <span class="room-picker-dept">${escapeHtml(deptName)}</span>
+    </div>
+    <span class="room-picker-available-dot" role="img" aria-label="Available"></span>
+  `;
+  row.addEventListener('click', () => onSelect(room.id));
+  row.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect(room.id);
+    }
+  });
+  return row;
 }
 
 let roomDropdownOutsideClickHandler = null;
@@ -1199,17 +1282,13 @@ async function showRoomDropdown(entryId, anchorEl) {
   popover.className = 'room-dropdown-popover';
   popover.innerHTML = `
     <div class="room-dropdown-content">
-      <label class="room-dropdown-label">Select room</label>
-      <div class="room-dropdown-select-wrap">
-        <select class="room-dropdown-select" id="room-dropdown-select" aria-label="Select room">
-          <option value="">Choose a room...</option>
-          ${rooms.map(r => `<option value="${r.id}">${(r.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</option>`).join('')}
-        </select>
-        <span class="room-dropdown-icon material-symbols-outlined" aria-hidden="true">keyboard_arrow_down</span>
-      </div>
+      <div class="room-dropdown-label" id="room-dropdown-title">Select room</div>
+      <button type="button" class="btn btn-secondary room-dropdown-auto-assign">Auto assign</button>
+      <input type="text" class="room-dropdown-search" placeholder="Search rooms..." autocomplete="off" aria-label="Search rooms" />
+      <div class="room-dropdown-list room-picker-scroll" role="listbox" aria-labelledby="room-dropdown-title"></div>
       <div class="room-dropdown-actions">
         <button type="button" class="btn btn-secondary room-dropdown-cancel">Cancel</button>
-        <button type="button" class="btn btn-primary room-dropdown-assign">Assign</button>
+        <button type="button" class="btn btn-primary room-dropdown-assign" disabled>Assign</button>
       </div>
     </div>
   `;
@@ -1222,17 +1301,56 @@ async function showRoomDropdown(entryId, anchorEl) {
   popover.style.left = `${rect.left}px`;
   popover.style.zIndex = '10000';
 
-  const selectEl = popover.querySelector('#room-dropdown-select');
+  const listEl = popover.querySelector('.room-dropdown-list');
+  const searchEl = popover.querySelector('.room-dropdown-search');
   const assignBtn = popover.querySelector('.room-dropdown-assign');
   const cancelBtn = popover.querySelector('.room-dropdown-cancel');
+  const autoAssignBtn = popover.querySelector('.room-dropdown-auto-assign');
 
-  const assign = async () => {
-    const roomId = selectEl?.value?.trim();
+  /** @type {string | null} */
+  let selectedRoomId = null;
+  const baseRooms = rooms;
+
+  function syncAssignButton() {
+    assignBtn.disabled = !selectedRoomId;
+  }
+
+  function renderPickerList() {
+    const query = (searchEl?.value || '').trim();
+    const filtered = baseRooms.filter(r => roomMatchesSearch(r, query));
+    listEl.innerHTML = '';
+    if (filtered.length === 0) {
+      listEl.innerHTML =
+        '<div class="room-dropdown-empty">No rooms match your search.</div>';
+      selectedRoomId = null;
+      syncAssignButton();
+      return;
+    }
+    filtered.forEach(room => {
+      const row = createRoomPickerRowElement(
+        room,
+        selectedRoomId === room.id,
+        (roomId) => {
+          selectedRoomId = roomId;
+          renderPickerList();
+          syncAssignButton();
+        }
+      );
+      listEl.appendChild(row);
+    });
+    if (selectedRoomId && !filtered.some(r => r.id === selectedRoomId)) {
+      selectedRoomId = null;
+    }
+    syncAssignButton();
+  }
+
+  async function performAssign(roomId) {
     if (!roomId) {
       toast.error('Please select a room');
       return;
     }
     assignBtn.disabled = true;
+    autoAssignBtn.disabled = true;
     assignBtn.textContent = 'Assigning...';
     try {
       const success = await updateQueueStatus(entryId, 'IN_CONSULTATION', roomId);
@@ -1242,21 +1360,37 @@ async function showRoomDropdown(entryId, anchorEl) {
     } catch (e) {
       toast.error('Failed to assign room');
     } finally {
-      assignBtn.disabled = false;
       assignBtn.textContent = 'Assign';
+      autoAssignBtn.disabled = baseRooms.length === 0;
+      syncAssignButton();
     }
-  };
+  }
 
-  const onCancel = (e) => {
+  searchEl.addEventListener('input', () => {
+    selectedRoomId = null;
+    renderPickerList();
+  });
+
+  autoAssignBtn.disabled = baseRooms.length === 0;
+  autoAssignBtn.addEventListener('click', () => {
+    if (baseRooms.length === 0) return;
+    performAssign(baseRooms[0].id);
+  });
+
+  assignBtn.addEventListener('click', () => performAssign(selectedRoomId));
+  cancelBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     closeRoomDropdownPopover();
-  };
-
-  assignBtn.addEventListener('click', assign);
-  cancelBtn.addEventListener('click', onCancel);
-  selectEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') assign();
   });
+
+  searchEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && selectedRoomId) {
+      e.preventDefault();
+      performAssign(selectedRoomId);
+    }
+  });
+
+  renderPickerList();
 
   // Outside-click: close when clicking outside popover (use capture so we run before other handlers)
   roomDropdownOutsideClickHandler = (e) => {
@@ -1266,7 +1400,7 @@ async function showRoomDropdown(entryId, anchorEl) {
     }
   };
   setTimeout(() => document.addEventListener('click', roomDropdownOutsideClickHandler, true), 0);
-  selectEl.focus();
+  searchEl.focus();
 }
 
 /**
@@ -1274,27 +1408,13 @@ async function showRoomDropdown(entryId, anchorEl) {
  */
 async function fetchRooms(departmentId) {
   try {
-    // Fetch rooms for the specific department
-    const response = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=false`);
+    const response = await apiGet(
+      `/rooms?departmentId=${encodeURIComponent(departmentId)}&includeInactive=false`
+    );
     const result = await response.json();
 
     if (result.success && result.data) {
-      availableRooms = result.data.rooms || [];
-      
-      // If no rooms found, try including inactive rooms
-      if (availableRooms.length === 0) {
-        const inactiveResponse = await apiGet(`/rooms?departmentId=${departmentId}&includeInactive=true`);
-        const inactiveResult = await inactiveResponse.json();
-        
-        if (inactiveResult.success && inactiveResult.data) {
-          availableRooms = inactiveResult.data.rooms || [];
-          
-          if (availableRooms.length > 0) {
-            toast.warning('Only inactive rooms available. Activate in Settings');
-          }
-        }
-      }
-      
+      availableRooms = (result.data.rooms || []).filter(r => r.isActive !== false);
       await renderRoomList();
     } else {
       availableRooms = [];
@@ -1313,93 +1433,147 @@ async function fetchRooms(departmentId) {
 }
 
 /**
- * Render room list
+ * Paint Assign Room modal list from `roomPickerSourceRooms` and search input.
+ */
+function paintStaffRoomModalList() {
+  if (!roomList) {
+    return;
+  }
+
+  const autoBtn = document.getElementById('room-modal-auto-assign');
+  const query = (document.getElementById('room-search-input')?.value || '').trim();
+  const filtered = roomPickerSourceRooms.filter(r => roomMatchesSearch(r, query));
+
+  if (autoBtn) {
+    autoBtn.disabled = roomPickerSourceRooms.length === 0;
+  }
+
+  roomList.innerHTML = '';
+  if (filtered.length === 0) {
+    roomList.innerHTML =
+      '<div class="loading-message">No rooms match your search.</div>';
+    if (roomModalConfirm) {
+      roomModalConfirm.disabled = true;
+    }
+    return;
+  }
+
+  filtered.forEach(room => {
+    const row = createRoomPickerRowElement(
+      room,
+      roomModalSelectedId === room.id,
+      (roomId) => {
+        roomModalSelectedId = roomId;
+        paintStaffRoomModalList();
+        if (roomModalConfirm) {
+          roomModalConfirm.disabled = false;
+        }
+      }
+    );
+    roomList.appendChild(row);
+  });
+
+  if (roomModalConfirm) {
+    const hasSelection =
+      roomModalSelectedId && filtered.some(r => r.id === roomModalSelectedId);
+    roomModalConfirm.disabled = !hasSelection;
+  }
+}
+
+/**
+ * Load occupied room ids (hospital queue in consultation)
+ * @returns {Promise<Set<string>>}
+ */
+async function fetchOccupiedRoomIds() {
+  let occupiedRoomIds = new Set();
+  try {
+    const occupiedResponse = await apiGet('/staff/queue?status=IN_CONSULTATION&limit=1000');
+    const occupiedResult = await occupiedResponse.json();
+
+    if (occupiedResult.success && occupiedResult.data?.queueEntries) {
+      occupiedRoomIds = new Set(
+        occupiedResult.data.queueEntries
+          .filter(entry => entry.assignedRoom && entry.assignedRoom.id)
+          .map(entry => entry.assignedRoom.id)
+      );
+    }
+  } catch (error) {
+    occupiedRoomIds = new Set(
+      queueData
+        .filter(
+          entry =>
+            entry.assignedRoom &&
+            entry.assignedRoom.id &&
+            entry.status === 'IN_CONSULTATION'
+        )
+        .map(entry => entry.assignedRoom.id)
+    );
+  }
+  return occupiedRoomIds;
+}
+
+/**
+ * Render room list (Assign Room modal): active, unoccupied rooms only
  */
 async function renderRoomList() {
   if (!roomList) {
     return;
   }
 
+  const autoBtn = document.getElementById('room-modal-auto-assign');
+  const searchEl = document.getElementById('room-search-input');
+  roomModalSelectedId = null;
+  if (searchEl) {
+    searchEl.value = '';
+  }
+
   if (availableRooms.length === 0) {
+    roomPickerSourceRooms = [];
     roomList.innerHTML = '<div class="loading-message">No rooms available</div>';
     if (roomModalConfirm) {
       roomModalConfirm.disabled = true;
     }
+    if (autoBtn) {
+      autoBtn.disabled = true;
+    }
     return;
   }
 
-  // Fetch all occupied rooms (queue entries with IN_CONSULTATION status)
-  // This ensures we check all entries, not just the current page
-  let occupiedRoomIds = new Set();
-  try {
-    const occupiedResponse = await apiGet('/staff/queue?status=IN_CONSULTATION&limit=1000');
-    const occupiedResult = await occupiedResponse.json();
-    
-    if (occupiedResult.success && occupiedResult.data?.queueEntries) {
-      occupiedRoomIds = new Set(
-        occupiedResult.data.queueEntries
-          .filter(entry => 
-            entry.assignedRoom && 
-            entry.assignedRoom.id
-          )
-          .map(entry => entry.assignedRoom.id)
-      );
-    }
-  } catch (error) {
-    // If API call fails, fall back to checking current page data
-    occupiedRoomIds = new Set(
-      queueData
-        .filter(entry => 
-          entry.assignedRoom && 
-          entry.assignedRoom.id && 
-          entry.status === 'IN_CONSULTATION'
-        )
-        .map(entry => entry.assignedRoom.id)
-    );
-  }
-
-  // Filter out occupied rooms
-  const availableRoomsFiltered = availableRooms.filter(room => !occupiedRoomIds.has(room.id));
+  const occupiedRoomIds = await fetchOccupiedRoomIds();
+  const availableRoomsFiltered = availableRooms.filter(
+    room => room.isActive !== false && !occupiedRoomIds.has(room.id)
+  );
 
   if (availableRoomsFiltered.length === 0) {
-    roomList.innerHTML = '<div class="loading-message">No available rooms. All rooms are currently occupied.</div>';
+    roomPickerSourceRooms = [];
+    roomList.innerHTML =
+      '<div class="loading-message">No available rooms. All rooms are currently occupied.</div>';
     if (roomModalConfirm) {
       roomModalConfirm.disabled = true;
     }
+    if (autoBtn) {
+      autoBtn.disabled = true;
+    }
     return;
   }
 
-  const roomsHTML = availableRoomsFiltered.map(room => `
-    <div class="room-item" data-room-id="${room.id}">
-      <div class="room-item-name">${room.name}</div>
-    </div>
-  `).join('');
+  roomPickerSourceRooms = availableRoomsFiltered;
+  paintStaffRoomModalList();
+}
 
-  roomList.innerHTML = roomsHTML;
-
-  // Attach room selection listeners
-  const roomItems = roomList.querySelectorAll('.room-item');
-  
-  roomItems.forEach(item => {
-    item.addEventListener('click', () => {
-      if (item.classList.contains('inactive')) return;
-      
-      // Remove previous selection
-      roomList.querySelectorAll('.room-item').forEach(i => i.classList.remove('selected'));
-      
-      // Add selection
-      item.classList.add('selected');
-      
-      // Enable confirm button
-      if (roomModalConfirm) {
-        roomModalConfirm.disabled = false;
-      }
-    });
-  });
-
-  if (roomModalConfirm) {
-    roomModalConfirm.disabled = true;
+/**
+ * Assign first available room in modal (same ordering as list)
+ */
+function handleRoomModalAutoAssign() {
+  if (!currentQueueEntryId) {
+    return;
   }
+  if (roomPickerSourceRooms.length === 0) {
+    toast.info('No available room to assign');
+    return;
+  }
+  roomModalSelectedId = roomPickerSourceRooms[0].id;
+  handleRoomAssign();
 }
 
 /**
@@ -1408,8 +1582,8 @@ async function renderRoomList() {
 async function handleRoomAssign() {
   if (!currentQueueEntryId) return;
 
-  const selectedRoom = roomList.querySelector('.room-item.selected');
-  if (!selectedRoom) {
+  const roomId = roomModalSelectedId;
+  if (!roomId) {
     toast.error('Please select a room');
     return;
   }
@@ -1421,7 +1595,6 @@ async function handleRoomAssign() {
   }
 
   try {
-  const roomId = selectedRoom.dataset.roomId;
     const entryId = currentQueueEntryId;
     
     // Close modal first to avoid UI issues
@@ -1453,6 +1626,16 @@ function closeRoomModal() {
     roomModalOverlay.style.display = 'none';
   }
   currentQueueEntryId = null;
+  roomPickerSourceRooms = [];
+  roomModalSelectedId = null;
+  const roomSearchEl = document.getElementById('room-search-input');
+  if (roomSearchEl) {
+    roomSearchEl.value = '';
+  }
+  const autoAssignEl = document.getElementById('room-modal-auto-assign');
+  if (autoAssignEl) {
+    autoAssignEl.disabled = true;
+  }
   if (roomList) {
     roomList.innerHTML = '';
   }

@@ -167,8 +167,21 @@
     </div>
     <div class="modal-body">
       <p class="modal-description">Select a room for this consultation:</p>
-      <div class="room-list" id="room-list">
-        <div class="loading-message">Loading rooms...</div>
+      <div class="room-select-container">
+        <button type="button" class="btn btn-secondary room-modal-auto-assign" id="room-modal-auto-assign" disabled>
+          Auto assign
+        </button>
+        <input
+          type="text"
+          class="room-search-input"
+          id="room-search-input"
+          placeholder="Search rooms..."
+          autocomplete="off"
+          aria-label="Search rooms"
+        />
+        <div class="room-list room-picker-scroll" id="room-list">
+          <div class="loading-message">Loading rooms...</div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -884,6 +897,11 @@
     opacity: 1;
   }
 
+  .modal-card.room-modal {
+    max-width: 19rem;
+    width: min(19rem, calc(100% - 2rem));
+  }
+
   .modal-header {
     display: flex;
     justify-content: space-between;
@@ -925,39 +943,105 @@
     margin-bottom: 1.6rem;
   }
 
-  .room-list {
+  .room-select-container {
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
 
-  .room-item {
-    padding: 1.2rem;
-    border: 2px solid var(--color-border-light);
+  .room-modal-auto-assign {
+    align-self: flex-start;
+    font-size: 1rem;
+    padding: 0.45rem 0.95rem;
+    line-height: 1.35;
+  }
+
+  .room-search-input {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 14rem;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 0.6rem;
+    font-size: 0.9rem;
+    background: var(--color-background-primary, #fff);
+    color: var(--color-text-primary, #111);
+  }
+
+  .room-search-input:focus {
+    outline: none;
+    border-color: var(--color-primary-blue, #6366f1);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+
+  .room-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .room-picker-scroll {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .room-picker-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    padding: 0.75rem 0.95rem;
+    border: 1px solid var(--color-border-light, #e5e7eb);
     border-radius: 0.6rem;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s, border-color 0.2s;
+    font-size: 1rem;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
-  .room-item:hover {
-    border-color: var(--color-primary-blue);
-    background-color: var(--color-background-gray-lighter);
+  .room-picker-row:hover {
+    background-color: var(--color-background-gray-lighter, #f9fafb);
+    border-color: var(--color-primary-blue, #6366f1);
   }
 
-  .room-item.selected {
-    border-color: var(--color-primary-blue);
-    background-color: var(--color-background-gray-lighter);
+  .room-picker-row.selected {
+    border: 2px solid var(--color-primary-blue, #2563eb);
+    background-color: rgba(99, 102, 241, 0.08);
   }
 
-  .room-item-name {
-    font-size: 1.4rem;
-    font-weight: 500;
-    color: var(--color-text-primary);
+  .room-picker-row:focus-visible {
+    outline: 2px solid var(--color-primary-blue, #6366f1);
+    outline-offset: 2px;
   }
 
-  .room-item.inactive {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .room-picker-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .room-picker-code {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary, #111);
+    line-height: 1.35;
+  }
+
+  .room-picker-dept {
+    font-size: 0.95rem;
+    color: var(--color-text-secondary, #6b7280);
+    line-height: 1.35;
+  }
+
+  .room-picker-available-dot {
+    flex-shrink: 0;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background-color: #059669;
+    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2);
   }
 
   .modal-footer {
@@ -980,14 +1064,22 @@
     opacity: 0.5;
   }
 
-  /* Inline room dropdown (per consultation) */
+  .room-modal .modal-footer .btn {
+    font-size: 1.1rem;
+    padding: 0.55rem 1.15rem;
+    line-height: 1.35;
+  }
+
+  /* Inline room picker popover (per consultation) */
   .room-dropdown-popover {
     background: var(--color-background-primary, #fff);
     border-radius: 0.6rem;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
     border: 1px solid var(--color-border-light, #e5e7eb);
-    padding: 1rem 1.2rem;
-    min-width: 220px;
+    padding: 0.85rem 1rem;
+    width: min(17.5rem, calc(100vw - 2rem));
+    max-width: 17.5rem;
+    box-sizing: border-box;
   }
   .room-dropdown-content {
     display: flex;
@@ -997,39 +1089,43 @@
   .room-dropdown-label {
     font-size: 1.2rem;
     font-weight: 600;
-    color: var(--color-text-secondary, #6b7280);
+    color: var(--color-text-primary, #111);
   }
-  .room-dropdown-select-wrap {
-    position: relative;
-    display: block;
+  .room-dropdown-auto-assign {
+    align-self: flex-start;
+    font-size: 1rem;
+    padding: 0.45rem 0.95rem;
+    line-height: 1.35;
   }
-  .room-dropdown-select {
+  .room-dropdown-search {
+    box-sizing: border-box;
     display: block;
     width: 100%;
-    padding: 0.6rem 2.2rem 0.6rem 0.8rem;
+    max-width: 12.5rem;
+    padding: 0.6rem 0.8rem;
     border: 1px solid var(--color-border-light, #e5e7eb);
-    border-radius: 0.4rem;
-    font-size: 1.2rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
     background: var(--color-background-primary, #fff);
     color: var(--color-text-primary, #111);
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
   }
-  .room-dropdown-select:focus {
+  .room-dropdown-search:focus {
     outline: none;
     border-color: var(--color-primary-blue, #6366f1);
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
   }
-  .room-dropdown-icon {
-    position: absolute;
-    right: 0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-    pointer-events: none;
-    font-size: 1.4rem;
+  .room-dropdown-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .room-dropdown-list .room-picker-row {
+    padding: 0.65rem 0.8rem;
+  }
+  .room-dropdown-empty {
+    font-size: 1.2rem;
     color: var(--color-text-secondary, #6b7280);
+    padding: 0.5rem 0;
   }
   .room-dropdown-actions {
     display: flex;
@@ -1038,8 +1134,9 @@
     margin-top: 0.2rem;
   }
   .room-dropdown-actions .btn {
-    padding: 0.5rem 1rem;
-    font-size: 1.2rem;
+    padding: 0.55rem 1.05rem;
+    font-size: 1.1rem;
+    line-height: 1.35;
   }
 
   @media (max-width: 768px) {
