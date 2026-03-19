@@ -160,25 +160,25 @@ async function startAutoCheckInScheduler() {
 
 /**
  * Start appointment reminder scheduler
- * Runs every hour to send appointment reminders (24h and 2h before)
+ * Runs every 15 minutes to send 30-minute-before reminders (once per appointment)
  */
 async function startAppointmentReminderScheduler() {
   try {
     const { checkAndSendAppointmentReminders } = await import('./services/appointmentReminder.service.js');
-    
+
     // Run immediately on startup
     checkAndSendAppointmentReminders().catch(console.error);
-    
-    // Then run every hour
+
+    // Then run every 15 minutes to catch the 30-min window
     setInterval(async () => {
       try {
         await checkAndSendAppointmentReminders();
       } catch (error) {
         console.error('[Appointment Reminders] Scheduler error:', error);
       }
-    }, 60 * 60 * 1000); // 1 hour
-    
-    console.log('✅ Appointment reminder scheduler started (runs every hour)');
+    }, 15 * 60 * 1000); // 15 minutes
+
+    console.log('✅ Appointment reminder scheduler started (30 min before, every 15 min)');
   } catch (error) {
     console.error('❌ Failed to start appointment reminder scheduler:', error);
   }

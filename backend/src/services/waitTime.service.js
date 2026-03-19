@@ -90,6 +90,38 @@ export async function getCurrentServingSequence(hospitalId, departmentId, tx = p
 }
 
 /**
+ * Get position in queue by index (handles sparse sequence numbers).
+ * Returns Map of entryId -> position (0 = next up, 1 = one ahead, etc.)
+ * Use this when sequence numbers have gaps from completed/cancelled entries.
+ * @param {string} hospitalId
+ * @param {string} departmentId
+ * @param {import('@prisma/client').PrismaClient} [tx=prisma]
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function getPositionByIndexForDepartment(hospitalId, departmentId, tx = prisma) {
+  const client = tx || prisma;
+  const active = await client.queueEntry.findMany({
+    where: {
+      hospitalId,
+      departmentId,
+      status: { in: ['WAITING', 'TRIAGE', 'CALLED'] },
+    },
+    select: { id: true, sequenceNumber: true, priority: true },
+  });
+  active.sort((a, b) => {
+    const pa = PRIORITY_ORDER[a.priority] ?? 2;
+    const pb = PRIORITY_ORDER[b.priority] ?? 2;
+    if (pa !== pb) return pb - pa;
+    return (a.sequenceNumber ?? 0) - (b.sequenceNumber ?? 0);
+  });
+  const map = new Map();
+  active.forEach((entry, index) => {
+    map.set(entry.id, index);
+  });
+  return map;
+}
+
+/**
  * Get count of active doctors with capacity in a department.
  * @param {string} hospitalId
  * @param {string} departmentId

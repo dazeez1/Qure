@@ -17,6 +17,7 @@ import { shouldSendEmailToPatient, sendAnnouncement } from './emailService.js';
  * @param {string} params.category - Category (APPOINTMENT, QUEUE, FEEDBACK, ANNOUNCEMENT)
  * @param {string} [params.priority] - Priority (default: NORMAL)
  * @param {string} [params.announcementId] - Optional announcement ID if linked
+ * @param {string} [params.appointmentId] - Optional appointment ID if linked (e.g. for reminders)
  * @param {boolean} [params.sendEmail] - Whether to send email (default: true)
  * @returns {Promise<Object>} Created notification
  */
@@ -29,6 +30,7 @@ export async function createPatientNotification({
   category,
   priority = 'NORMAL',
   announcementId = null,
+  appointmentId = null,
   sendEmail = true,
 }) {
   try {
@@ -43,6 +45,7 @@ export async function createPatientNotification({
         category,
         priority,
         announcementId,
+        appointmentId,
         isRead: false,
       },
     });
@@ -125,7 +128,7 @@ export async function createAppointmentConfirmationNotification({
 }
 
 /**
- * Create appointment reminder notification
+ * Create appointment reminder notification (30 minutes before, sent once per appointment)
  */
 export async function createAppointmentReminderNotification({
   patientId,
@@ -134,7 +137,7 @@ export async function createAppointmentReminderNotification({
   appointmentDate,
   departmentName,
   doctorName,
-  reminderType, // '24H' or '2H'
+  reminderType, // '30M' (only type used now)
 }) {
   const date = new Date(appointmentDate);
   const formattedDate = date.toLocaleDateString('en-US', {
@@ -148,20 +151,18 @@ export async function createAppointmentReminderNotification({
     hour12: true,
   });
 
-  const hoursText = reminderType === '24H' ? '24 hours' : '2 hours';
-  const title = `Appointment Reminder - ${hoursText} before`;
-  const content = `Reminder: You have an appointment coming up.\n\nDate: ${formattedDate}\nTime: ${formattedTime}\nDepartment: ${departmentName}${doctorName ? `\nDoctor: ${doctorName}` : ''}\n\nPlease arrive 15 minutes before your scheduled time.`;
-
-  const type = reminderType === '24H' ? 'APPOINTMENT_REMINDER_24H' : 'APPOINTMENT_REMINDER_2H';
+  const title = 'Appointment Reminder - 30 minutes before';
+  const content = `Reminder: You have an appointment coming up in 30 minutes.\n\nDate: ${formattedDate}\nTime: ${formattedTime}\nDepartment: ${departmentName}${doctorName ? `\nDoctor: ${doctorName}` : ''}\n\nPlease arrive 15 minutes before your scheduled time.`;
 
   return await createPatientNotification({
     patientId,
     hospitalId,
-    type,
+    type: 'APPOINTMENT_REMINDER_30M',
     title,
     content,
     category: 'APPOINTMENT',
     priority: 'NORMAL',
+    appointmentId,
     sendEmail: true,
   });
 }

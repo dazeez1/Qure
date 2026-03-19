@@ -79,6 +79,7 @@ export const authenticate = async (req, res, next) => {
         isPrimary: true,
         isVerified: true,
         hospitalId: true, // Added hospitalId for staff access code verification
+        departmentId: true, // For doctor department scoping
         currentActivePatients: true, // Added for doctor load badge
         maxConcurrentPatients: true, // Added for doctor load badge
       },

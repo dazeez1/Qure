@@ -64,6 +64,7 @@ enum NotificationType {
   APPOINTMENT_CONFIRMATION
   APPOINTMENT_REMINDER_24H
   APPOINTMENT_REMINDER_2H
+  APPOINTMENT_REMINDER_30M
   APPOINTMENT_CANCELLATION
   APPOINTMENT_RESCHEDULE
   QUEUE_STATUS_CHANGE
@@ -251,8 +252,9 @@ model Appointment {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  queueEntry QueueEntry?
-  feedbacks  Feedback[]
+  queueEntry           QueueEntry?
+  feedbacks            Feedback[]
+  patientNotifications PatientNotification[]
 
   @@index([hospitalId, status])
   @@index([hospitalId, appointmentDate])
@@ -333,6 +335,8 @@ model PatientNotification {
   id             String               @id @default(auto()) @map("_id") @db.ObjectId
   patientId      String               @db.ObjectId
   patient        Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentId  String?              @db.ObjectId
+  appointment    Appointment?         @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   announcementId String?              @db.ObjectId
   announcement   Announcement?        @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   type           NotificationType
@@ -349,6 +353,7 @@ model PatientNotification {
 
   @@index([patientId, isRead])
   @@index([patientId, createdAt])
+  @@index([appointmentId, type])
   @@map("patient_notifications")
 }
 

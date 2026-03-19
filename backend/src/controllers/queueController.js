@@ -19,14 +19,16 @@ import {
   createQueueCancellationNotification,
   createFeedbackRequestNotification,
 } from '../services/patientNotification.service.js';
+import { invalidateCacheByPrefix } from '../utils/cache.js';
 
 /**
  * Emit real-time queue update to hospital room (Socket.IO).
- * No-op if app has no io or hospitalId is missing. Preserves hospital isolation.
+ * Also invalidates dashboard cache so refetches return fresh data.
  */
 export function emitQueueUpdate(app, hospitalId) {
   if (!hospitalId) return;
   try {
+    invalidateCacheByPrefix(`dashboard:${hospitalId}:`);
     const io = app && typeof app.get === 'function' && app.get('io');
     if (io) io.to(`hospital_${hospitalId}`).emit('queue:update', { hospitalId, type: 'QUEUE_UPDATED' });
   } catch (_) { /* ignore */ }
@@ -1213,15 +1215,18 @@ export const getStaffQueue = async (req, res, next) => {
     // Apply pagination to merged result
     const paginatedQueueEntries = entriesWithWaitTime.slice(skip, skip + limitNum);
 
-    // Count COMPLETED entries today (same scope as queue: hospital, optional department/doctor)
+    // Count completed queues for the day (when status became COMPLETED today)
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
     const completedWhere = { hospitalId: where.hospitalId, status: 'COMPLETED' };
-    if (where.assignedDoctorId) completedWhere.assignedDoctorId = where.assignedDoctorId;
-    if (where.departmentId) completedWhere.departmentId = where.departmentId;
-    completedWhere.checkInTime = { gte: startOfToday, lte: endOfToday };
+    if (isDoctor && !isPrimary) {
+      completedWhere.departmentId = user.departmentId;
+    } else if (where.departmentId) {
+      completedWhere.departmentId = where.departmentId;
+    }
+    completedWhere.updatedAt = { gte: startOfToday, lte: endOfToday };
     const completedTodayCount = await prisma.queueEntry.count({ where: completedWhere });
 
     const result = {

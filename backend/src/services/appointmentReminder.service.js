@@ -3,38 +3,27 @@ import { createAppointmentReminderNotification } from './patientNotification.ser
 
 /**
  * Appointment Reminder Service
- * Sends reminders 24 hours and 2 hours before appointments
+ * Sends a single reminder 30 minutes before each appointment
  */
 
 /**
- * Check and send appointment reminders
- * Should be called periodically (e.g., every hour)
+ * Check and send appointment reminders (30 minutes before, once per appointment)
+ * Should be called periodically (e.g., every 10-15 minutes to catch the 30-min window)
  */
 export async function checkAndSendAppointmentReminders() {
   try {
     const now = new Date();
-    
-    // Calculate 24 hours from now
-    const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const in24HoursStart = new Date(in24Hours);
-    in24HoursStart.setMinutes(0, 0, 0);
-    const in24HoursEnd = new Date(in24Hours);
-    in24HoursEnd.setMinutes(59, 59, 999);
 
-    // Calculate 2 hours from now
-    const in2Hours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    const in2HoursStart = new Date(in2Hours);
-    in2HoursStart.setMinutes(0, 0, 0);
-    const in2HoursEnd = new Date(in2Hours);
-    in2HoursEnd.setMinutes(59, 59, 999);
+    // Window: appointments 20–40 minutes from now (30 min ± 10 min; catches with 15-min cron)
+    const windowStart = new Date(now.getTime() + 20 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() + 40 * 60 * 1000);
 
-    // Find appointments that need 24-hour reminders
-    const appointments24H = await prisma.appointment.findMany({
+    const appointments = await prisma.appointment.findMany({
       where: {
         status: 'BOOKED',
         appointmentDate: {
-          gte: in24HoursStart,
-          lte: in24HoursEnd,
+          gte: windowStart,
+          lte: windowEnd,
         },
       },
       include: {
@@ -59,90 +48,27 @@ export async function checkAndSendAppointmentReminders() {
       },
     });
 
-    // Find appointments that need 2-hour reminders
-    const appointments2H = await prisma.appointment.findMany({
+    if (appointments.length === 0) {
+      return { sent: 0, failed: 0 };
+    }
+
+    // Find appointments that already received a 30M reminder
+    const appointmentIds = appointments.map(a => a.id);
+    const existing = await prisma.patientNotification.findMany({
       where: {
-        status: 'BOOKED',
-        appointmentDate: {
-          gte: in2HoursStart,
-          lte: in2HoursEnd,
-        },
+        type: 'APPOINTMENT_REMINDER_30M',
+        appointmentId: { in: appointmentIds },
       },
-      include: {
-        patient: {
-          select: {
-            id: true,
-            emailNotificationsEnabled: true,
-          },
-        },
-        hospital: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        department: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      select: { appointmentId: true },
     });
+    const alreadySent = new Set(existing.map(n => n.appointmentId).filter(Boolean));
 
-    // Get all appointment IDs that need reminders
-    const appointmentIds24H = appointments24H.map(a => a.id);
-    const appointmentIds2H = appointments2H.map(a => a.id);
-    const allAppointmentIds = [...new Set([...appointmentIds24H, ...appointmentIds2H])];
+    let sent = 0;
+    let failed = 0;
 
-    // Check if reminders have already been sent for these appointments
-    // We'll check the notification content to see if it mentions the appointment date
-    const sentReminders = await prisma.patientNotification.findMany({
-      where: {
-        type: {
-          in: ['APPOINTMENT_REMINDER_24H', 'APPOINTMENT_REMINDER_2H'],
-        },
-        createdAt: {
-          gte: new Date(now.getTime() - 3 * 60 * 60 * 1000), // Check last 3 hours
-        },
-      },
-      select: {
-        patientId: true,
-        type: true,
-        content: true,
-        createdAt: true,
-      },
-    });
-
-    // Create a map of patient+type+date combinations that already received reminders
-    // We'll extract the date from the content to match appointments
-    const reminderMap = new Map();
-    sentReminders.forEach(reminder => {
-      // Extract date from content (format: "Date: March 7, 2026")
-      const dateMatch = reminder.content.match(/Date: ([^\\n]+)/);
-      if (dateMatch) {
-        const key = `${reminder.patientId}-${reminder.type}-${dateMatch[1]}`;
-        reminderMap.set(key, true);
-      }
-    });
-
-    let sent24H = 0;
-    let sent2H = 0;
-    let failed24H = 0;
-    let failed2H = 0;
-
-    // Send 24-hour reminders
-    for (const appointment of appointments24H) {
-      // Format appointment date to match notification content format
-      const appointmentDate = new Date(appointment.appointmentDate);
-      const formattedDate = appointmentDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-      const reminderKey = `${appointment.patientId}-APPOINTMENT_REMINDER_24H-${formattedDate}`;
-      if (reminderMap.has(reminderKey)) {
-        continue; // Already sent
+    for (const appointment of appointments) {
+      if (alreadySent.has(appointment.id)) {
+        continue;
       }
 
       try {
@@ -152,64 +78,23 @@ export async function checkAndSendAppointmentReminders() {
           appointmentId: appointment.id,
           appointmentDate: appointment.appointmentDate,
           departmentName: appointment.department.name,
-          doctorName: null, // No doctor assigned at appointment time
-          reminderType: '24H',
+          doctorName: null,
+          reminderType: '30M',
         });
-        sent24H++;
+        sent++;
       } catch (error) {
-        console.error(`Failed to send 24H reminder for appointment ${appointment.id}:`, error);
-        failed24H++;
+        console.error(`Failed to send 30M reminder for appointment ${appointment.id}:`, error);
+        failed++;
       }
     }
 
-    // Send 2-hour reminders
-    for (const appointment of appointments2H) {
-      // Format appointment date to match notification content format
-      const appointmentDate = new Date(appointment.appointmentDate);
-      const formattedDate = appointmentDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-      const reminderKey = `${appointment.patientId}-APPOINTMENT_REMINDER_2H-${formattedDate}`;
-      if (reminderMap.has(reminderKey)) {
-        continue; // Already sent
-      }
-
-      try {
-        await createAppointmentReminderNotification({
-          patientId: appointment.patientId,
-          hospitalId: appointment.hospitalId,
-          appointmentId: appointment.id,
-          appointmentDate: appointment.appointmentDate,
-          departmentName: appointment.department.name,
-          doctorName: null, // No doctor assigned at appointment time
-          reminderType: '2H',
-        });
-        sent2H++;
-      } catch (error) {
-        console.error(`Failed to send 2H reminder for appointment ${appointment.id}:`, error);
-        failed2H++;
-      }
+    if (sent > 0) {
+      console.log(`[Appointment Reminders] Sent ${sent} 30-minute reminders. Failed: ${failed}`);
     }
 
-    if (sent24H > 0 || sent2H > 0) {
-      console.log(`[Appointment Reminders] Sent ${sent24H} 24H reminders, ${sent2H} 2H reminders. Failed: ${failed24H} 24H, ${failed2H} 2H`);
-    }
-
-    return {
-      sent24H,
-      sent2H,
-      failed24H,
-      failed2H,
-    };
+    return { sent, failed };
   } catch (error) {
     console.error('Error checking appointment reminders:', error);
-    return {
-      sent24H: 0,
-      sent2H: 0,
-      failed24H: 0,
-      failed2H: 0,
-    };
+    return { sent: 0, failed: 0 };
   }
 }

@@ -1,4 +1,15 @@
 import prisma from '../config/database.js';
+import { getCache, setCache } from '../utils/cache.js';
+import {
+  getPositionByIndexForDepartment,
+  getActiveDoctorsCount,
+  getConsultationTimeForDepartment,
+  calculateQueueWaitTime,
+} from './waitTime.service.js';
+
+const WAIT_CAP_MINUTES = 120; // Match queue display cap
+
+const DASHBOARD_CACHE_TTL_MS = 15000; // 15 seconds - balances freshness vs load
 
 /**
  * Get high-level dashboard overview data for a staff user.
@@ -27,6 +38,10 @@ export async function getDashboardOverview({ hospitalId, departmentId, search })
   if (!hospitalId) {
     throw new Error('hospitalId is required for getDashboardOverview');
   }
+
+  const cacheKey = `dashboard:${hospitalId}:${departmentId || ''}:${(search || '').trim()}`;
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
 
   // --------------------------------------------
   // Shared filters
@@ -268,40 +283,56 @@ export async function getDashboardOverview({ hospitalId, departmentId, search })
     inConsultationCount: occupancyMap.get(room.id) || 0,
   }));
 
-  // Calculate REAL average wait time today from completed entries
-  // This is the actual average time patients waited (from check-in to completion)
-  const completedEntriesToday = await prisma.queueEntry.findMany({
-    where: {
-      hospitalId,
-      status: 'COMPLETED',
-      updatedAt: {
-        gte: todayStart,
-        lte: todayEnd,
-      },
-      ...(departmentId && { departmentId }),
-    },
+  // Average estimated wait time using real-time queue formula
+  // Position = index in sorted line (not sequenceNumber diff - handles sparse sequences)
+  const waitingEntries = await prisma.queueEntry.findMany({
+    where: queueFilter,
     select: {
-      checkInTime: true,
-      updatedAt: true,
+      id: true,
+      hospitalId: true,
+      departmentId: true,
     },
   });
 
-  let averageWaitTimeToday = null;
-  if (completedEntriesToday.length > 0) {
-    const waitTimes = completedEntriesToday.map((entry) => {
-      const checkIn = new Date(entry.checkInTime);
-      const completed = new Date(entry.updatedAt);
-      const diffMs = completed.getTime() - checkIn.getTime();
-      return diffMs / (1000 * 60); // Convert to minutes
+  let averageWaitTimeToday = 0;
+  if (waitingEntries.length > 0) {
+    const entriesByDept = new Map();
+    waitingEntries.forEach((e) => {
+      const key = `${e.hospitalId}-${e.departmentId}`;
+      if (!entriesByDept.has(key)) entriesByDept.set(key, []);
+      entriesByDept.get(key).push(e);
     });
 
-    const totalWaitTime = waitTimes.reduce((sum, time) => sum + time, 0);
-    averageWaitTimeToday = Math.round((totalWaitTime / waitTimes.length) * 10) / 10; // Round to 1 decimal place
-  } else {
-    averageWaitTimeToday = 0; // No completed entries today
+    const waitTimes = [];
+    for (const [, entries] of entriesByDept) {
+      const first = entries[0];
+      const [positionMap, activeDoctorsCount, consultationTime] = await Promise.all([
+        getPositionByIndexForDepartment(first.hospitalId, first.departmentId),
+        getActiveDoctorsCount(first.hospitalId, first.departmentId),
+        getConsultationTimeForDepartment(first.departmentId),
+      ]);
+
+      for (const entry of entries) {
+        const position = positionMap.get(entry.id) ?? 0;
+        const waitMins = calculateQueueWaitTime({
+          position,
+          activeDoctors: activeDoctorsCount,
+          consultationTime,
+        });
+        if (waitMins != null) {
+          const capped = Math.min(waitMins, WAIT_CAP_MINUTES);
+          waitTimes.push(capped);
+        }
+      }
+    }
+
+    if (waitTimes.length > 0) {
+      const total = waitTimes.reduce((sum, t) => sum + t, 0);
+      averageWaitTimeToday = Math.round((total / waitTimes.length) * 10) / 10;
+    }
   }
 
-  return {
+  const result = {
     hospitalName: hospital?.name || null,
     queuePreview,
     queueCounts,
@@ -311,5 +342,8 @@ export async function getDashboardOverview({ hospitalId, departmentId, search })
     roomStats,
     averageWaitTimeToday,
   };
+
+  setCache(cacheKey, result, DASHBOARD_CACHE_TTL_MS);
+  return result;
 }
 

@@ -9,6 +9,7 @@
     "start": "node src/app.js",
     "lint": "eslint src --ext .js",
     "test:wait-time": "node src/tests/waitTime.service.test.js",
+    "test:appointments": "node src/tests/appointmentBooking.test.js",
     "postinstall": "npx prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",

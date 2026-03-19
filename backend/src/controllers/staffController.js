@@ -365,11 +365,17 @@ export const getStaffDashboard = async (req, res) => {
       });
     }
 
-    const { departmentId, search } = req.query;
+    const { departmentId: queryDepartmentId, search } = req.query;
+
+    // Scope by role: doctors see only their department; admins/primary see all or filtered
+    const isDoctor = user.role === 'STAFF' && user.staffRole === 'DOCTOR' && !user.isPrimary;
+    const effectiveDepartmentId = isDoctor
+      ? user.departmentId
+      : queryDepartmentId || undefined;
 
     const dashboardData = await getDashboardOverview({
       hospitalId,
-      departmentId,
+      departmentId: effectiveDepartmentId,
       search,
     });
 

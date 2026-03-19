@@ -240,16 +240,24 @@ function setupSearchInput() {
 /**
  * Populate department dropdown from API
  * Uses /api/settings/departments and only includes ACTIVE departments
+ * For doctors: disabled, shows only their department
  */
 async function populateDepartments() {
   const dropdown = document.getElementById('department-select');
   if (!dropdown) return;
 
-  // Always reset to a clean placeholder option
+  const currentUser = getAuthUser();
+  const isDoctor =
+    currentUser &&
+    currentUser.role === 'STAFF' &&
+    currentUser.staffRole === 'DOCTOR' &&
+    !currentUser.isPrimary;
+  const doctorDepartmentId = isDoctor ? currentUser.departmentId : null;
+
   dropdown.innerHTML = '';
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = 'Select Department';
+  placeholder.textContent = isDoctor ? 'My Department' : 'Select Department';
   dropdown.appendChild(placeholder);
 
   try {
@@ -262,21 +270,32 @@ async function populateDepartments() {
 
     const departments = result.data?.departments || [];
 
-    departments
-      .filter(dep => dep.status === 'ACTIVE')
-      .forEach(dep => {
-        const option = document.createElement('option');
-        option.value = dep.id;
-        option.textContent = dep.name;
-        dropdown.appendChild(option);
-      });
+    let activeDepartments = departments.filter(dep => dep.status === 'ACTIVE');
+    if (isDoctor && doctorDepartmentId) {
+      const docDept = activeDepartments.find(dep => dep.id === doctorDepartmentId);
+      activeDepartments = docDept ? [docDept] : activeDepartments;
+    }
 
-    // Listen for changes to refetch dashboard + queue
-    dropdown.addEventListener('change', () => {
-      const depId = dropdown.value || '';
-      fetchDashboardSummary(depId);
-      fetchQueueEntries(depId);
+    activeDepartments.forEach(dep => {
+      const option = document.createElement('option');
+      option.value = dep.id;
+      option.textContent = dep.name;
+      dropdown.appendChild(option);
     });
+
+    if (isDoctor) {
+      if (doctorDepartmentId && activeDepartments.some(d => d.id === doctorDepartmentId)) {
+        dropdown.value = doctorDepartmentId;
+      }
+      dropdown.disabled = true;
+      dropdown.title = 'Doctors see only their department';
+    } else {
+      dropdown.addEventListener('change', () => {
+        const depId = dropdown.value || '';
+        fetchDashboardSummary(depId);
+        fetchQueueEntries(depId);
+      });
+    }
   } catch (error) {
     console.error('Department fetch error:', error);
     toast.error('Failed to load departments');
