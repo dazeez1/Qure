@@ -272,7 +272,8 @@ export const inviteStaff = async (req, res, next) => {
 
     // Generate invite link
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const inviteUrl = `${frontendUrl}/accept-invite?token=${inviteToken}`;
+    // Vercel build outputs `accept-invite.html`, so the email link must include the extension
+    const inviteUrl = `${frontendUrl}/accept-invite.html?token=${inviteToken}`;
     
     // Get hospital name for email
     const hospital = await prisma.hospital.findUnique({

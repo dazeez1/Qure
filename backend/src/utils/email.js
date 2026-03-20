@@ -125,7 +125,8 @@ export const sendPasswordResetEmail = async (email, resetToken, firstName = 'Use
   try {
     const emailTransporter = await getTransporter();
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+    // Vercel build outputs `reset-password.html`, so the email link must include the extension
+    const resetUrl = `${frontendUrl}/reset-password.html?token=${resetToken}`;
 
     // Email content
     const mailOptions = {

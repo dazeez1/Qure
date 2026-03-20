@@ -559,7 +559,8 @@ export const forgotPassword = async (req, res, next) => {
         console.log('   To:', user.email);
         
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+        // Vercel build outputs `reset-password.html`, so the email link must include the extension
+        const resetLink = `${frontendUrl}/reset-password.html?token=${resetToken}`;
         
         const emailResult = await sendPasswordResetEmail(user.email, resetLink, user.firstName);
         
@@ -620,7 +621,8 @@ export const forgotPassword = async (req, res, next) => {
         console.log('   To:', patient.email);
         
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+        // Vercel build outputs `reset-password.html`, so the email link must include the extension
+        const resetLink = `${frontendUrl}/reset-password.html?token=${resetToken}`;
         
         // Extract first name from fullName
         const firstName = patient.fullName.split(' ')[0] || 'Patient';
