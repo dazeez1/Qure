@@ -417,3 +417,47 @@ if (patientForm) {
 if (staffForm) {
   setupFormValidation(staffForm, 'staff');
 }
+
+// Terms & Conditions modal (patient + staff register)
+const termsModalOverlay = document.getElementById('terms-modal-overlay');
+const termsModalTriggers = document.querySelectorAll('.terms-modal-trigger');
+const termsModalCloseBtn = document.getElementById('terms-modal-close');
+
+function openTermsModal(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!termsModalOverlay) {
+    return;
+  }
+  termsModalOverlay.classList.add('is-open');
+  termsModalOverlay.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  termsModalCloseBtn?.focus();
+}
+
+function closeTermsModal() {
+  if (!termsModalOverlay) {
+    return;
+  }
+  termsModalOverlay.classList.remove('is-open');
+  termsModalOverlay.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+
+termsModalTriggers.forEach((trigger) => {
+  trigger.addEventListener('click', openTermsModal);
+});
+
+termsModalCloseBtn?.addEventListener('click', closeTermsModal);
+
+termsModalOverlay?.addEventListener('click', (e) => {
+  if (e.target === termsModalOverlay) {
+    closeTermsModal();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && termsModalOverlay?.classList.contains('is-open')) {
+    closeTermsModal();
+  }
+});

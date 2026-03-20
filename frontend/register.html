@@ -149,7 +149,8 @@
             <div class="term-label">
               <input type="checkbox" id="terms-patient" required />
               <label for="terms-patient">
-                I agree with the <a href="#terms">Terms & Conditions</a>
+                I agree with the
+                <a href="#" class="terms-modal-trigger">Terms &amp; Conditions</a>
               </label>
             </div>
             <span class="status" id="terms-patient-error"></span>
@@ -270,7 +271,8 @@
             <div class="term-label">
               <input type="checkbox" id="terms-staff" required />
               <label for="terms-staff">
-                I agree with the <a href="#terms">Terms & Conditions</a>
+                I agree with the
+                <a href="#" class="terms-modal-trigger">Terms &amp; Conditions</a>
               </label>
             </div>
             <span class="status" id="terms-staff-error"></span>
@@ -291,6 +293,174 @@
             <p>Qure</p>
           </div>
           <h2>Let's get started!</h2>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terms & Conditions modal -->
+    <div
+      id="terms-modal-overlay"
+      class="terms-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="terms-modal-title"
+      aria-hidden="true"
+    >
+      <div class="terms-modal-panel" tabindex="-1">
+        <div class="terms-modal-header">
+          <h2 id="terms-modal-title" class="terms-modal-document-title">Qure — Terms and Conditions</h2>
+          <p class="terms-modal-effective">Effective date: March 2026</p>
+          <button type="button" class="terms-modal-close" id="terms-modal-close" aria-label="Close terms">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+        <div class="terms-modal-body">
+          <p>
+            Welcome to <strong>Qure</strong>. By accessing or using Qure’s services (including our websites,
+            applications, and related tools), you agree to these Terms and Conditions (“<strong>Agreement</strong>”).
+            If you do not agree, do not use Qure.
+          </p>
+
+          <h3 class="terms-section-heading">1. Introduction</h3>
+          <p>
+            Qure is a <strong>multi-hospital software platform</strong> that helps healthcare providers and patients
+            manage <strong>appointments, queues, notifications, and related operational workflows</strong>. Features
+            may include (depending on your hospital’s configuration and your role) online booking, queue status, staff
+            dashboards, and communications tied to your care journey.
+          </p>
+          <p>
+            Qure may use <strong>automation and digital tools</strong> to support these workflows. Qure is
+            <strong>not a medical device</strong> and does not replace professional medical judgment.
+          </p>
+
+          <h3 class="terms-section-heading">2. Eligibility and acceptance</h3>
+          <p>
+            By using Qure, you confirm that you are <strong>at least 18 years old</strong>, or that you have the legal
+            capacity to accept these Terms, or that a parent/guardian accepts on your behalf where required by law.
+          </p>
+          <p>
+            If you use Qure <strong>on behalf of a hospital, clinic, or other organization</strong>, you represent
+            that you have authority to bind that organization to this Agreement.
+          </p>
+
+          <h3 class="terms-section-heading">3. Permitted use of the service</h3>
+          <p>Depending on your role and what your hospital enables, you may use Qure to:</p>
+          <ul>
+            <li>Register and manage a <strong>patient account</strong> associated with a participating hospital.</li>
+            <li><strong>Book, view, or manage appointments</strong> where offered.</li>
+            <li>
+              <strong>Join or follow a virtual or on-site queue</strong>, receive updates, and view status information
+              made available by the hospital.
+            </li>
+            <li>
+              <strong>Receive notifications</strong> (e.g. reminders or operational messages) sent through channels the
+              hospital configures.
+            </li>
+            <li>
+              <strong>Staff users</strong>: access <strong>hospital-scoped</strong> tools for queue operations,
+              scheduling, and related workflows <strong>only as authorized</strong> by your hospital and your assigned
+              role.
+            </li>
+          </ul>
+          <p>You agree to use Qure <strong>only for lawful purposes</strong> and in line with your hospital’s policies and applicable regulations.</p>
+
+          <h3 class="terms-section-heading">4. User responsibilities</h3>
+          <p>You agree that you will:</p>
+          <ul>
+            <li>
+              Provide <strong>accurate, current, and complete</strong> information when registering or updating your
+              profile, where required.
+            </li>
+            <li>
+              Keep <strong>login credentials confidential</strong> and notify your hospital or Qure support if you
+              suspect unauthorized access (per procedures your hospital provides).
+            </li>
+            <li>
+              <strong>Not</strong> misuse Qure, including but not limited to illegal, abusive, harassing,
+              discriminatory, or harmful activity; impersonation; unauthorized access to data or systems; introducing
+              malware; spam; or scraping except as expressly permitted in writing.
+            </li>
+          </ul>
+          <p>Hospital and staff users must follow employer policies, professional obligations, and data-handling rules applicable to their role.</p>
+
+          <h3 class="terms-section-heading">5. Privacy and data protection</h3>
+          <p>
+            Your privacy matters. By using Qure, you acknowledge that <strong>personal data</strong> may be collected
+            and processed to operate the service. Further detail should be provided in Qure’s <strong>Privacy Policy</strong>
+            and your <strong>hospital’s</strong> notices, where they apply.
+          </p>
+          <p>Without limiting the Privacy Policy, Qure may process:</p>
+          <ul>
+            <li><strong>Account and profile data</strong> (e.g. name, contact details, identifiers your hospital requires).</li>
+            <li><strong>Usage and technical data</strong> (e.g. device/browser type, logs, session activity) to secure and improve the service.</li>
+            <li><strong>Operational and care-journey data</strong> as configured by your hospital (e.g. appointment and queue-related information).</li>
+          </ul>
+          <p>
+            <strong>Hospital responsibility:</strong> For many data categories, your <strong>hospital</strong> determines why and how data is processed in connection with care operations. Qure processes such data on behalf of or in coordination with the hospital as described in applicable agreements and policies.
+          </p>
+          <p>
+            <strong>Service providers:</strong> Qure may use subprocessors (e.g. hosting, messaging, email/SMS, analytics) under appropriate safeguards, subject to their terms and privacy policies where relevant.
+          </p>
+          <p>
+            <strong>Retention:</strong> Data may be retained as needed to provide the service, meet legal obligations, and comply with hospital policies. Deletion may be subject to legal, clinical, or operational record-keeping requirements.
+          </p>
+          <p>
+            <strong>Security:</strong> We implement reasonable technical and organizational measures. No system is 100% secure; we cannot guarantee absolute security.
+          </p>
+
+          <h3 class="terms-section-heading">6. Medical disclaimer</h3>
+          <p>
+            Qure provides <strong>software and information workflows</strong>. It is <strong>not</strong> a substitute for
+            <strong>professional medical advice, diagnosis, or treatment</strong>. Always seek qualified health providers
+            for medical questions. <strong>In an emergency, contact local emergency services immediately.</strong>
+          </p>
+
+          <h3 class="terms-section-heading">7. Intellectual property</h3>
+          <p>
+            Qure’s name, branding, software, documentation, and content (excluding user content and hospital content)
+            are owned by Qure or its licensors. You may not copy, modify, distribute, or create derivative works except
+            as allowed by law or with written permission.
+          </p>
+
+          <h3 class="terms-section-heading">8. Limitation of liability</h3>
+          <p>To the maximum extent permitted by law:</p>
+          <ul>
+            <li>Qure is provided <strong>“as is”</strong> and <strong>“as available”</strong> without warranties of any kind, express or implied.</li>
+            <li>Qure is not liable for indirect, incidental, special, consequential, or punitive damages, or loss of profits, data, or goodwill.</li>
+            <li>Total liability may be limited as permitted by law and any subscription terms that apply.</li>
+          </ul>
+          <p>Some jurisdictions do not allow certain limitations; in those cases, limits apply only to the extent permitted.</p>
+
+          <h3 class="terms-section-heading">9. Suspension and termination</h3>
+          <p>
+            We or your hospital may suspend or terminate access if you violate these Terms, if required by law, or for
+            security or operational reasons. You may stop using Qure at any time; some provisions survive termination.
+          </p>
+
+          <h3 class="terms-section-heading">10. Changes</h3>
+          <p>
+            We may update these Terms. We will post the updated Terms and adjust the effective date. Continued use after
+            changes may constitute acceptance, where permitted by law. If you do not agree, stop using Qure.
+          </p>
+
+          <h3 class="terms-section-heading">11. Governing law and disputes</h3>
+          <p>
+            These Terms are governed by the laws of the <strong>Federal Republic of Nigeria</strong>, without regard to
+            conflict-of-law rules, unless mandatory consumer or local rules require otherwise. Disputes shall be subject
+            to the jurisdiction of the courts of Nigeria, except where prohibited.
+          </p>
+
+          <h3 class="terms-section-heading">12. Contact</h3>
+          <p>
+            For questions about these Terms or privacy practices:
+            <a href="mailto:d.azeez@alustudent.com">d.azeez@alustudent.com</a>
+          </p>
+
+          <h3 class="terms-section-heading">13. Consent</h3>
+          <p>
+            By using Qure, you acknowledge that you have read and understood these Terms and Conditions and agree to be
+            bound by them.
+          </p>
         </div>
       </div>
     </div>
