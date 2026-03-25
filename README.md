@@ -12,6 +12,7 @@ A comprehensive multi-hospital SaaS healthcare queue management system that stre
 - [Running the Application](#running-the-application)
 - [Deployment](#deployment)
 - [Demo Video](#demo-video)
+- [Design Prototype (Figma)](#design-prototype-figma)
 - [Live Deployment](#live-deployment)
 - [Related Files](#related-files)
 - [Analysis](#analysis)
@@ -386,6 +387,10 @@ Use these checks to confirm the system works **after** deployment:
 Watch the comprehensive 5-minute demo showcasing the core functionalities of Qure:
 
 **[ Demo Video - Google Drive](https://drive.google.com/drive/folders/1nQ650BPcvyr-nnSnXwHxgzmxtOee-j4F?usp=sharing)**
+
+## Design Prototype (Figma)
+
+**[Qure Design - ALU Figma Prototype](https://www.figma.com/proto/ZgIejwv9TrGqiXm86h9CRd/Qure-Design---ALU?node-id=125-7990&t=Z1Uag9G7wToWwk8G-1)**
 
 The demo covers:
 
