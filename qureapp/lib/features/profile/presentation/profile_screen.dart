@@ -13,8 +13,8 @@ import '../domain/patient_profile_models.dart';
 
 final patientProfileProvider =
     FutureProvider.autoDispose<PatientProfileDetails>((ref) async {
-  return ref.watch(patientProfileApiProvider).getMe();
-});
+      return ref.watch(patientProfileApiProvider).getMe();
+    });
 
 const Color _kPageBg = Color(0xFFF3F4F6);
 const Color _kTitle = Color(0xFF111827);
@@ -112,7 +112,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 profile: data,
                 saving: _saving,
                 isUploadingAvatar: _isUploadingAvatar,
-                onUploadAvatar: _isUploadingAvatar ? null : _pickAndUploadAvatar,
+                onUploadAvatar: _isUploadingAvatar
+                    ? null
+                    : _pickAndUploadAvatar,
                 onSave: (phone, gender) => _saveProfile(phone, gender),
                 onLogout: _logout,
               ),
@@ -120,9 +122,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   e.toString(),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
               loading: () => const Padding(

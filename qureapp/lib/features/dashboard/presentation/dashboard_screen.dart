@@ -23,8 +23,9 @@ const Color _kButtonBlue = Color(0xFF0B2E7A);
 const Color _kAccentOrange = Color(0xFFFF8A2B);
 const Color _kCancelRed = Color(0xFFE53935);
 
-final patientDashboardFirstNameProvider =
-    FutureProvider.autoDispose<String>((ref) async {
+final patientDashboardFirstNameProvider = FutureProvider.autoDispose<String>((
+  ref,
+) async {
   try {
     final me = await ref.watch(patientProfileApiProvider).getMe();
     final parts = me.fullName.trim().split(RegExp(r'\s+'));
@@ -43,9 +44,11 @@ final patientDashboardFirstNameProvider =
 });
 
 final patientDashboardNotificationPrefsProvider =
-    FutureProvider.autoDispose<({bool emailEnabled, bool pushEnabled})>((ref) async {
-  return ref.watch(patientProfileApiProvider).getNotificationPreferences();
-});
+    FutureProvider.autoDispose<({bool emailEnabled, bool pushEnabled})>((
+      ref,
+    ) async {
+      return ref.watch(patientProfileApiProvider).getNotificationPreferences();
+    });
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -158,10 +161,7 @@ class _QueueSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final async = ref.watch(patientQueueStatusProvider);
     return async.when(
-      data: (status) => _QueueCard(
-        status: status,
-        ref: ref,
-      ),
+      data: (status) => _QueueCard(status: status, ref: ref),
       loading: () => const _QueueCardPlaceholder(),
       error: (e, _) => _QueueCardError(message: e.toString()),
     );
@@ -206,17 +206,17 @@ class _QueueCardError extends StatelessWidget {
       ),
       child: Text(
         message,
-        style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.error,
+          fontSize: 12,
+        ),
       ),
     );
   }
 }
 
 class _QueueCard extends StatelessWidget {
-  const _QueueCard({
-    required this.status,
-    required this.ref,
-  });
+  const _QueueCard({required this.status, required this.ref});
 
   final PatientQueueStatus? status;
   final WidgetRef ref;
@@ -234,11 +234,7 @@ class _QueueCard extends StatelessWidget {
         ),
         child: const Text(
           'You’re not in a queue right now.',
-          style: TextStyle(
-            fontSize: 14.5,
-            color: _kTextMuted,
-            height: 1.35,
-          ),
+          style: TextStyle(fontSize: 14.5, color: _kTextMuted, height: 1.35),
         ),
       );
     }
@@ -281,10 +277,7 @@ class _QueueCard extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 etaText,
-                style: const TextStyle(
-                  fontSize: 14.5,
-                  color: _kTextMuted,
-                ),
+                style: const TextStyle(fontSize: 14.5, color: _kTextMuted),
               ),
             ],
           ),
@@ -328,7 +321,8 @@ class _QueueCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () => _confirmCancelQueue(context, ref, entry.id),
+                    onPressed: () =>
+                        _confirmCancelQueue(context, ref, entry.id),
                     child: const Text(
                       'CANCEL',
                       style: TextStyle(
@@ -538,7 +532,10 @@ class _UpcomingAppointmentsBlock extends StatelessWidget {
           child: SizedBox(
             width: 22,
             height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2, color: _kPrimaryBlue),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _kPrimaryBlue,
+            ),
           ),
         ),
       ),
@@ -551,10 +548,7 @@ class _UpcomingAppointmentsBlock extends StatelessWidget {
 }
 
 class _AppointmentCard extends StatelessWidget {
-  const _AppointmentCard({
-    required this.appointment,
-    required this.ref,
-  });
+  const _AppointmentCard({required this.appointment, required this.ref});
 
   final AppointmentSummary appointment;
   final WidgetRef ref;
@@ -603,7 +597,8 @@ class _AppointmentCard extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: InkWell(
-                    onTap: () => _rescheduleAppointment(context, ref, appointment),
+                    onTap: () =>
+                        _rescheduleAppointment(context, ref, appointment),
                     child: const Text(
                       'Reschedule',
                       style: TextStyle(
@@ -625,10 +620,7 @@ class _AppointmentCard extends StatelessWidget {
                 flex: 4,
                 child: Text(
                   'Dr. to be assigned',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
               ),
               Expanded(
@@ -636,10 +628,7 @@ class _AppointmentCard extends StatelessWidget {
                 child: Text(
                   appointment.departmentName ?? 'Department',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
               ),
               Expanded(
@@ -698,7 +687,9 @@ Future<void> _confirmCancelAppointment(
   }
 
   try {
-    await ref.read(patientAppointmentsApiProvider).cancelAppointment(appointmentId);
+    await ref
+        .read(patientAppointmentsApiProvider)
+        .cancelAppointment(appointmentId);
     if (!context.mounted) {
       return;
     }
@@ -723,7 +714,9 @@ Future<void> _rescheduleAppointment(
   final current = appointment.appointmentDate.toLocal();
   final date = await showDatePicker(
     context: context,
-    initialDate: current.isAfter(DateTime.now()) ? current : DateTime.now().add(const Duration(days: 1)),
+    initialDate: current.isAfter(DateTime.now())
+        ? current
+        : DateTime.now().add(const Duration(days: 1)),
     firstDate: DateTime.now(),
     lastDate: DateTime.now().add(const Duration(days: 365)),
   );
@@ -756,7 +749,9 @@ Future<void> _rescheduleAppointment(
   }
 
   try {
-    await ref.read(patientAppointmentsApiProvider).rescheduleAppointment(
+    await ref
+        .read(patientAppointmentsApiProvider)
+        .rescheduleAppointment(
           appointmentId: appointment.id,
           appointmentDate: next,
         );
@@ -785,13 +780,15 @@ class _NotificationsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final async = ref.watch(patientDashboardProvider);
     return async.when(
-      data: (data) => _NotificationsCardContent(
-        notifications: data.notifications,
-      ),
+      data: (data) =>
+          _NotificationsCardContent(notifications: data.notifications),
       loading: () => const _ElevatedPlaceholder(height: 100),
       error: (e, _) => Text(
         e.toString(),
-        style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.error,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -886,7 +883,10 @@ class _NotificationsCardContentState
     }
     final hasRead = list.any((n) => n.isRead);
     if (!hasRead) {
-      await AppToast.showInfo(context, message: 'No read notifications to clear.');
+      await AppToast.showInfo(
+        context,
+        message: 'No read notifications to clear.',
+      );
       return;
     }
     setState(() => _bulkBusy = true);
@@ -923,7 +923,8 @@ class _NotificationsCardContentState
     final primary = n.content.trim().isNotEmpty
         ? n.content.trim()
         : n.title.trim();
-    final showTitle = n.title.trim().isNotEmpty &&
+    final showTitle =
+        n.title.trim().isNotEmpty &&
         n.content.trim().isNotEmpty &&
         n.title.trim() != primary;
     if (!_needsSeeMore(primary)) {
@@ -996,16 +997,11 @@ class _NotificationsCardContentState
                     : _markAllAsRead,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 36,
-                  minHeight: 36,
-                ),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 icon: Icon(
                   Icons.done_all_rounded,
                   size: 22,
-                  color: hasUnread && !_bulkBusy
-                      ? _kPrimaryBlue
-                      : _kTextMuted,
+                  color: hasUnread && !_bulkBusy ? _kPrimaryBlue : _kTextMuted,
                 ),
               ),
               IconButton(
@@ -1015,10 +1011,7 @@ class _NotificationsCardContentState
                     : _clearReadNotifications,
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 36,
-                  minHeight: 36,
-                ),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 icon: Icon(
                   Icons.clear_all_rounded,
                   size: 22,
@@ -1047,7 +1040,8 @@ class _NotificationsCardContentState
                   final primary = n.content.trim().isNotEmpty
                       ? n.content.trim()
                       : n.title.trim();
-                  final showTitle = n.title.trim().isNotEmpty &&
+                  final showTitle =
+                      n.title.trim().isNotEmpty &&
                       n.content.trim().isNotEmpty &&
                       n.title.trim() != primary;
                   final needsMore = _needsSeeMore(primary);
@@ -1186,9 +1180,7 @@ class _NotificationsCardContentState
                       width: i == _pageIndex ? 8 : 6,
                       height: i == _pageIndex ? 8 : 6,
                       decoration: BoxDecoration(
-                        color: i == _pageIndex
-                            ? _kPrimaryBlue
-                            : _kBorderGrey,
+                        color: i == _pageIndex ? _kPrimaryBlue : _kBorderGrey,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1229,8 +1221,11 @@ class _FeedbackCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.chat_bubble_outline_rounded,
-                  color: Colors.grey.shade800, size: 22),
+              Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Colors.grey.shade800,
+                size: 22,
+              ),
               const SizedBox(width: 8),
               const Text(
                 'Have Feedback?',
@@ -1337,7 +1332,10 @@ class _NotificationSettingsCardState
             loading: () => const LinearProgressIndicator(minHeight: 2),
             error: (e, _) => Text(
               e.toString(),
-              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 12,
+              ),
             ),
           ),
         ],
@@ -1352,14 +1350,16 @@ class _NotificationSettingsCardState
   ) async {
     setState(() => _busy = true);
     try {
-      await ref.read(patientProfileApiProvider).setNotificationPreferences(
-            emailEnabled: enabled,
-          );
+      await ref
+          .read(patientProfileApiProvider)
+          .setNotificationPreferences(emailEnabled: enabled);
       ref.invalidate(patientDashboardNotificationPrefsProvider);
       if (context.mounted) {
         await AppToast.showSuccess(
           context,
-          message: enabled ? 'Email notifications on.' : 'Email notifications off.',
+          message: enabled
+              ? 'Email notifications on.'
+              : 'Email notifications off.',
         );
       }
     } catch (e) {
@@ -1414,10 +1414,7 @@ class _DashboardFooter extends StatelessWidget {
         Text(
           '© 2025 Qure Nigeria. All rights reserved.',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 11.5,
-            color: Colors.grey.shade500,
-          ),
+          style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500),
         ),
         const SizedBox(height: 8),
         Row(

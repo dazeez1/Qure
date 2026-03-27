@@ -29,9 +29,18 @@ class AppShell extends ConsumerWidget {
             ref.read(shellTabIndexProvider.notifier).goTo(index),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), label: 'My Bookings'),
-          NavigationDestination(icon: Icon(Icons.access_time_outlined), label: 'Queue Status'),
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'Feedback'),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            label: 'My Bookings',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.access_time_outlined),
+            label: 'Queue Status',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            label: 'Feedback',
+          ),
         ],
       ),
     );

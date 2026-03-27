@@ -62,7 +62,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _isSubmitting = true);
     final authController = ref.read(authControllerProvider.notifier);
     final fullName =
-        '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'.trim();
+        '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'
+            .trim();
 
     final error = await authController.register(
       fullName: fullName,
@@ -79,7 +80,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return;
     }
 
-    await AppToast.showSuccess(context, message: 'Account created. Please sign in.');
+    await AppToast.showSuccess(
+      context,
+      message: 'Account created. Please sign in.',
+    );
     if (!mounted) return;
     context.go('/login');
   }
@@ -96,15 +100,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF0B3F9A),
-                Color(0xFF08307A),
-              ],
+              colors: [Color(0xFF0B3F9A), Color(0xFF08307A)],
             ),
           ),
           child: SafeArea(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(18, topPadding > 0 ? 10 : 22, 18, 16),
+              padding: EdgeInsets.fromLTRB(
+                18,
+                topPadding > 0 ? 10 : 22,
+                18,
+                16,
+              ),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -117,15 +123,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Row(
-                                children: const [
-                                  QureBrandMarkAuth(),
-                                  Spacer(),
-                                ],
+                                children: const [QureBrandMarkAuth(), Spacer()],
                               ),
                               const SizedBox(height: 14),
                               Text(
                                 'Create Your Account',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
                                       fontSize: 41,
                                       height: 1.05,
                                       letterSpacing: -0.3,
@@ -136,9 +140,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 'Join to manage visits easily – as a patient',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
                                       fontSize: 14.5,
-                                      color: Colors.white.withValues(alpha: 0.82),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.82,
+                                      ),
                                     ),
                               ),
                               const SizedBox(height: 16),
@@ -201,7 +208,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 validator: (value) {
                                   final phone = (value ?? '').trim();
                                   if (phone.isEmpty) return 'Phone is required';
-                                  if (phone.replaceAll(RegExp(r'\D'), '').length < 10) {
+                                  if (phone
+                                          .replaceAll(RegExp(r'\D'), '')
+                                          .length <
+                                      10) {
                                     return 'Enter a valid phone number';
                                   }
                                   return null;
@@ -211,7 +221,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               _GenderDropdown(
                                 label: 'Gender',
                                 value: _genderValue,
-                                onChanged: (value) => setState(() => _genderValue = value),
+                                onChanged: (value) =>
+                                    setState(() => _genderValue = value),
                               ),
                               const SizedBox(height: 12),
                               _FigmaTextField(
@@ -221,10 +232,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 obscureText: _isPasswordHidden,
                                 textInputAction: TextInputAction.next,
                                 suffixIcon: IconButton(
-                                  onPressed: () =>
-                                      setState(() => _isPasswordHidden = !_isPasswordHidden),
+                                  onPressed: () => setState(
+                                    () =>
+                                        _isPasswordHidden = !_isPasswordHidden,
+                                  ),
                                   icon: Icon(
-                                    _isPasswordHidden ? Icons.visibility_off : Icons.visibility,
+                                    _isPasswordHidden
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
                                     color: Colors.white.withValues(alpha: 0.85),
                                   ),
                                 ),
@@ -247,7 +262,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 textInputAction: TextInputAction.done,
                                 suffixIcon: IconButton(
                                   onPressed: () => setState(
-                                    () => _isConfirmPasswordHidden = !_isConfirmPasswordHidden,
+                                    () => _isConfirmPasswordHidden =
+                                        !_isConfirmPasswordHidden,
                                   ),
                                   icon: Icon(
                                     _isConfirmPasswordHidden
@@ -261,12 +277,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   if (confirmPassword.isEmpty) {
                                     return 'Confirm your password';
                                   }
-                                  if (confirmPassword != _passwordController.text) {
+                                  if (confirmPassword !=
+                                      _passwordController.text) {
                                     return 'Passwords do not match';
                                   }
                                   return null;
                                 },
-                                onFieldSubmitted: (_) => _isSubmitting ? null : _submit(),
+                                onFieldSubmitted: (_) =>
+                                    _isSubmitting ? null : _submit(),
                               ),
                               const SizedBox(height: 14),
                               Row(
@@ -279,12 +297,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                       value: _agreedToTerms,
                                       onChanged: _isSubmitting
                                           ? null
-                                          : (value) =>
-                                              setState(() => _agreedToTerms = value ?? false),
+                                          : (value) => setState(
+                                              () => _agreedToTerms =
+                                                  value ?? false,
+                                            ),
                                       visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                       side: BorderSide(
-                                        color: Colors.white.withValues(alpha: 0.55),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.55,
+                                        ),
                                         width: 1.1,
                                       ),
                                       checkColor: const Color(0xFF0B3F9A),
@@ -294,23 +317,30 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Wrap(
-                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
                                       children: [
                                         Text(
                                           'I agree with the ',
                                           style: TextStyle(
                                             fontSize: 13.5,
-                                            color: Colors.white.withValues(alpha: 0.72),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.72,
+                                            ),
                                           ),
                                         ),
                                         InkWell(
-                                          onTap: _isSubmitting ? null : () => context.push('/terms'),
+                                          onTap: _isSubmitting
+                                              ? null
+                                              : () => context.push('/terms'),
                                           child: Text(
                                             'Terms & Conditions',
                                             // Match login "Forgot password?" styling
                                             style: TextStyle(
                                               fontSize: 13.5,
-                                              color: Colors.white.withValues(alpha: 0.78),
+                                              color: Colors.white.withValues(
+                                                alpha: 0.78,
+                                              ),
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
@@ -336,7 +366,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                       ? const SizedBox(
                                           height: 18,
                                           width: 18,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
                                         )
                                       : const Text(
                                           'Sign up as  Patient',
@@ -355,11 +387,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                     'Already have an account? ',
                                     style: TextStyle(
                                       fontSize: 13.5,
-                                      color: Colors.white.withValues(alpha: 0.78),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.78,
+                                      ),
                                     ),
                                   ),
                                   InkWell(
-                                    onTap: _isSubmitting ? null : () => context.go('/login'),
+                                    onTap: _isSubmitting
+                                        ? null
+                                        : () => context.go('/login'),
                                     child: const Text(
                                       'Log in here',
                                       style: TextStyle(
@@ -396,20 +432,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 label: 'Privacy Policy',
                                 onTap: () => AppToast.showInfo(
                                   context,
-                                  message: 'Privacy Policy screen will be added next.',
+                                  message:
+                                      'Privacy Policy screen will be added next.',
                                 ),
                               ),
-                              _FooterDot(color: Colors.white.withValues(alpha: 0.55)),
+                              _FooterDot(
+                                color: Colors.white.withValues(alpha: 0.55),
+                              ),
                               _FooterLink(
                                 label: 'Terms of Service',
                                 onTap: () => context.push('/terms'),
                               ),
-                              _FooterDot(color: Colors.white.withValues(alpha: 0.55)),
+                              _FooterDot(
+                                color: Colors.white.withValues(alpha: 0.55),
+                              ),
                               _FooterLink(
                                 label: 'Cookie Settings',
                                 onTap: () => AppToast.showInfo(
                                   context,
-                                  message: 'Cookie settings are not used in the mobile app.',
+                                  message:
+                                      'Cookie settings are not used in the mobile app.',
                                 ),
                               ),
                             ],
@@ -439,7 +481,10 @@ class _AuthCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22), width: 1),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.22),
+          width: 1,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
@@ -500,7 +545,11 @@ class _FigmaTextField extends StatelessWidget {
           textInputAction: textInputAction,
           validator: validator,
           obscureText: obscureText ?? false,
-          style: const TextStyle(color: Colors.white, fontSize: 14.5, height: 1.2),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14.5,
+            height: 1.2,
+          ),
           cursorColor: Colors.white,
           onFieldSubmitted: onFieldSubmitted,
           decoration: InputDecoration(
@@ -652,7 +701,9 @@ class _FooterLink extends StatelessWidget {
         children: [
           Text(
             label,
-            style: textStyle.copyWith(color: Colors.white.withValues(alpha: 0.75)),
+            style: textStyle.copyWith(
+              color: Colors.white.withValues(alpha: 0.75),
+            ),
           ),
           const SizedBox(height: 3),
           Container(
