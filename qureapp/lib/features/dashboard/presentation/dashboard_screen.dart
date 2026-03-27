@@ -815,6 +815,8 @@ class _NotificationsCardContentState
   /// Expanded body text by notification id (carousel index can shift).
   final Map<String, bool> _expandedByNotificationId = {};
 
+  bool _bulkBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -822,9 +824,95 @@ class _NotificationsCardContentState
   }
 
   @override
+  void didUpdateWidget(covariant _NotificationsCardContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final list = widget.notifications.take(12).toList();
+    if (list.isNotEmpty && _pageIndex >= list.length) {
+      _pageIndex = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _pageController.hasClients) {
+          _pageController.jumpToPage(0);
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _markAllAsRead() async {
+    final list = widget.notifications.take(12).toList();
+    if (_bulkBusy || list.isEmpty) {
+      return;
+    }
+    final hasUnread = list.any((n) => !n.isRead);
+    if (!hasUnread) {
+      await AppToast.showInfo(context, message: 'No unread notifications.');
+      return;
+    }
+    setState(() => _bulkBusy = true);
+    try {
+      await ref.read(patientNotificationsApiProvider).markAllAsRead();
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(patientDashboardProvider);
+      await AppToast.showSuccess(
+        context,
+        message: 'All notifications marked as read.',
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        await AppToast.showError(context, message: e.message);
+      }
+    } catch (e) {
+      if (mounted) {
+        await AppToast.showError(context, message: e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _bulkBusy = false);
+      }
+    }
+  }
+
+  Future<void> _clearReadNotifications() async {
+    final list = widget.notifications.take(12).toList();
+    if (_bulkBusy || list.isEmpty) {
+      return;
+    }
+    final hasRead = list.any((n) => n.isRead);
+    if (!hasRead) {
+      await AppToast.showInfo(context, message: 'No read notifications to clear.');
+      return;
+    }
+    setState(() => _bulkBusy = true);
+    try {
+      await ref.read(patientNotificationsApiProvider).clearAllRead();
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(patientDashboardProvider);
+      await AppToast.showSuccess(
+        context,
+        message: 'Read notifications cleared.',
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        await AppToast.showError(context, message: e.message);
+      }
+    } catch (e) {
+      if (mounted) {
+        await AppToast.showError(context, message: e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _bulkBusy = false);
+      }
+    }
   }
 
   static bool _needsSeeMore(String primary) {
@@ -863,6 +951,8 @@ class _NotificationsCardContentState
   @override
   Widget build(BuildContext context) {
     final list = widget.notifications.take(12).toList();
+    final hasUnread = list.any((n) => !n.isRead);
+    final hasRead = list.any((n) => n.isRead);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -883,15 +973,56 @@ class _NotificationsCardContentState
         children: [
           Row(
             children: [
-              Icon(Icons.notifications_none_rounded,
-                  color: Colors.grey.shade800, size: 22),
+              Icon(
+                Icons.notifications_outlined,
+                color: _kPrimaryBlue,
+                size: 22,
+              ),
               const SizedBox(width: 8),
-              const Text(
-                'Notifications',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
+              const Expanded(
+                child: Text(
+                  'Notifications',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0B2E7A),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Mark all as read',
+                onPressed: _bulkBusy || list.isEmpty || !hasUnread
+                    ? null
+                    : _markAllAsRead,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 36,
+                ),
+                icon: Icon(
+                  Icons.done_all_rounded,
+                  size: 22,
+                  color: hasUnread && !_bulkBusy
+                      ? _kPrimaryBlue
+                      : _kTextMuted,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Clear read notifications',
+                onPressed: _bulkBusy || list.isEmpty || !hasRead
+                    ? null
+                    : _clearReadNotifications,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 36,
+                ),
+                icon: Icon(
+                  Icons.clear_all_rounded,
+                  size: 22,
+                  color: hasRead && !_bulkBusy ? _kPrimaryBlue : _kTextMuted,
                 ),
               ),
             ],

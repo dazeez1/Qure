@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/branding/qure_brand_mark.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../profile/presentation/profile_screen.dart';
 
-const Color kPatientTopBarBlue = Color(0xFF0B3F9A);
-
-/// Shared header: Qure mark on the left, profile avatar on the right.
+/// Shared header: Qure logo on the left, profile avatar on the right.
 class PatientTopBar extends ConsumerWidget {
   const PatientTopBar({super.key});
 
@@ -16,30 +15,7 @@ class PatientTopBar extends ConsumerWidget {
 
     return Row(
       children: [
-        Row(
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: kPatientTopBarBlue,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(5),
-                child: Icon(Icons.add, color: Colors.white, size: 18),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Qure',
-              style: TextStyle(
-                color: kPatientTopBarBlue,
-                fontWeight: FontWeight.w800,
-                fontSize: 20,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ],
-        ),
+        const QureBrandMarkPatientAppBar(),
         const Spacer(),
         Material(
           color: Colors.transparent,

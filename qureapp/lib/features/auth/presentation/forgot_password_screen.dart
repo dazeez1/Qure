@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/branding/qure_brand_mark.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/ui/app_toast.dart';
 import '../data/auth_password_api.dart';
@@ -105,7 +106,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                                   children: [
                                     Row(
                                       children: const [
-                                        _BrandMark(label: 'Qure'),
+                                        QureBrandMarkAuth(),
                                         Spacer(),
                                       ],
                                     ),
@@ -297,43 +298,6 @@ class _ForgotPasswordCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
         child: child,
       ),
-    );
-  }
-}
-
-class _BrandMark extends StatelessWidget {
-  const _BrandMark({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.95),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Padding(
-            padding: EdgeInsets.all(6),
-            child: Icon(
-              Icons.add_box_outlined,
-              size: 20,
-              color: Color(0xFF0B3F9A),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-          ),
-        ),
-      ],
     );
   }
 }
