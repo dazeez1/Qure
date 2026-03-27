@@ -1,7 +1,6 @@
 /**
  * Patient Feedback Page
- * Handles feedback submission and display (aligned with mobile: hospital scope,
- * completed visits only, sufficient page limit, distinct dropdown labels).
+ * Handles feedback submission and display
  */
 
 'use strict';
@@ -12,7 +11,6 @@ import { toast } from '../../utils/toast.js';
 import { displayAvatar } from '../../utils/avatar.js';
 
 let selectedRating = 0;
-/** Resolved hospital for carousel + scoped completed appointments (matches app logic). */
 let currentHospitalId = null;
 
 /**
@@ -28,15 +26,17 @@ function initMobileNav() {
       mobileNav.classList.toggle('active');
     });
 
+    // Close mobile nav when clicking on a link
     const mobileNavLinks = mobileNav.querySelectorAll('a');
-    mobileNavLinks.forEach((link) => {
+    mobileNavLinks.forEach(link => {
       link.addEventListener('click', () => {
         hamburgerMenu.classList.remove('active');
         mobileNav.classList.remove('active');
       });
     });
 
-    document.addEventListener('click', (e) => {
+    // Close mobile nav when clicking outside
+    document.addEventListener('click', e => {
       if (
         !hamburgerMenu.contains(e.target) &&
         !mobileNav.contains(e.target) &&
@@ -64,6 +64,7 @@ function initStarRating() {
         ratingInput.value = rating;
       }
 
+      // Update star display
       stars.forEach((s, i) => {
         if (i < rating) {
           s.classList.add('filled');
@@ -87,6 +88,7 @@ function initStarRating() {
     });
   });
 
+  // Reset on mouse leave
   const starRating = document.getElementById('star-rating');
   if (starRating) {
     starRating.addEventListener('mouseleave', () => {
@@ -104,84 +106,7 @@ function initStarRating() {
 }
 
 /**
- * Same resolution order as the mobile app: queue/dashboard hospital, else a single
- * hospital from upcoming (BOOKED) list.
- */
-async function resolveFeedbackHospitalId() {
-  try {
-    const response = await apiGet('/patient/dashboard');
-    if (response.ok) {
-      const result = await response.json();
-      const data = result.data;
-      if (data?.currentQueue?.hospitalId) {
-        return data.currentQueue.hospitalId;
-      }
-      const upcoming = data?.upcomingAppointments || [];
-      for (const a of upcoming) {
-        if (a.hospital?.id) {
-          return a.hospital.id;
-        }
-      }
-    }
-  } catch (e) {
-    console.error('resolveFeedbackHospitalId dashboard:', e);
-  }
-
-  try {
-    const r = await apiGet('/patient/appointments?page=1&limit=40');
-    if (!r.ok) {
-      return null;
-    }
-    const result = await r.json();
-    const appointments = result.data?.appointments || [];
-    const ids = new Set(
-      appointments.map((apt) => apt.hospital?.id).filter(Boolean),
-    );
-    if (ids.size === 1) {
-      return [...ids][0];
-    }
-  } catch (e) {
-    console.error('resolveFeedbackHospitalId bookings:', e);
-  }
-
-  return null;
-}
-
-function uniqueAppointmentsById(appointments) {
-  const seen = new Set();
-  return appointments.filter((a) => {
-    if (!a.id || seen.has(a.id)) {
-      return false;
-    }
-    seen.add(a.id);
-    return true;
-  });
-}
-
-/**
- * Date + time + department (matches mobile Feedback dropdown).
- */
-function formatAppointmentOptionText(apt) {
-  const date = new Date(apt.appointmentDate);
-  const dateStr = date.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  let h = date.getHours();
-  const m = date.getMinutes().toString().padStart(2, '0');
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12;
-  if (h === 0) {
-    h = 12;
-  }
-  const dept = apt.department?.name || 'Visit';
-  return `${dateStr} · ${h}:${m} ${ampm} · ${dept}`;
-}
-
-/**
- * Load completed appointments for dropdown (excluding those with existing feedback).
- * Uses hospitalId when known; requests enough rows (limit 50) like the mobile app.
+ * Load completed appointments for dropdown (excluding those with existing feedback)
  */
 async function loadCompletedAppointments() {
   try {
@@ -189,17 +114,9 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    const params = new URLSearchParams({
-      status: 'COMPLETED',
-      page: '1',
-      limit: '50',
-    });
-    if (currentHospitalId) {
-      params.set('hospitalId', currentHospitalId);
-    }
-
+    // Get completed appointments (backend already marks which have feedback)
     const appointmentsResponse = await apiGet(
-      `/patient/appointments?${params.toString()}`,
+      '/patient/appointments?status=COMPLETED'
     );
 
     if (!appointmentsResponse.ok) {
@@ -210,10 +127,9 @@ async function loadCompletedAppointments() {
     const appointments = appointmentsResult.data?.appointments || [];
 
     const select = document.getElementById('appointment-select');
-    if (!select) {
-      return;
-    }
+    if (!select) return;
 
+    // Clear existing options except the first one
     select.innerHTML =
       '<option value="">Select a completed appointment...</option>';
 
@@ -226,14 +142,15 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    let filtered = appointments.filter((apt) => !apt.hasFeedback);
-    filtered = uniqueAppointmentsById(filtered);
-    filtered.sort(
-      (a, b) =>
-        new Date(b.appointmentDate) - new Date(a.appointmentDate),
-    );
+    // Get hospitalId from first appointment for feedback loading
+    if (appointments.length > 0 && appointments[0].hospital?.id) {
+      currentHospitalId = appointments[0].hospital.id;
+    }
 
-    if (filtered.length === 0) {
+    // Filter out appointments that already have feedback
+    const filteredAppointments = appointments.filter(apt => !apt.hasFeedback);
+
+    if (filteredAppointments.length === 0) {
       const option = document.createElement('option');
       option.value = '';
       option.textContent = 'All completed appointments have feedback';
@@ -242,10 +159,20 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    filtered.forEach((apt) => {
+    // Populate dropdown with only appointments without feedback
+    filteredAppointments.forEach(apt => {
       const option = document.createElement('option');
       option.value = apt.id;
-      option.textContent = formatAppointmentOptionText(apt);
+
+      const date = new Date(apt.appointmentDate);
+      const dateStr = date.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const departmentName = apt.department?.name || 'Department';
+
+      option.textContent = `${dateStr} - ${departmentName}`;
       select.appendChild(option);
     });
   } catch (error) {
@@ -255,15 +182,58 @@ async function loadCompletedAppointments() {
 }
 
 /**
- * Load hospital feedback carousel
+ * Filter out appointments that already have feedback
+ */
+function filterAppointmentsWithFeedback(appointmentIdsWithFeedback) {
+  const select = document.getElementById('appointment-select');
+  if (!select || !window.availableAppointments) return;
+
+  // Remove options for appointments that have feedback
+  Array.from(select.options).forEach(option => {
+    if (option.value && appointmentIdsWithFeedback.has(option.value)) {
+      option.remove();
+    }
+  });
+
+  // If no options left (except the first placeholder), show message
+  if (select.options.length === 1) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'All completed appointments have feedback';
+    option.disabled = true;
+    select.appendChild(option);
+  }
+}
+
+/**
+ * Load hospital feedback
  */
 async function loadHospitalFeedback() {
   try {
+    // Get hospitalId from user's appointments or URL
+    if (!currentHospitalId) {
+      // Try to get from dashboard
+      if (isAuthenticated()) {
+        const response = await apiGet('/patient/dashboard');
+        if (response.ok) {
+          const result = await response.json();
+          const currentQueue = result.data?.currentQueue;
+          const appointments = result.data?.upcomingAppointments || [];
+
+          if (currentQueue && currentQueue.hospitalId) {
+            currentHospitalId = currentQueue.hospitalId;
+          } else if (appointments.length > 0 && appointments[0].hospital?.id) {
+            currentHospitalId = appointments[0].hospital.id;
+          }
+        }
+      }
+    }
+
     if (!currentHospitalId) {
       const container = document.getElementById('feedback-carousel-container');
       if (container) {
         container.innerHTML =
-          '<div class="empty-state">Patient reviews will appear here once your hospital is known (e.g. from an upcoming visit or queue).</div>';
+          '<div class="empty-state">Unable to determine hospital</div>';
       }
       const controls = document.getElementById('carousel-controls');
       if (controls) {
@@ -278,7 +248,7 @@ async function loadHospitalFeedback() {
     }
 
     const result = await response.json();
-    const feedbacks = Array.isArray(result.data) ? result.data : [];
+    const feedbacks = result.data || [];
 
     renderFeedbackCarousel(feedbacks);
   } catch (error) {
@@ -304,27 +274,25 @@ let feedbacksData = [];
 function renderFeedbackCarousel(feedbacks) {
   const container = document.getElementById('feedback-carousel-container');
   const controls = document.getElementById('carousel-controls');
-  if (!container) {
-    return;
-  }
+  if (!container) return;
 
   feedbacksData = feedbacks;
 
   if (feedbacks.length === 0) {
     container.innerHTML =
-      '<div class="empty-state">No feedback available yet for this hospital.</div>';
-    if (controls) {
-      controls.style.display = 'none';
-    }
+      '<div class="empty-state">No feedback available</div>';
+    if (controls) controls.style.display = 'none';
     return;
   }
 
+  // Show controls if there's more than one feedback
   if (controls) {
     controls.style.display = feedbacks.length > 1 ? 'flex' : 'none';
   }
 
+  // Render all feedback items
   container.innerHTML = feedbacks
-    .map((feedback) => {
+    .map(feedback => {
       const date = new Date(feedback.date);
       const dateStr = date.toLocaleDateString('en-US', {
         month: 'long',
@@ -332,6 +300,7 @@ function renderFeedbackCarousel(feedbacks) {
         year: 'numeric',
       });
 
+      // Format doctor name
       let doctorName = 'N/A';
       if (feedback.doctorName) {
         doctorName = feedback.doctorName.startsWith('Dr. ')
@@ -339,6 +308,7 @@ function renderFeedbackCarousel(feedbacks) {
           : `Dr. ${feedback.doctorName}`;
       }
 
+      // Create star display
       const stars = Array(5)
         .fill(0)
         .map((_, i) => {
@@ -347,15 +317,13 @@ function renderFeedbackCarousel(feedbacks) {
         })
         .join('');
 
-      const dept = feedback.departmentName || '—';
-
       return `
         <div class="feedback-item">
           <div class="feedback-item-header">
             <div class="feedback-item-patient">${feedback.patientName}</div>
             <div class="feedback-item-rating">${stars}</div>
           </div>
-          <div class="feedback-item-date">${dateStr} - ${dept}</div>
+          <div class="feedback-item-date">${dateStr} - ${feedback.departmentName}</div>
           <div class="feedback-item-doctor">${doctorName}</div>
           ${feedback.comment ? `<div class="feedback-item-comment">${feedback.comment}</div>` : ''}
         </div>
@@ -363,21 +331,26 @@ function renderFeedbackCarousel(feedbacks) {
     })
     .join('');
 
+  // Set initial position
   currentFeedbackIndex = 0;
   updateCarouselPosition();
   updateCarouselControls();
 }
 
+/**
+ * Update carousel position
+ */
 function updateCarouselPosition() {
   const container = document.getElementById('feedback-carousel-container');
-  if (!container) {
-    return;
-  }
+  if (!container) return;
 
   const translateX = -currentFeedbackIndex * 100;
   container.style.transform = `translateX(${translateX}%)`;
 }
 
+/**
+ * Update carousel controls (buttons and indicator)
+ */
 function updateCarouselControls() {
   const prevBtn = document.getElementById('prev-btn');
   const nextBtn = document.getElementById('next-btn');
@@ -396,6 +369,9 @@ function updateCarouselControls() {
   }
 }
 
+/**
+ * Initialize carousel controls
+ */
 function initCarouselControls() {
   const prevBtn = document.getElementById('prev-btn');
   const nextBtn = document.getElementById('next-btn');
@@ -440,6 +416,7 @@ async function handleSubmit(e) {
   const appointmentId = appointmentSelect.value;
   const comment = commentTextarea.value.trim();
 
+  // Validate
   if (!rating || rating < 1 || rating > 5) {
     toast.error('Please select a rating');
     return;
@@ -450,6 +427,7 @@ async function handleSubmit(e) {
     return;
   }
 
+  // Disable submit button
   submitBtn.disabled = true;
   submitBtn.textContent = 'Submitting...';
 
@@ -476,23 +454,28 @@ async function handleSubmit(e) {
 
     toast.success('Feedback submitted successfully!');
 
+    // Reset form
     selectedRating = 0;
     ratingInput.value = '';
     appointmentSelect.value = '';
     commentTextarea.value = '';
 
+    // Reset stars
     const stars = document.querySelectorAll('.star');
-    stars.forEach((star) => {
+    stars.forEach(star => {
       star.classList.remove('filled', 'active');
     });
 
+    // Remove the submitted appointment from dropdown
+    // appointmentSelect is already declared above, so we can use it directly
     const submittedOption = appointmentSelect.querySelector(
-      `option[value="${appointmentId}"]`,
+      `option[value="${appointmentId}"]`
     );
     if (submittedOption) {
       submittedOption.remove();
     }
 
+    // If no options left, show message
     if (appointmentSelect.options.length === 1) {
       const option = document.createElement('option');
       option.value = '';
@@ -501,12 +484,14 @@ async function handleSubmit(e) {
       appointmentSelect.appendChild(option);
     }
 
-    currentHospitalId = await resolveFeedbackHospitalId();
+    // Reload appointments and feedback
     await loadCompletedAppointments();
     await loadHospitalFeedback();
   } catch (error) {
     console.error('Error submitting feedback:', error);
-    toast.error(error.message || 'Failed to submit feedback. Please try again.');
+    toast.error(
+      error.message || 'Failed to submit feedback. Please try again.'
+    );
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Submit';
@@ -517,6 +502,7 @@ async function handleSubmit(e) {
  * Initialize page
  */
 async function initPage() {
+  // Set up user profile if logged in
   if (isAuthenticated()) {
     const user = getAuthUser();
     if (user) {
@@ -533,7 +519,7 @@ async function initPage() {
         const initials = user.fullName
           ? user.fullName
               .split(' ')
-              .map((n) => n[0])
+              .map(n => n[0])
               .join('')
               .toUpperCase()
               .slice(0, 2)
@@ -542,6 +528,7 @@ async function initPage() {
       }
     }
   } else {
+    // Redirect to login if not authenticated
     toast.error('Please log in to access feedback');
     setTimeout(() => {
       window.location.href = '/login.html';
@@ -549,20 +536,27 @@ async function initPage() {
     return;
   }
 
+  // Initialize mobile navigation
   initMobileNav();
+
+  // Initialize star rating
   initStarRating();
+
+  // Initialize carousel controls
   initCarouselControls();
 
+  // Set up form submission
   const form = document.getElementById('feedback-form');
   if (form) {
     form.addEventListener('submit', handleSubmit);
   }
 
-  currentHospitalId = await resolveFeedbackHospitalId();
+  // Load data
   await loadCompletedAppointments();
   await loadHospitalFeedback();
 }
 
+// Initialize on page load
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initPage);
 } else {
