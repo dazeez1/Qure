@@ -8,7 +8,10 @@ import {
   normalizeEmail,
 } from '../utils/validation.js';
 import { generateAccessCode } from '../utils/accessCode.js';
-import { sendAccessCodeEmail, sendPasswordResetEmail } from '../services/emailService.js';
+import {
+  sendAccessCodeEmail,
+  sendPasswordResetEmail,
+} from '../services/emailService.js';
 import { generateResetToken } from '../utils/resetToken.js';
 
 /**
@@ -66,7 +69,8 @@ export const register = async (req, res, next) => {
     if (!isValidPassword(password)) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character',
+        message:
+          'Password must be at least 8 characters and include uppercase, lowercase, number, and special character',
       });
     }
 
@@ -200,7 +204,7 @@ export const login = async (req, res, next) => {
     // Normalize email if it's an email address
     let normalizedEmail = null;
     let phoneNumber = null;
-    
+
     // Check if input is an email or phone number
     if (isValidEmail(email)) {
       normalizedEmail = normalizeEmail(email);
@@ -265,7 +269,8 @@ export const login = async (req, res, next) => {
     // Validate role if provided (optional, but helps with routing)
     // ADMIN is a type of staff, so allow ADMIN when STAFF is requested
     if (role) {
-      const isRoleMatch = user.role === role || (role === 'STAFF' && user.role === 'ADMIN');
+      const isRoleMatch =
+        user.role === role || (role === 'STAFF' && user.role === 'ADMIN');
       if (!isRoleMatch) {
         return res.status(401).json({
           success: false,
@@ -450,7 +455,7 @@ export const verifyAccessCode = async (req, res, next) => {
       where: { id: user.id },
       data: {
         isVerified: true,
-          isActive: true,
+        isActive: true,
       },
     });
 
@@ -536,7 +541,10 @@ export const forgotPassword = async (req, res, next) => {
 
       // Generate reset token
       const resetToken = generateResetToken();
-      console.log('🔑 Reset token generated:', resetToken.substring(0, 10) + '...');
+      console.log(
+        '🔑 Reset token generated:',
+        resetToken.substring(0, 10) + '...'
+      );
 
       // Calculate expiration (1 hour from now)
       const expiresAt = new Date();
@@ -557,19 +565,28 @@ export const forgotPassword = async (req, res, next) => {
       try {
         console.log('📧 Attempting to send password reset email...');
         console.log('   To:', user.email);
-        
+
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         // Vercel build outputs `reset-password.html`, so the email link must include the extension
         const resetLink = `${frontendUrl}/reset-password.html?token=${resetToken}`;
-        
-        const emailResult = await sendPasswordResetEmail(user.email, resetLink, user.firstName);
-        
+
+        const emailResult = await sendPasswordResetEmail(
+          user.email,
+          resetLink,
+          user.firstName
+        );
+
         if (emailResult.success) {
           console.log('✅ Password reset email sent successfully!');
           console.log('   Message ID:', emailResult.messageId);
-          console.log('   Check Brevo dashboard or email inbox for confirmation');
+          console.log(
+            '   Check Brevo dashboard or email inbox for confirmation'
+          );
         } else {
-          console.error('❌ Failed to send password reset email:', emailResult.error);
+          console.error(
+            '❌ Failed to send password reset email:',
+            emailResult.error
+          );
         }
       } catch (emailError) {
         console.error('❌ Error sending password reset email:', emailError);
@@ -598,7 +615,10 @@ export const forgotPassword = async (req, res, next) => {
 
       // Generate reset token
       const resetToken = generateResetToken();
-      console.log('🔑 Reset token generated:', resetToken.substring(0, 10) + '...');
+      console.log(
+        '🔑 Reset token generated:',
+        resetToken.substring(0, 10) + '...'
+      );
 
       // Calculate expiration (1 hour from now)
       const expiresAt = new Date();
@@ -619,24 +639,36 @@ export const forgotPassword = async (req, res, next) => {
       try {
         console.log('📧 Attempting to send password reset email to patient...');
         console.log('   To:', patient.email);
-        
+
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         // Vercel build outputs `reset-password.html`, so the email link must include the extension
         const resetLink = `${frontendUrl}/reset-password.html?token=${resetToken}`;
-        
+
         // Extract first name from fullName
         const firstName = patient.fullName.split(' ')[0] || 'Patient';
-        const emailResult = await sendPasswordResetEmail(patient.email, resetLink, firstName);
-        
+        const emailResult = await sendPasswordResetEmail(
+          patient.email,
+          resetLink,
+          firstName
+        );
+
         if (emailResult.success) {
           console.log('✅ Password reset email sent successfully to patient!');
           console.log('   Message ID:', emailResult.messageId);
-          console.log('   Check Brevo dashboard or email inbox for confirmation');
+          console.log(
+            '   Check Brevo dashboard or email inbox for confirmation'
+          );
         } else {
-          console.error('❌ Failed to send password reset email to patient:', emailResult.error);
+          console.error(
+            '❌ Failed to send password reset email to patient:',
+            emailResult.error
+          );
         }
       } catch (emailError) {
-        console.error('❌ Error sending password reset email to patient:', emailError);
+        console.error(
+          '❌ Error sending password reset email to patient:',
+          emailError
+        );
         console.error('   Error details:', {
           message: emailError.message,
           code: emailError.code,
@@ -645,14 +677,17 @@ export const forgotPassword = async (req, res, next) => {
         // Don't fail the request if email fails - token is still created
       }
     } else {
-      console.log('ℹ️  User/Patient not found (email does not exist in database)');
+      console.log(
+        'ℹ️  User/Patient not found (email does not exist in database)'
+      );
       console.log('   (This is normal - we return success for security)');
     }
 
     // Always return success (security best practice)
     res.status(200).json({
       success: true,
-      message: 'If an account exists with that email, a password reset link has been sent.',
+      message:
+        'If an account exists with that email, a password reset link has been sent.',
     });
   } catch (error) {
     next(error);
@@ -767,7 +802,8 @@ export const resetPassword = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Password reset successfully. Please log in with your new password.',
+      message:
+        'Password reset successfully. Please log in with your new password.',
     });
   } catch (error) {
     next(error);
@@ -869,7 +905,8 @@ export const acceptInvite = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Invite accepted successfully. Please log in with your new password.',
+      message:
+        'Invite accepted successfully. Please log in with your new password.',
     });
   } catch (error) {
     next(error);

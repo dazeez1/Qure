@@ -9,6 +9,12 @@ final patientQueueApiProvider = Provider<PatientQueueApi>((ref) {
   return PatientQueueApi(dio);
 });
 
+final patientQueueStatusProvider =
+    FutureProvider.autoDispose<PatientQueueStatus?>((ref) async {
+  final api = ref.watch(patientQueueApiProvider);
+  return api.getQueueStatus();
+});
+
 class PatientQueueApi {
   PatientQueueApi(this._dio);
 
@@ -56,6 +62,7 @@ class PatientQueueApi {
 
     return QueueEntryStatus(
       id: map['id'] as String,
+      hospitalId: map['hospitalId'] as String?,
       ticketNumber: (map['ticketNumber'] as String?) ?? '',
       sequenceNumber: map['sequenceNumber'] as int?,
       status: (map['status'] as String?) ?? '',

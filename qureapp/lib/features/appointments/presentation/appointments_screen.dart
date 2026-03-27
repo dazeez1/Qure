@@ -2,15 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/ui/app_toast.dart';
+import '../../shell/presentation/patient_top_bar.dart';
 import '../../feedback/data/patient_feedback_api.dart';
 import '../data/patient_appointments_api.dart';
 import '../domain/patient_appointment_models.dart';
-
-final patientAppointmentsProvider =
-    FutureProvider.autoDispose.family<AppointmentListPage, String?>((ref, status) async {
-  final api = ref.watch(patientAppointmentsApiProvider);
-  return api.getAppointments(page: 1, limit: 20, status: status);
-});
 
 class AppointmentsScreen extends ConsumerStatefulWidget {
   const AppointmentsScreen({super.key});
@@ -30,13 +25,17 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: PatientTopBar(),
+            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
-                      'Appointments',
+                      'My Bookings',
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                   ),

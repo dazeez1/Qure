@@ -48,7 +48,9 @@ async function getTransporter() {
       },
     });
 
-    console.log('📧 Ethereal Email Test Account Created (Brevo not configured)');
+    console.log(
+      '📧 Ethereal Email Test Account Created (Brevo not configured)'
+    );
     console.log('   User:', testAccount.user);
     console.log('   Pass:', testAccount.pass);
     console.log('   Use the Preview URL from console to view emails');
@@ -121,7 +123,11 @@ export const sendAccessCodeEmail = async (email, accessCode, hospitalName) => {
  * @param {string} firstName - User's first name (optional)
  * @returns {Promise<void>}
  */
-export const sendPasswordResetEmail = async (email, resetToken, firstName = 'User') => {
+export const sendPasswordResetEmail = async (
+  email,
+  resetToken,
+  firstName = 'User'
+) => {
   try {
     const emailTransporter = await getTransporter();
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';

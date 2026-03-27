@@ -22,6 +22,7 @@ class PatientAppointment {
     required this.appointmentDate,
     required this.status,
     required this.reason,
+    required this.hospitalId,
     required this.hospitalName,
     required this.departmentName,
     required this.hasFeedback,
@@ -31,6 +32,7 @@ class PatientAppointment {
   final DateTime appointmentDate;
   final String status;
   final String? reason;
+  final String? hospitalId;
   final String? hospitalName;
   final String? departmentName;
   final bool hasFeedback;

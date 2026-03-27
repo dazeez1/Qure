@@ -14,6 +14,12 @@ final patientAppointmentsApiProvider = Provider<PatientAppointmentsApi>((ref) {
   return PatientAppointmentsApi(dio, cache);
 });
 
+final patientAppointmentsProvider =
+    FutureProvider.autoDispose.family<AppointmentListPage, String?>((ref, status) async {
+  final api = ref.watch(patientAppointmentsApiProvider);
+  return api.getAppointments(page: 1, limit: 20, status: status);
+});
+
 class PatientAppointmentsApi {
   PatientAppointmentsApi(this._dio, this._cache);
 
@@ -79,6 +85,53 @@ class PatientAppointmentsApi {
     );
   }
 
+  Future<void> createAppointment({
+    required String hospitalId,
+    required String departmentId,
+    required DateTime appointmentDate,
+    String? reason,
+  }) async {
+    try {
+      await _dio.post<Map<String, dynamic>>(
+        '/appointments',
+        data: {
+          'hospitalId': hospitalId,
+          'departmentId': departmentId,
+          'appointmentDate': appointmentDate.toUtc().toIso8601String(),
+          ...?(reason == null || reason.trim().isEmpty ? null : {'reason': reason.trim()}),
+        },
+      );
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  Future<void> cancelAppointment(String appointmentId) async {
+    try {
+      await _dio.patch<Map<String, dynamic>>(
+        '/appointments/$appointmentId/cancel',
+      );
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  Future<void> rescheduleAppointment({
+    required String appointmentId,
+    required DateTime appointmentDate,
+  }) async {
+    try {
+      await _dio.patch<Map<String, dynamic>>(
+        '/appointments/$appointmentId/reschedule',
+        data: {
+          'appointmentDate': appointmentDate.toUtc().toIso8601String(),
+        },
+      );
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
   PatientAppointment _parseAppointment(Map<String, dynamic> map) {
     final hospital = map['hospital'] as Map<String, dynamic>?;
     final department = map['department'] as Map<String, dynamic>?;
@@ -87,6 +140,7 @@ class PatientAppointmentsApi {
       appointmentDate: DateTime.parse(map['appointmentDate'] as String),
       status: map['status'] as String,
       reason: map['reason'] as String?,
+      hospitalId: hospital?['id'] as String?,
       hospitalName: hospital?['name'] as String?,
       departmentName: department?['name'] as String?,
       hasFeedback: (map['hasFeedback'] as bool?) ?? false,

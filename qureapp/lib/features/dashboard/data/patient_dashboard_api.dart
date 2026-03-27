@@ -14,6 +14,12 @@ final patientDashboardApiProvider = Provider<PatientDashboardApi>((ref) {
   return PatientDashboardApi(dio, cache);
 });
 
+final patientDashboardProvider =
+    FutureProvider.autoDispose<PatientDashboardData>((ref) async {
+  final api = ref.watch(patientDashboardApiProvider);
+  return api.fetchDashboard();
+});
+
 class PatientDashboardApi {
   PatientDashboardApi(this._dio, this._cache);
 
@@ -91,6 +97,7 @@ class PatientDashboardApi {
       appointmentDate: DateTime.parse(map['appointmentDate'] as String),
       status: map['status'] as String,
       reason: map['reason'] as String?,
+      hospitalId: hospital?['id'] as String?,
       hospitalName: hospital?['name'] as String?,
       departmentName: department?['name'] as String?,
     );

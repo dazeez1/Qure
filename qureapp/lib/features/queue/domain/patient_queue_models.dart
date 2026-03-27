@@ -17,6 +17,7 @@ class PatientQueueStatus {
 class QueueEntryStatus {
   const QueueEntryStatus({
     required this.id,
+    required this.hospitalId,
     required this.ticketNumber,
     required this.sequenceNumber,
     required this.status,
@@ -28,6 +29,7 @@ class QueueEntryStatus {
   });
 
   final String id;
+  final String? hospitalId;
   final String ticketNumber;
   final int? sequenceNumber;
   final String status;

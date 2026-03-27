@@ -7,6 +7,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/legal/presentation/terms_and_conditions_screen.dart';
+import '../features/appointments/presentation/book_appointment_screen.dart';
 import '../features/shell/presentation/app_shell.dart';
 import '../features/splash/presentation/splash_screen.dart';
 import '../features/auth/application/auth_controller.dart';
@@ -63,6 +64,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/',
         builder: (context, state) => const AppShell(),
+      ),
+      GoRoute(
+        path: '/book-appointment',
+        builder: (context, state) => const BookAppointmentScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

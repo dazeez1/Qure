@@ -2168,6 +2168,7 @@ export const getPatientQueueStatus = async (req, res, next) => {
         data: {
           queueEntry: {
             id: result.queueEntry.id,
+            hospitalId: result.queueEntry.hospitalId,
             ticketNumber: result.queueEntry.ticketNumber,
             sequenceNumber: result.queueEntry.sequenceNumber,
             status: result.queueEntry.status,

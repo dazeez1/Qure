@@ -55,7 +55,7 @@ export const getStaff = async (req, res, next) => {
     });
 
     // Format response with department
-    const formattedStaff = staff.map((member) => ({
+    const formattedStaff = staff.map(member => ({
       id: member.id,
       firstName: member.firstName,
       lastName: member.lastName,
@@ -92,7 +92,8 @@ export const getStaff = async (req, res, next) => {
 export const inviteStaff = async (req, res, next) => {
   try {
     const user = req.user;
-    const { firstName, lastName, email, role, staffRole, departmentId } = req.body;
+    const { firstName, lastName, email, role, staffRole, departmentId } =
+      req.body;
 
     // Ensure user has a hospital linked
     if (!user.hospitalId) {
@@ -103,14 +104,22 @@ export const inviteStaff = async (req, res, next) => {
     }
 
     // Validate required fields
-    if (!firstName || typeof firstName !== 'string' || firstName.trim().length === 0) {
+    if (
+      !firstName ||
+      typeof firstName !== 'string' ||
+      firstName.trim().length === 0
+    ) {
       return res.status(400).json({
         success: false,
         message: 'First name is required.',
       });
     }
 
-    if (!lastName || typeof lastName !== 'string' || lastName.trim().length === 0) {
+    if (
+      !lastName ||
+      typeof lastName !== 'string' ||
+      lastName.trim().length === 0
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Last name is required.',
@@ -169,7 +178,8 @@ export const inviteStaff = async (req, res, next) => {
     if (role === 'STAFF' && !isPrimary && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: 'Only primary staff or administrators can invite staff members.',
+        message:
+          'Only primary staff or administrators can invite staff members.',
       });
     }
 
@@ -226,7 +236,9 @@ export const inviteStaff = async (req, res, next) => {
     }
 
     // Generate temporary password (will be reset via invite token)
-    const temporaryPassword = await hashPassword(crypto.randomBytes(32).toString('hex'));
+    const temporaryPassword = await hashPassword(
+      crypto.randomBytes(32).toString('hex')
+    );
 
     // Create user
     const newUser = await prisma.user.create({
@@ -274,7 +286,7 @@ export const inviteStaff = async (req, res, next) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     // Vercel build outputs `accept-invite.html`, so the email link must include the extension
     const inviteUrl = `${frontendUrl}/accept-invite.html?token=${inviteToken}`;
-    
+
     // Get hospital name for email
     const hospital = await prisma.hospital.findUnique({
       where: { id: user.hospitalId },
@@ -290,7 +302,7 @@ export const inviteStaff = async (req, res, next) => {
       console.log('   To:', normalizedEmail);
       console.log('   Name:', `${firstName} ${lastName}`);
       console.log('   Role:', role);
-      
+
       const emailResult = await sendStaffInvitationEmail(
         normalizedEmail,
         inviteUrl,
@@ -369,7 +381,8 @@ export const getStaffDashboard = async (req, res) => {
     const { departmentId: queryDepartmentId, search } = req.query;
 
     // Scope by role: doctors see only their department; admins/primary see all or filtered
-    const isDoctor = user.role === 'STAFF' && user.staffRole === 'DOCTOR' && !user.isPrimary;
+    const isDoctor =
+      user.role === 'STAFF' && user.staffRole === 'DOCTOR' && !user.isPrimary;
     const effectiveDepartmentId = isDoctor
       ? user.departmentId
       : queryDepartmentId || undefined;
@@ -423,7 +436,8 @@ export const updateStaff = async (req, res, next) => {
   try {
     const user = req.user; // Current user making the request
     const { id } = req.params; // Staff member ID to update
-    const { firstName, lastName, role, staffRole, departmentId, isActive } = req.body;
+    const { firstName, lastName, role, staffRole, departmentId, isActive } =
+      req.body;
 
     // Ensure user has a hospital linked
     if (!user.hospitalId) {
@@ -441,7 +455,8 @@ export const updateStaff = async (req, res, next) => {
     if (!isPrimary && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: 'Only primary staff or administrators can update staff members.',
+        message:
+          'Only primary staff or administrators can update staff members.',
       });
     }
 
@@ -566,7 +581,8 @@ export const updateStaff = async (req, res, next) => {
         if (!staffRole || (staffRole !== 'DOCTOR' && staffRole !== 'NURSE')) {
           return res.status(400).json({
             success: false,
-            message: 'Staff role must have a valid staffRole (DOCTOR or NURSE).',
+            message:
+              'Staff role must have a valid staffRole (DOCTOR or NURSE).',
           });
         }
 
@@ -607,14 +623,18 @@ export const updateStaff = async (req, res, next) => {
         if (staffMember.role === 'ADMIN') {
           return res.status(400).json({
             success: false,
-            message: 'Admin role cannot have a staff role or department assigned.',
+            message:
+              'Admin role cannot have a staff role or department assigned.',
           });
         }
 
         // If current role is STAFF, validate staffRole and departmentId
         if (staffMember.role === 'STAFF') {
           if (staffRole !== undefined) {
-            if (!staffRole || (staffRole !== 'DOCTOR' && staffRole !== 'NURSE')) {
+            if (
+              !staffRole ||
+              (staffRole !== 'DOCTOR' && staffRole !== 'NURSE')
+            ) {
               return res.status(400).json({
                 success: false,
                 message: 'Staff role must be either DOCTOR or NURSE.',
@@ -684,7 +704,12 @@ export const updateStaff = async (req, res, next) => {
       // CRITICAL: Admin cannot deactivate another Admin
       // This is already covered by the Admin modification block above,
       // but adding explicit check here for clarity
-      if (isAdmin && !isPrimary && staffMember.role === 'ADMIN' && user.id !== staffMember.id) {
+      if (
+        isAdmin &&
+        !isPrimary &&
+        staffMember.role === 'ADMIN' &&
+        user.id !== staffMember.id
+      ) {
         return res.status(403).json({
           success: false,
           message: 'Administrators cannot modify other administrators.',
