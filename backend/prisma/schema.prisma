@@ -224,6 +224,7 @@ model Patient {
   dateOfBirth               DateTime?
   avatarUrl                 String?
   emailNotificationsEnabled Boolean   @default(true)
+  pushNotificationsEnabled  Boolean   @default(true)
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 
@@ -233,8 +234,25 @@ model Patient {
   feedbacks           Feedback[]
   supportMessages     SupportMessage[]
   PatientNotification PatientNotification[]
+  deviceTokens        PatientDeviceToken[]
 
   @@map("patients")
+}
+
+model PatientDeviceToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  patientId  String   @db.ObjectId
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  token      String
+  platform   String?  // ios/android/web
+  isActive   Boolean  @default(true)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([patientId, token])
+  @@index([token])
+  @@map("patient_device_tokens")
 }
 
 model Appointment {

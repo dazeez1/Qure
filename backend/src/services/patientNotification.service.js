@@ -1,5 +1,6 @@
 import prisma from '../config/database.js';
 import { shouldSendEmailToPatient, sendAnnouncement } from './emailService.js';
+import { sendPushToPatient } from './pushNotification.service.js';
 
 /**
  * Patient Notification Service
@@ -32,6 +33,7 @@ export async function createPatientNotification({
   announcementId = null,
   appointmentId = null,
   sendEmail = true,
+  sendPush = true,
 }) {
   try {
     // Create notification
@@ -79,6 +81,27 @@ export async function createPatientNotification({
       } catch (emailError) {
         console.error('Failed to send notification email:', emailError);
         // Don't fail notification creation if email fails
+      }
+    }
+
+    // Send push notification if requested
+    if (sendPush) {
+      try {
+        await sendPushToPatient({
+          patientId,
+          title,
+          body: content,
+          data: {
+            type,
+            category,
+            hospitalId,
+            ...(appointmentId ? { appointmentId } : {}),
+            ...(announcementId ? { announcementId } : {}),
+          },
+        });
+      } catch (pushError) {
+        console.error('Failed to send push notification:', pushError);
+        // Don't fail notification creation if push fails
       }
     }
 

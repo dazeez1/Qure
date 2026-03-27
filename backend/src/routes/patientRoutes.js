@@ -17,6 +17,10 @@ import {
   markAllNotificationsAsRead,
   clearAllReadNotifications,
 } from '../controllers/patientNotificationController.js';
+import {
+  upsertPatientPushToken,
+  deactivatePatientPushToken,
+} from '../controllers/patientPushTokenController.js';
 import { uploadAvatar } from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
@@ -108,6 +112,20 @@ router.get('/notification-preferences', getPatientNotificationPreferences);
  * Body: { emailNotificationsEnabled: boolean }
  */
 router.patch('/notification-preferences', updatePatientNotificationPreferences);
+
+/**
+ * POST /api/patient/push-tokens
+ * Register/refresh a device push token for the authenticated patient
+ * Body: { token: string, platform?: 'ios'|'android'|'web' }
+ */
+router.post('/push-tokens', upsertPatientPushToken);
+
+/**
+ * DELETE /api/patient/push-tokens
+ * Deactivate a device push token for the authenticated patient
+ * Body: { token: string }
+ */
+router.delete('/push-tokens', deactivatePatientPushToken);
 
 /**
  * PATCH /api/patient/notifications/:id/read

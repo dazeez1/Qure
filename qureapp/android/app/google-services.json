@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "178442274577",
+    "project_id": "qureapp-e52b0",
+    "storage_bucket": "qureapp-e52b0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:178442274577:android:8f7a64717476aaef8b2eb0",
+        "android_client_info": {
+          "package_name": "com.example.qureapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHUFJowvL2_z2qqeAikulOruarJGJUQnE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

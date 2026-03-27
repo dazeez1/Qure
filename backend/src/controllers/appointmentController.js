@@ -255,11 +255,34 @@ export const getPatientAppointments = async (req, res, next) => {
     const limitNum = parseInt(limit, 10) || 10;
     const skip = (pageNum - 1) * limitNum;
 
-    // Build where clause - only BOOKED appointments
+    // Build where clause
+    // Backwards-compatible default: only show upcoming BOOKED appointments unless a status filter is provided.
     const where = {
       patientId: patient.id,
-      status: 'BOOKED', // Only BOOKED appointments
     };
+
+    if (status) {
+      const allowedStatuses = [
+        'BOOKED',
+        'CHECKED_IN',
+        'MOVED_TO_QUEUE',
+        'IN_CONSULTATION',
+        'COMPLETED',
+        'CANCELLED',
+        'NO_SHOW',
+      ];
+
+      if (typeof status !== 'string' || !allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid status filter. Allowed: ${allowedStatuses.join(', ')}`,
+        });
+      }
+
+      where.status = status;
+    } else {
+      where.status = 'BOOKED';
+    }
 
     // Add hospital filter if provided
     if (hospitalId) {

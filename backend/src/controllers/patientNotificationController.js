@@ -14,6 +14,7 @@ export const getPatientNotificationPreferences = async (req, res, next) => {
       where: { id: patientId },
       select: {
         emailNotificationsEnabled: true,
+        pushNotificationsEnabled: true,
       },
     });
 
@@ -28,6 +29,7 @@ export const getPatientNotificationPreferences = async (req, res, next) => {
       success: true,
       data: {
         emailNotificationsEnabled: patient.emailNotificationsEnabled ?? true,
+        pushNotificationsEnabled: patient.pushNotificationsEnabled ?? true,
       },
     });
   } catch (error) {
@@ -45,20 +47,27 @@ export const getPatientNotificationPreferences = async (req, res, next) => {
 export const updatePatientNotificationPreferences = async (req, res, next) => {
   try {
     const patientId = req.user.id;
-    const { emailNotificationsEnabled } = req.body;
+    const { emailNotificationsEnabled, pushNotificationsEnabled } = req.body;
 
     // Validate input
-    if (emailNotificationsEnabled === undefined) {
+    if (emailNotificationsEnabled === undefined && pushNotificationsEnabled === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'emailNotificationsEnabled is required.',
+        message: 'At least one preference must be provided.',
       });
     }
 
-    if (typeof emailNotificationsEnabled !== 'boolean') {
+    if (emailNotificationsEnabled !== undefined && typeof emailNotificationsEnabled !== 'boolean') {
       return res.status(400).json({
         success: false,
         message: 'emailNotificationsEnabled must be a boolean value.',
+      });
+    }
+
+    if (pushNotificationsEnabled !== undefined && typeof pushNotificationsEnabled !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'pushNotificationsEnabled must be a boolean value.',
       });
     }
 
@@ -66,10 +75,12 @@ export const updatePatientNotificationPreferences = async (req, res, next) => {
     const updatedPatient = await prisma.patient.update({
       where: { id: patientId },
       data: {
-        emailNotificationsEnabled,
+        ...(emailNotificationsEnabled !== undefined ? { emailNotificationsEnabled } : {}),
+        ...(pushNotificationsEnabled !== undefined ? { pushNotificationsEnabled } : {}),
       },
       select: {
         emailNotificationsEnabled: true,
+        pushNotificationsEnabled: true,
       },
     });
 
@@ -77,6 +88,7 @@ export const updatePatientNotificationPreferences = async (req, res, next) => {
       success: true,
       data: {
         emailNotificationsEnabled: updatedPatient.emailNotificationsEnabled,
+        pushNotificationsEnabled: updatedPatient.pushNotificationsEnabled,
       },
       message: 'Notification preferences updated successfully.',
     });
