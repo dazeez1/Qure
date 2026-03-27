@@ -26,12 +26,21 @@ class PatientAppointmentsApi {
   final Dio _dio;
   final OfflineCacheStore _cache;
 
+  static String _cacheScopeKey(String? status, String? hospitalId) {
+    final s = status ?? 'BOOKED';
+    final h =
+        hospitalId != null && hospitalId.trim().isNotEmpty ? hospitalId.trim() : 'all';
+    return 'patientAppointments.status=$s.hospital=$h';
+  }
+
   Future<AppointmentListPage> getAppointments({
     required int page,
     required int limit,
     String? status,
+    String? hospitalId,
   }) async {
-    final cacheKey = 'patientAppointments.page=$page.limit=$limit.status=${status ?? 'BOOKED'}';
+    final scope = _cacheScopeKey(status, hospitalId);
+    final cacheKey = 'patientAppointments.page=$page.limit=$limit.$scope';
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         '/patient/appointments',
@@ -39,6 +48,9 @@ class PatientAppointmentsApi {
           'page': page,
           'limit': limit,
           ...?(status == null ? null : {'status': status}),
+          ...?((hospitalId == null || hospitalId.trim().isEmpty)
+              ? null
+              : {'hospitalId': hospitalId.trim()}),
         },
       );
 

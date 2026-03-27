@@ -9,7 +9,7 @@ import {
 /**
  * Create a new appointment (Patient only)
  * POST /api/appointments
- * 
+ *
  * Body: {
  *   hospitalId: string (required)
  *   departmentId: string (required)
@@ -31,7 +31,11 @@ export const createAppointment = async (req, res, next) => {
     const { hospitalId, departmentId, appointmentDate, reason } = req.body;
 
     // Validate required fields
-    const validation = validateRequiredFields(req.body, ['hospitalId', 'departmentId', 'appointmentDate']);
+    const validation = validateRequiredFields(req.body, [
+      'hospitalId',
+      'departmentId',
+      'appointmentDate',
+    ]);
     if (!validation.isValid) {
       return res.status(400).json({
         success: false,
@@ -98,25 +102,27 @@ export const createAppointment = async (req, res, next) => {
 
     // Check for active appointments in OTHER hospitals
     // Prevent booking in a different hospital if patient has any active appointment in another hospital
-    const activeAppointmentInOtherHospital = await prisma.appointment.findFirst({
-      where: {
-        patientId: patient.id,
-        hospitalId: {
-          not: hospitalId, // Different hospital
-        },
-        status: {
-          in: ['BOOKED', 'CHECKED_IN', 'MOVED_TO_QUEUE', 'IN_CONSULTATION'],
-        },
-      },
-      include: {
-        hospital: {
-          select: {
-            id: true,
-            name: true,
+    const activeAppointmentInOtherHospital = await prisma.appointment.findFirst(
+      {
+        where: {
+          patientId: patient.id,
+          hospitalId: {
+            not: hospitalId, // Different hospital
+          },
+          status: {
+            in: ['BOOKED', 'CHECKED_IN', 'MOVED_TO_QUEUE', 'IN_CONSULTATION'],
           },
         },
-      },
-    });
+        include: {
+          hospital: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      }
+    );
 
     if (activeAppointmentInOtherHospital) {
       return res.status(400).json({
@@ -129,34 +135,42 @@ export const createAppointment = async (req, res, next) => {
     // Standard appointment duration: 30 minutes
     const APPOINTMENT_DURATION_MINUTES = 30;
     const appointmentStartTime = appointmentDateTime;
-    const appointmentEndTime = new Date(appointmentStartTime.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000);
+    const appointmentEndTime = new Date(
+      appointmentStartTime.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000
+    );
 
     // Find existing appointments for this patient at the SAME hospital
     // Exclude CANCELLED and COMPLETED appointments as they don't block time slots
-    const existingAppointmentsAtSameHospital = await prisma.appointment.findMany({
-      where: {
-        patientId: patient.id,
-        hospitalId: hospitalId, // Same hospital only
-        status: {
-          notIn: ['CANCELLED', 'COMPLETED'],
+    const existingAppointmentsAtSameHospital =
+      await prisma.appointment.findMany({
+        where: {
+          patientId: patient.id,
+          hospitalId: hospitalId, // Same hospital only
+          status: {
+            notIn: ['CANCELLED', 'COMPLETED'],
+          },
         },
-      },
-      select: {
-        id: true,
-        appointmentDate: true,
-        status: true,
-      },
-    });
+        select: {
+          id: true,
+          appointmentDate: true,
+          status: true,
+        },
+      });
 
     // Check for time overlaps within the same hospital
     // Two appointments overlap if: newStart < existingEnd AND newEnd > existingStart
     // Assuming same 30-minute duration for existing appointments
     for (const existingAppt of existingAppointmentsAtSameHospital) {
       const existingStartTime = new Date(existingAppt.appointmentDate);
-      const existingEndTime = new Date(existingStartTime.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000);
+      const existingEndTime = new Date(
+        existingStartTime.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000
+      );
 
       // Check if time windows overlap
-      if (appointmentStartTime < existingEndTime && appointmentEndTime > existingStartTime) {
+      if (
+        appointmentStartTime < existingEndTime &&
+        appointmentEndTime > existingStartTime
+      ) {
         return res.status(400).json({
           success: false,
           message: `This appointment time overlaps with an existing appointment on ${existingStartTime.toLocaleString()}. Please choose a different time.`,
@@ -203,7 +217,10 @@ export const createAppointment = async (req, res, next) => {
         doctorName: null, // No doctor assigned at appointment creation
       });
     } catch (notificationError) {
-      console.error('Failed to create appointment confirmation notification:', notificationError);
+      console.error(
+        'Failed to create appointment confirmation notification:',
+        notificationError
+      );
       // Don't fail appointment creation if notification fails
     }
 
@@ -230,7 +247,7 @@ export const createAppointment = async (req, res, next) => {
 /**
  * Get patient's appointments
  * GET /api/patient/appointments
- * 
+ *
  * Query params:
  *   status: string (optional) - Filter by status (BOOKED, CHECKED_IN, MOVED_TO_QUEUE, IN_CONSULTATION, COMPLETED, CANCELLED, NO_SHOW)
  *   hospitalId: string (optional) - Filter by hospital
@@ -342,7 +359,7 @@ export const getPatientAppointments = async (req, res, next) => {
       success: true,
       message: 'Appointments retrieved successfully.',
       data: {
-        appointments: appointments.map((apt) => ({
+        appointments: appointments.map(apt => ({
           id: apt.id,
           appointmentDate: apt.appointmentDate,
           status: apt.status,
@@ -372,10 +389,10 @@ export const getPatientAppointments = async (req, res, next) => {
 /**
  * Reschedule an appointment (Patient only)
  * PATCH /api/appointments/:id/reschedule
- * 
+ *
  * Only the patient who owns the appointment can reschedule it.
  * Only BOOKED appointments can be rescheduled.
- * 
+ *
  * Body: {
  *   appointmentDate: string (ISO date string, required)
  * }
@@ -413,126 +430,148 @@ export const rescheduleAppointment = async (req, res, next) => {
 
     // Wrap in transaction (extend timeout for hosted DB latency)
     const result = await prisma.$transaction(
-      async (tx) => {
-      // Find appointment
-      const appointment = await tx.appointment.findUnique({
-        where: { id },
-        include: {
-          hospital: {
-            select: {
-              id: true,
-              name: true,
+      async tx => {
+        // Find appointment
+        const appointment = await tx.appointment.findUnique({
+          where: { id },
+          include: {
+            hospital: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+                shortCode: true,
+                status: true,
+                hospitalId: true,
+              },
             },
           },
-          department: {
-            select: {
-              id: true,
-              name: true,
-              shortCode: true,
-              status: true,
-              hospitalId: true,
+        });
+
+        if (!appointment) {
+          throw new Error('Appointment not found.');
+        }
+
+        // Verify patient owns the appointment
+        if (appointment.patientId !== patient.id) {
+          throw new Error(
+            'You do not have permission to reschedule this appointment.'
+          );
+        }
+
+        // Validate appointment status = BOOKED
+        if (appointment.status !== 'BOOKED') {
+          throw new Error(
+            `Cannot reschedule appointment with status: ${appointment.status}. Only BOOKED appointments can be rescheduled.`
+          );
+        }
+
+        // Validate department is ACTIVE
+        if (appointment.department.status !== 'ACTIVE') {
+          throw new Error(
+            'Department is not active. Cannot reschedule appointment.'
+          );
+        }
+
+        // Validate new appointment date is in the future
+        if (newAppointmentDateTime <= new Date()) {
+          throw new Error('New appointment date must be in the future.');
+        }
+
+        // Time-overlap validation: Prevent overlapping appointment times
+        // Standard appointment duration: 30 minutes
+        const APPOINTMENT_DURATION_MINUTES = 30;
+        const newAppointmentStartTime = newAppointmentDateTime;
+        const newAppointmentEndTime = new Date(
+          newAppointmentStartTime.getTime() +
+            APPOINTMENT_DURATION_MINUTES * 60 * 1000
+        );
+
+        // Find existing appointments for this patient at the SAME hospital
+        // Exclude CANCELLED and COMPLETED appointments as they don't block time slots
+        // Exclude the current appointment being rescheduled
+        const overlappingAppointments = await tx.appointment.findMany({
+          where: {
+            patientId: patient.id,
+            hospitalId: appointment.hospitalId,
+            id: { not: id }, // Exclude current appointment
+            status: {
+              notIn: ['CANCELLED', 'COMPLETED'],
+            },
+            appointmentDate: {
+              gte: newAppointmentStartTime,
+              lt: newAppointmentEndTime,
             },
           },
-        },
-      });
+        });
 
-      if (!appointment) {
-        throw new Error('Appointment not found.');
-      }
-
-      // Verify patient owns the appointment
-      if (appointment.patientId !== patient.id) {
-        throw new Error('You do not have permission to reschedule this appointment.');
-      }
-
-      // Validate appointment status = BOOKED
-      if (appointment.status !== 'BOOKED') {
-        throw new Error(`Cannot reschedule appointment with status: ${appointment.status}. Only BOOKED appointments can be rescheduled.`);
-      }
-
-      // Validate department is ACTIVE
-      if (appointment.department.status !== 'ACTIVE') {
-        throw new Error('Department is not active. Cannot reschedule appointment.');
-      }
-
-      // Validate new appointment date is in the future
-      if (newAppointmentDateTime <= new Date()) {
-        throw new Error('New appointment date must be in the future.');
-      }
-
-      // Time-overlap validation: Prevent overlapping appointment times
-      // Standard appointment duration: 30 minutes
-      const APPOINTMENT_DURATION_MINUTES = 30;
-      const newAppointmentStartTime = newAppointmentDateTime;
-      const newAppointmentEndTime = new Date(newAppointmentStartTime.getTime() + APPOINTMENT_DURATION_MINUTES * 60 * 1000);
-
-      // Find existing appointments for this patient at the SAME hospital
-      // Exclude CANCELLED and COMPLETED appointments as they don't block time slots
-      // Exclude the current appointment being rescheduled
-      const overlappingAppointments = await tx.appointment.findMany({
-        where: {
-          patientId: patient.id,
-          hospitalId: appointment.hospitalId,
-          id: { not: id }, // Exclude current appointment
-          status: {
-            notIn: ['CANCELLED', 'COMPLETED'],
-          },
-          appointmentDate: {
-            gte: newAppointmentStartTime,
-            lt: newAppointmentEndTime,
-          },
-        },
-      });
-
-      // Also check for appointments that start before but end during the new appointment window
-      const overlappingAppointmentsBefore = await tx.appointment.findMany({
-        where: {
-          patientId: patient.id,
-          hospitalId: appointment.hospitalId,
-          id: { not: id },
-          status: {
-            notIn: ['CANCELLED', 'COMPLETED'],
-          },
-          appointmentDate: {
-            lt: newAppointmentStartTime,
-            gte: new Date(newAppointmentStartTime.getTime() - APPOINTMENT_DURATION_MINUTES * 60 * 1000),
-          },
-        },
-      });
-
-      if (overlappingAppointments.length > 0 || overlappingAppointmentsBefore.length > 0) {
-        throw new Error('This appointment time conflicts with an existing appointment. Please choose a different time.');
-      }
-
-      // Store old date for notification
-      const oldDate = appointment.appointmentDate;
-
-      // Update appointment date
-      const updatedAppointment = await tx.appointment.update({
-        where: { id },
-        data: {
-          appointmentDate: newAppointmentDateTime,
-        },
-        include: {
-          hospital: {
-            select: {
-              id: true,
-              name: true,
+        // Also check for appointments that start before but end during the new appointment window
+        const overlappingAppointmentsBefore = await tx.appointment.findMany({
+          where: {
+            patientId: patient.id,
+            hospitalId: appointment.hospitalId,
+            id: { not: id },
+            status: {
+              notIn: ['CANCELLED', 'COMPLETED'],
+            },
+            appointmentDate: {
+              lt: newAppointmentStartTime,
+              gte: new Date(
+                newAppointmentStartTime.getTime() -
+                  APPOINTMENT_DURATION_MINUTES * 60 * 1000
+              ),
             },
           },
-          department: {
-            select: {
-              id: true,
-              name: true,
-              shortCode: true,
+        });
+
+        if (
+          overlappingAppointments.length > 0 ||
+          overlappingAppointmentsBefore.length > 0
+        ) {
+          throw new Error(
+            'This appointment time conflicts with an existing appointment. Please choose a different time.'
+          );
+        }
+
+        // Store old date for notification
+        const oldDate = appointment.appointmentDate;
+
+        // Update appointment date
+        const updatedAppointment = await tx.appointment.update({
+          where: { id },
+          data: {
+            appointmentDate: newAppointmentDateTime,
+          },
+          include: {
+            hospital: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            department: {
+              select: {
+                id: true,
+                name: true,
+                shortCode: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      return { updatedAppointment, oldDate, department: appointment.department };
-    },
-    { timeout: 15000 });
+        return {
+          updatedAppointment,
+          oldDate,
+          department: appointment.department,
+        };
+      },
+      { timeout: 15000 }
+    );
 
     // Create reschedule notification (non-blocking)
     // Note: No doctor is assigned at appointment reschedule time - doctors are assigned when checking into queue
@@ -546,7 +585,10 @@ export const rescheduleAppointment = async (req, res, next) => {
         doctorName: null, // No doctor assigned at appointment reschedule
       });
     } catch (notificationError) {
-      console.error('Failed to create reschedule notification:', notificationError);
+      console.error(
+        'Failed to create reschedule notification:',
+        notificationError
+      );
       // Don't fail reschedule if notification fails
     }
 
@@ -581,7 +623,7 @@ export const rescheduleAppointment = async (req, res, next) => {
 /**
  * Cancel an appointment
  * PATCH /api/appointments/:id/cancel
- * 
+ *
  * Only the patient who owns the appointment can cancel it.
  * Only BOOKED appointments can be cancelled.
  */
@@ -673,7 +715,10 @@ export const cancelAppointment = async (req, res, next) => {
         departmentName: appointment.department.name,
       });
     } catch (notificationError) {
-      console.error('Failed to create cancellation notification:', notificationError);
+      console.error(
+        'Failed to create cancellation notification:',
+        notificationError
+      );
       // Don't fail cancellation if notification fails
     }
 

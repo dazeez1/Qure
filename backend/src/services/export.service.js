@@ -49,7 +49,8 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
   startDate.setHours(0, 0, 0, 0);
 
   // Fetch all data in parallel
-  const [dashboard, dailyTrends, peakHours, queueEntries, feedbacks] = await Promise.all([
+  const [dashboard, dailyTrends, peakHours, queueEntries, feedbackRows] =
+    await Promise.all([
     getDashboardOverview({ hospitalId }),
     getDailyTrends({ hospitalId, days }),
     getPeakHours({ hospitalId, days }),
@@ -100,7 +101,7 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
         checkInTime: 'desc',
       },
     }),
-    // Fetch feedback within date range
+    // Feedback without appointment join (avoids Prisma 500 if appointment was deleted in DB)
     prisma.feedback.findMany({
       where: {
         hospitalId,
@@ -109,7 +110,12 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
           lte: today,
         },
       },
-      include: {
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        appointmentId: true,
         patient: {
           select: {
             fullName: true,
@@ -121,22 +127,37 @@ export async function generateHospitalExport({ hospitalId, days = 7 }) {
             lastName: true,
           },
         },
-        appointment: {
-          select: {
-            appointmentDate: true,
-            department: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
       },
       orderBy: {
-        createdAt: 'asc', // Chronological sorting
+        createdAt: 'asc',
       },
     }),
   ]);
+
+  const feedbackAppointmentIds = [
+    ...new Set(feedbackRows.map((f) => f.appointmentId)),
+  ];
+  const feedbackAppointments = feedbackAppointmentIds.length
+    ? await prisma.appointment.findMany({
+        where: { id: { in: feedbackAppointmentIds } },
+        select: {
+          id: true,
+          appointmentDate: true,
+          department: {
+            select: { name: true },
+          },
+        },
+      })
+    : [];
+  const feedbackAppointmentById = new Map(
+    feedbackAppointments.map((a) => [a.id, a]),
+  );
+  const feedbacks = feedbackRows
+    .filter((f) => feedbackAppointmentById.has(f.appointmentId))
+    .map((f) => ({
+      ...f,
+      appointment: feedbackAppointmentById.get(f.appointmentId),
+    }));
 
   // Build CSV string
   const csvLines = [];

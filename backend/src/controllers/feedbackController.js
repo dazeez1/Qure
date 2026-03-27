@@ -203,56 +203,70 @@ export const getHospitalFeedback = async (req, res, next) => {
       });
     }
 
-    // Get recent feedback for the hospital
-    // Order by createdAt descending, limit to 50 most recent
+    // Load feedback without joining appointment. If appointments were removed
+    // directly in MongoDB (bypassing Prisma), orphan feedback rows still exist;
+    // Prisma would throw "appointment is required... got null" on include.
     const feedbacks = await prisma.feedback.findMany({
       where: {
         hospitalId: hospitalId,
       },
-      include: {
+      select: {
+        id: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        appointmentId: true,
         patient: {
           select: {
             fullName: true,
-            // Do NOT include email, phone, or other private data
           },
         },
         doctor: {
           select: {
             firstName: true,
             lastName: true,
-            // Do NOT include email, phone, or other private data
-          },
-        },
-        appointment: {
-          select: {
-            appointmentDate: true,
-            department: {
-              select: {
-                name: true,
-              },
-            },
           },
         },
       },
       orderBy: {
         createdAt: 'desc',
       },
-      take: 50, // Limit to 50 most recent feedbacks
+      take: 50,
     });
 
-    // Format response data (only include public fields)
-    const formattedFeedbacks = feedbacks.map((feedback) => ({
-      id: feedback.id,
-      rating: feedback.rating,
-      comment: feedback.comment,
-      patientName: feedback.patient.fullName,
-      doctorName: feedback.doctor
-        ? `${feedback.doctor.firstName} ${feedback.doctor.lastName}`
-        : null,
-      departmentName: feedback.appointment.department.name,
-      date: feedback.appointment.appointmentDate,
-      createdAt: feedback.createdAt,
-    }));
+    const appointmentIds = [...new Set(feedbacks.map((f) => f.appointmentId))];
+    const appointments = appointmentIds.length
+      ? await prisma.appointment.findMany({
+          where: { id: { in: appointmentIds } },
+          select: {
+            id: true,
+            appointmentDate: true,
+            department: {
+              select: { name: true },
+            },
+          },
+        })
+      : [];
+    const appointmentById = new Map(appointments.map((a) => [a.id, a]));
+
+    // Skip orphan feedback (appointment deleted outside Prisma / bad data)
+    const formattedFeedbacks = feedbacks
+      .filter((f) => appointmentById.has(f.appointmentId))
+      .map((feedback) => {
+        const appt = appointmentById.get(feedback.appointmentId);
+        return {
+          id: feedback.id,
+          rating: feedback.rating,
+          comment: feedback.comment,
+          patientName: feedback.patient.fullName,
+          doctorName: feedback.doctor
+            ? `${feedback.doctor.firstName} ${feedback.doctor.lastName}`
+            : null,
+          departmentName: appt.department?.name ?? null,
+          date: appt.appointmentDate,
+          createdAt: feedback.createdAt,
+        };
+      });
 
     res.status(200).json({
       success: true,
