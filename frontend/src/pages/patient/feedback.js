@@ -12,6 +12,8 @@ import { displayAvatar } from '../../utils/avatar.js';
 
 let selectedRating = 0;
 let currentHospitalId = null;
+/** Set from loaded appointments so the public feedback API can retry if dashboard id fails (e.g. env mismatch). */
+let carouselHospitalFallbackId = null;
 
 /**
  * Resolve hospital for feedback (aligned with mobile app):
@@ -74,6 +76,18 @@ function dedupeAppointmentsById(appointments) {
     seen.add(apt.id);
     return true;
   });
+}
+
+/**
+ * Scheduled slot still in the future — should not appear as a “completed” choice
+ * (avoids bad data / timezone confusion vs today’s date).
+ */
+function isFutureAppointmentSlot(iso) {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) {
+    return false;
+  }
+  return t > Date.now();
 }
 
 /**
@@ -198,8 +212,9 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    let url =
-      '/patient/appointments?status=COMPLETED&page=1&limit=50';
+    carouselHospitalFallbackId = null;
+
+    let url = '/patient/appointments?status=COMPLETED&page=1&limit=50';
     if (currentHospitalId) {
       url += `&hospitalId=${encodeURIComponent(currentHospitalId)}`;
     }
@@ -213,6 +228,14 @@ async function loadCompletedAppointments() {
     const appointmentsResult = await appointmentsResponse.json();
     let appointments = appointmentsResult.data?.appointments || [];
     appointments = dedupeAppointmentsById(appointments);
+
+    for (const apt of appointments) {
+      const hid = apt.hospital?.id;
+      if (hid) {
+        carouselHospitalFallbackId = hid;
+        break;
+      }
+    }
 
     const select = document.getElementById('appointment-select');
     if (!select) return;
@@ -230,7 +253,10 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    let filteredAppointments = appointments.filter(apt => !apt.hasFeedback);
+    let filteredAppointments = appointments.filter(
+      apt =>
+        !apt.hasFeedback && !isFutureAppointmentSlot(apt.appointmentDate)
+    );
     filteredAppointments.sort(
       (a, b) =>
         new Date(b.appointmentDate).getTime() -
@@ -259,44 +285,60 @@ async function loadCompletedAppointments() {
 }
 
 /**
- * Load hospital feedback (public carousel). Requires currentHospitalId from
- * resolveFeedbackHospitalId — same as mobile when context exists.
+ * Load hospital feedback (public carousel).
+ * Tries dashboard/booking hospital id first, then first hospital from completed
+ * list (aligns with mobile when the primary id 404s or mismatches production).
  */
 async function loadHospitalFeedback() {
-  try {
-    if (!currentHospitalId) {
-      const container = document.getElementById('feedback-carousel-container');
-      if (container) {
-        container.innerHTML =
-          '<div class="empty-state">Unable to determine hospital</div>';
-      }
-      const controls = document.getElementById('carousel-controls');
-      if (controls) {
-        controls.style.display = 'none';
-      }
-      return;
-    }
+  const container = document.getElementById('feedback-carousel-container');
+  const controls = document.getElementById('carousel-controls');
 
-    const response = await apiGet(`/feedback/hospital/${currentHospitalId}`);
-    if (!response.ok) {
-      throw new Error('Failed to load feedback');
-    }
+  const candidateIds = [
+    ...new Set(
+      [currentHospitalId, carouselHospitalFallbackId].filter(Boolean)
+    ),
+  ];
 
-    const result = await response.json();
-    const feedbacks = result.data || [];
-
-    renderFeedbackCarousel(feedbacks);
-  } catch (error) {
-    console.error('Error loading feedback:', error);
-    const container = document.getElementById('feedback-carousel-container');
+  if (candidateIds.length === 0) {
     if (container) {
       container.innerHTML =
-        '<div class="empty-state">Failed to load feedback</div>';
+        '<div class="empty-state">Unable to determine hospital for community feedback.</div>';
     }
-    const controls = document.getElementById('carousel-controls');
     if (controls) {
       controls.style.display = 'none';
     }
+    return;
+  }
+
+  let lastStatus = null;
+  for (const hid of candidateIds) {
+    try {
+      const response = await apiGet(
+        `/feedback/hospital/${encodeURIComponent(hid)}`
+      );
+      lastStatus = response.status;
+      if (!response.ok) {
+        continue;
+      }
+      const result = await response.json();
+      const feedbacks = result.data || [];
+      renderFeedbackCarousel(feedbacks);
+      return;
+    } catch (e) {
+      console.warn('loadHospitalFeedback attempt failed for hospital', hid, e);
+    }
+  }
+
+  console.error(
+    'loadHospitalFeedback: all attempts failed, last HTTP status',
+    lastStatus
+  );
+  if (container) {
+    container.innerHTML =
+      '<div class="empty-state">Failed to load feedback</div>';
+  }
+  if (controls) {
+    controls.style.display = 'none';
   }
 }
 
