@@ -14,6 +14,89 @@ let selectedRating = 0;
 let currentHospitalId = null;
 
 /**
+ * Resolve hospital for feedback (aligned with mobile app):
+ * dashboard queue → upcoming appointments → single-hospital BOOKED list.
+ * @returns {Promise<string|null>}
+ */
+async function resolveFeedbackHospitalId() {
+  try {
+    const dashRes = await apiGet('/patient/dashboard');
+    if (dashRes.ok) {
+      const body = await dashRes.json();
+      const data = body.data || {};
+      const q = data.currentQueue;
+      if (q && q.hospitalId) {
+        return q.hospitalId;
+      }
+      const upcoming = data.upcomingAppointments || [];
+      for (const a of upcoming) {
+        const hid = a.hospital?.id;
+        if (hid) {
+          return hid;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('resolveFeedbackHospitalId dashboard:', e);
+  }
+
+  try {
+    const bookRes = await apiGet('/patient/appointments?page=1&limit=40');
+    if (!bookRes.ok) {
+      return null;
+    }
+    const body = await bookRes.json();
+    const list = body.data?.appointments || [];
+    const ids = new Set();
+    for (const apt of list) {
+      const hid = apt.hospital?.id || apt.hospitalId;
+      if (hid) {
+        ids.add(hid);
+      }
+    }
+    if (ids.size === 1) {
+      return [...ids][0];
+    }
+  } catch (e) {
+    console.warn('resolveFeedbackHospitalId bookings:', e);
+  }
+
+  return null;
+}
+
+/** @param {Array<{ id: string }>} appointments */
+function dedupeAppointmentsById(appointments) {
+  const seen = new Set();
+  return appointments.filter(apt => {
+    if (!apt.id || seen.has(apt.id)) {
+      return false;
+    }
+    seen.add(apt.id);
+    return true;
+  });
+}
+
+/**
+ * @param {object} apt
+ * @returns {string}
+ */
+function formatAppointmentOptionLabel(apt) {
+  const date = new Date(apt.appointmentDate);
+  const dateStr = date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const timeStr = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  const departmentName = apt.department?.name || 'Visit';
+  return `${dateStr} · ${timeStr} · ${departmentName}`;
+}
+
+/**
  * Initialize mobile navigation
  */
 function initMobileNav() {
@@ -106,7 +189,8 @@ function initStarRating() {
 }
 
 /**
- * Load completed appointments for dropdown (excluding those with existing feedback)
+ * Load completed appointments for dropdown (excluding those with existing feedback).
+ * Uses optional hospitalId + limit=50 to match the mobile app.
  */
 async function loadCompletedAppointments() {
   try {
@@ -114,17 +198,21 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    // Get completed appointments (backend already marks which have feedback)
-    const appointmentsResponse = await apiGet(
-      '/patient/appointments?status=COMPLETED'
-    );
+    let url =
+      '/patient/appointments?status=COMPLETED&page=1&limit=50';
+    if (currentHospitalId) {
+      url += `&hospitalId=${encodeURIComponent(currentHospitalId)}`;
+    }
+
+    const appointmentsResponse = await apiGet(url);
 
     if (!appointmentsResponse.ok) {
       throw new Error('Failed to load appointments');
     }
 
     const appointmentsResult = await appointmentsResponse.json();
-    const appointments = appointmentsResult.data?.appointments || [];
+    let appointments = appointmentsResult.data?.appointments || [];
+    appointments = dedupeAppointmentsById(appointments);
 
     const select = document.getElementById('appointment-select');
     if (!select) return;
@@ -142,13 +230,12 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    // Get hospitalId from first appointment for feedback loading
-    if (appointments.length > 0 && appointments[0].hospital?.id) {
-      currentHospitalId = appointments[0].hospital.id;
-    }
-
-    // Filter out appointments that already have feedback
-    const filteredAppointments = appointments.filter(apt => !apt.hasFeedback);
+    let filteredAppointments = appointments.filter(apt => !apt.hasFeedback);
+    filteredAppointments.sort(
+      (a, b) =>
+        new Date(b.appointmentDate).getTime() -
+        new Date(a.appointmentDate).getTime()
+    );
 
     if (filteredAppointments.length === 0) {
       const option = document.createElement('option');
@@ -159,20 +246,10 @@ async function loadCompletedAppointments() {
       return;
     }
 
-    // Populate dropdown with only appointments without feedback
     filteredAppointments.forEach(apt => {
       const option = document.createElement('option');
       option.value = apt.id;
-
-      const date = new Date(apt.appointmentDate);
-      const dateStr = date.toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      });
-      const departmentName = apt.department?.name || 'Department';
-
-      option.textContent = `${dateStr} - ${departmentName}`;
+      option.textContent = formatAppointmentOptionLabel(apt);
       select.appendChild(option);
     });
   } catch (error) {
@@ -182,53 +259,11 @@ async function loadCompletedAppointments() {
 }
 
 /**
- * Filter out appointments that already have feedback
- */
-function filterAppointmentsWithFeedback(appointmentIdsWithFeedback) {
-  const select = document.getElementById('appointment-select');
-  if (!select || !window.availableAppointments) return;
-
-  // Remove options for appointments that have feedback
-  Array.from(select.options).forEach(option => {
-    if (option.value && appointmentIdsWithFeedback.has(option.value)) {
-      option.remove();
-    }
-  });
-
-  // If no options left (except the first placeholder), show message
-  if (select.options.length === 1) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = 'All completed appointments have feedback';
-    option.disabled = true;
-    select.appendChild(option);
-  }
-}
-
-/**
- * Load hospital feedback
+ * Load hospital feedback (public carousel). Requires currentHospitalId from
+ * resolveFeedbackHospitalId — same as mobile when context exists.
  */
 async function loadHospitalFeedback() {
   try {
-    // Get hospitalId from user's appointments or URL
-    if (!currentHospitalId) {
-      // Try to get from dashboard
-      if (isAuthenticated()) {
-        const response = await apiGet('/patient/dashboard');
-        if (response.ok) {
-          const result = await response.json();
-          const currentQueue = result.data?.currentQueue;
-          const appointments = result.data?.upcomingAppointments || [];
-
-          if (currentQueue && currentQueue.hospitalId) {
-            currentHospitalId = currentQueue.hospitalId;
-          } else if (appointments.length > 0 && appointments[0].hospital?.id) {
-            currentHospitalId = appointments[0].hospital.id;
-          }
-        }
-      }
-    }
-
     if (!currentHospitalId) {
       const container = document.getElementById('feedback-carousel-container');
       if (container) {
@@ -551,7 +586,8 @@ async function initPage() {
     form.addEventListener('submit', handleSubmit);
   }
 
-  // Load data
+  currentHospitalId = await resolveFeedbackHospitalId();
+
   await loadCompletedAppointments();
   await loadHospitalFeedback();
 }
