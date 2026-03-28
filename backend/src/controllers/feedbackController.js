@@ -3,13 +3,13 @@ import prisma from '../config/database.js';
 /**
  * Create patient feedback
  * POST /api/patient/feedback
- * 
+ *
  * Body: {
  *   appointmentId: string (required)
  *   rating: number (required, 1-5)
  *   comment: string (optional)
  * }
- * 
+ *
  * Rules:
  * - Patient must be authenticated
  * - Appointment must exist and belong to patient
@@ -54,93 +54,100 @@ export const createPatientFeedback = async (req, res, next) => {
 
     // Wrap in transaction (extend timeout for hosted DB latency)
     const result = await prisma.$transaction(
-      async (tx) => {
-      // Find appointment and verify ownership
-      const appointment = await tx.appointment.findUnique({
-        where: { id: appointmentId },
-        include: {
-          patient: {
-            select: {
-              id: true,
+      async tx => {
+        // Find appointment and verify ownership
+        const appointment = await tx.appointment.findUnique({
+          where: { id: appointmentId },
+          include: {
+            patient: {
+              select: {
+                id: true,
+              },
+            },
+            queueEntry: {
+              select: {
+                assignedDoctorId: true,
+              },
             },
           },
-          queueEntry: {
-            select: {
-              assignedDoctorId: true,
+        });
+
+        if (!appointment) {
+          throw new Error('Appointment not found.');
+        }
+
+        // Verify patient owns the appointment
+        if (appointment.patientId !== patient.id) {
+          throw new Error(
+            'You do not have permission to provide feedback for this appointment.'
+          );
+        }
+
+        // Verify appointment status is COMPLETED
+        if (appointment.status !== 'COMPLETED') {
+          throw new Error(
+            `Cannot provide feedback for appointment with status: ${appointment.status}. Only COMPLETED appointments can receive feedback.`
+          );
+        }
+
+        // Check for existing feedback (prevent duplicate)
+        const existingFeedback = await tx.feedback.findUnique({
+          where: {
+            patientId_appointmentId: {
+              patientId: patient.id,
+              appointmentId: appointmentId,
             },
           },
-        },
-      });
+        });
 
-      if (!appointment) {
-        throw new Error('Appointment not found.');
-      }
+        if (existingFeedback) {
+          throw new Error(
+            'You have already provided feedback for this appointment.'
+          );
+        }
 
-      // Verify patient owns the appointment
-      if (appointment.patientId !== patient.id) {
-        throw new Error('You do not have permission to provide feedback for this appointment.');
-      }
+        // Get doctorId from queue entry if available
+        const doctorId = appointment.queueEntry?.assignedDoctorId || null;
 
-      // Verify appointment status is COMPLETED
-      if (appointment.status !== 'COMPLETED') {
-        throw new Error(`Cannot provide feedback for appointment with status: ${appointment.status}. Only COMPLETED appointments can receive feedback.`);
-      }
-
-      // Check for existing feedback (prevent duplicate)
-      const existingFeedback = await tx.feedback.findUnique({
-        where: {
-          patientId_appointmentId: {
+        // Create feedback
+        const feedback = await tx.feedback.create({
+          data: {
+            rating,
+            comment: comment?.trim() || null,
             patientId: patient.id,
             appointmentId: appointmentId,
+            doctorId: doctorId,
+            hospitalId: appointment.hospitalId,
           },
-        },
-      });
-
-      if (existingFeedback) {
-        throw new Error('You have already provided feedback for this appointment.');
-      }
-
-      // Get doctorId from queue entry if available
-      const doctorId = appointment.queueEntry?.assignedDoctorId || null;
-
-      // Create feedback
-      const feedback = await tx.feedback.create({
-        data: {
-          rating,
-          comment: comment?.trim() || null,
-          patientId: patient.id,
-          appointmentId: appointmentId,
-          doctorId: doctorId,
-          hospitalId: appointment.hospitalId,
-        },
-        include: {
-          patient: {
-            select: {
-              fullName: true,
+          include: {
+            patient: {
+              select: {
+                fullName: true,
+              },
             },
-          },
-          doctor: {
-            select: {
-              firstName: true,
-              lastName: true,
+            doctor: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
             },
-          },
-          appointment: {
-            select: {
-              appointmentDate: true,
-              department: {
-                select: {
-                  name: true,
+            appointment: {
+              select: {
+                appointmentDate: true,
+                department: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
           },
-        },
-      });
+        });
 
-      return feedback;
-    },
-    { timeout: 15000 });
+        return feedback;
+      },
+      { timeout: 15000 }
+    );
 
     res.status(201).json({
       success: true,
@@ -170,7 +177,7 @@ export const createPatientFeedback = async (req, res, next) => {
 /**
  * Get hospital feedback (public)
  * GET /api/feedback/hospital/:hospitalId
- * 
+ *
  * Returns recent feedback for display
  * Only includes: rating, comment, patient name, doctor name, date
  * Does NOT expose private data (email, phone, etc.)
@@ -234,7 +241,7 @@ export const getHospitalFeedback = async (req, res, next) => {
       take: 50,
     });
 
-    const appointmentIds = [...new Set(feedbacks.map((f) => f.appointmentId))];
+    const appointmentIds = [...new Set(feedbacks.map(f => f.appointmentId))];
     const appointments = appointmentIds.length
       ? await prisma.appointment.findMany({
           where: { id: { in: appointmentIds } },
@@ -247,12 +254,12 @@ export const getHospitalFeedback = async (req, res, next) => {
           },
         })
       : [];
-    const appointmentById = new Map(appointments.map((a) => [a.id, a]));
+    const appointmentById = new Map(appointments.map(a => [a.id, a]));
 
     // Skip orphan feedback (appointment deleted outside Prisma / bad data)
     const formattedFeedbacks = feedbacks
-      .filter((f) => appointmentById.has(f.appointmentId))
-      .map((feedback) => {
+      .filter(f => appointmentById.has(f.appointmentId))
+      .map(feedback => {
         const appt = appointmentById.get(feedback.appointmentId);
         return {
           id: feedback.id,

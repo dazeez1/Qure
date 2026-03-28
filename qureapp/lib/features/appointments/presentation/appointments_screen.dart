@@ -17,6 +17,9 @@ const Color _kNavyButton = Color(0xFF0B2E7A);
 const Color _kCancelBrown = Color(0xFF9A3412);
 const Color _kTitle = Color(0xFF111827);
 
+/// Server filter for upcoming (active) bookings only.
+const String _kUpcomingBookingsStatus = 'BOOKED';
+
 class AppointmentsScreen extends ConsumerStatefulWidget {
   const AppointmentsScreen({super.key});
 
@@ -25,10 +28,8 @@ class AppointmentsScreen extends ConsumerStatefulWidget {
 }
 
 class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
-  String? _selectedStatus;
-
   void _invalidateAppointmentCaches() {
-    ref.invalidate(patientAppointmentsProvider(_selectedStatus));
+    ref.invalidate(patientAppointmentsProvider(_kUpcomingBookingsStatus));
     ref.invalidate(patientFeedbackAppointmentCandidatesProvider);
   }
 
@@ -45,7 +46,7 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
                 padding: EdgeInsets.symmetric(vertical: 32),
                 child: Center(
                   child: Text(
-                    'No appointments found.',
+                    'No upcoming appointments.',
                     style: TextStyle(color: _kTitle, fontSize: 15),
                   ),
                 ),
@@ -57,40 +58,40 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
             sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final appointment = data.appointments[index];
-                  final isLast = index == data.appointments.length - 1;
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
-                    child: _BookingCard(
-                      appointment: appointment,
-                      onLeaveFeedback:
-                          appointment.status == 'COMPLETED' && !appointment.hasFeedback
-                              ? () => _openFeedback(context, appointment.id)
-                              : null,
-                      onReschedule: appointment.status == 'BOOKED'
-                          ? () => reschedulePatientAppointment(
-                                context,
-                                ref,
-                                appointmentId: appointment.id,
-                                currentAppointmentDate: appointment.appointmentDate,
-                                invalidateAppointmentCaches: _invalidateAppointmentCaches,
-                              )
-                          : null,
-                      onCancel: appointment.status == 'BOOKED'
-                          ? () => confirmAndCancelPatientAppointment(
-                                context,
-                                ref,
-                                appointmentId: appointment.id,
-                                invalidateAppointmentCaches: _invalidateAppointmentCaches,
-                              )
-                          : null,
-                    ),
-                  );
-                },
-                childCount: data.appointments.length,
-              ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final appointment = data.appointments[index];
+                final isLast = index == data.appointments.length - 1;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
+                  child: _BookingCard(
+                    appointment: appointment,
+                    onLeaveFeedback:
+                        appointment.status == 'COMPLETED' &&
+                            !appointment.hasFeedback
+                        ? () => _openFeedback(context, appointment.id)
+                        : null,
+                    onReschedule: appointment.status == 'BOOKED'
+                        ? () => reschedulePatientAppointment(
+                            context,
+                            ref,
+                            appointmentId: appointment.id,
+                            currentAppointmentDate: appointment.appointmentDate,
+                            invalidateAppointmentCaches:
+                                _invalidateAppointmentCaches,
+                          )
+                        : null,
+                    onCancel: appointment.status == 'BOOKED'
+                        ? () => confirmAndCancelPatientAppointment(
+                            context,
+                            ref,
+                            appointmentId: appointment.id,
+                            invalidateAppointmentCaches:
+                                _invalidateAppointmentCaches,
+                          )
+                        : null,
+                  ),
+                );
+              }, childCount: data.appointments.length),
             ),
           ),
         ];
@@ -117,7 +118,10 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final page = ref.watch(patientAppointmentsProvider(_selectedStatus));
+    final page = ref.watch(
+      patientAppointmentsProvider(_kUpcomingBookingsStatus),
+    );
+    final bottomComfort = MediaQuery.paddingOf(context).bottom + 40;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -148,7 +152,7 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
                     ),
                     IconButton(
                       onPressed: () => ref.invalidate(
-                        patientAppointmentsProvider(_selectedStatus),
+                        patientAppointmentsProvider(_kUpcomingBookingsStatus),
                       ),
                       icon: const Icon(Icons.refresh),
                       tooltip: 'Refresh',
@@ -157,41 +161,10 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
                 ),
               ),
             ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _StatusChip(
-                        label: 'Upcoming',
-                        selected:
-                            _selectedStatus == null || _selectedStatus == 'BOOKED',
-                        onSelected: () => setState(() => _selectedStatus = null),
-                      ),
-                      const SizedBox(width: 8),
-                      _StatusChip(
-                        label: 'Completed',
-                        selected: _selectedStatus == 'COMPLETED',
-                        onSelected: () =>
-                            setState(() => _selectedStatus = 'COMPLETED'),
-                      ),
-                      const SizedBox(width: 8),
-                      _StatusChip(
-                        label: 'Cancelled',
-                        selected: _selectedStatus == 'CANCELLED',
-                        onSelected: () =>
-                            setState(() => _selectedStatus = 'CANCELLED'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
             ..._bookingContentSlivers(context, page),
             const SliverToBoxAdapter(child: PatientLegalFooter()),
+            SliverToBoxAdapter(child: SizedBox(height: bottomComfort)),
           ],
         ),
       ),
@@ -217,7 +190,9 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: commentController,
-              decoration: const InputDecoration(labelText: 'Comment (optional)'),
+              decoration: const InputDecoration(
+                labelText: 'Comment (optional)',
+              ),
               maxLines: 3,
             ),
           ],
@@ -244,12 +219,17 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
       if (!context.mounted) {
         return;
       }
-      await AppToast.showError(context, message: 'Enter a rating between 1 and 5.');
+      await AppToast.showError(
+        context,
+        message: 'Enter a rating between 1 and 5.',
+      );
       return;
     }
 
     try {
-      await ref.read(patientFeedbackApiProvider).submitFeedback(
+      await ref
+          .read(patientFeedbackApiProvider)
+          .submitFeedback(
             appointmentId: appointmentId,
             rating: rating,
             comment: commentController.text.trim().isEmpty
@@ -260,44 +240,13 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
         return;
       }
       await AppToast.showSuccess(context, message: 'Feedback submitted.');
-      ref.invalidate(patientAppointmentsProvider(_selectedStatus));
+      ref.invalidate(patientAppointmentsProvider(_kUpcomingBookingsStatus));
     } catch (e) {
       if (!context.mounted) {
         return;
       }
       await AppToast.showError(context, message: e.toString());
     }
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      showCheckmark: false,
-      selectedColor: _kCardBlue,
-      checkmarkColor: _kNavyButton,
-      labelStyle: TextStyle(
-        color: selected ? _kNavyButton : _kTitle,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-        fontSize: 13.5,
-      ),
-      side: BorderSide(color: selected ? _kNavyButton : Colors.grey.shade400),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-    );
   }
 }
 
@@ -335,15 +284,9 @@ class _BookingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _CenteredFieldBlock(
-            label: 'Date & Time',
-            value: dateLine,
-          ),
+          _CenteredFieldBlock(label: 'Date & Time', value: dateLine),
           const SizedBox(height: 16),
-          _CenteredFieldBlock(
-            label: 'Department',
-            value: dept,
-          ),
+          _CenteredFieldBlock(label: 'Department', value: dept),
           if (onReschedule != null || onCancel != null) ...[
             const SizedBox(height: 18),
             const Text(
@@ -416,10 +359,7 @@ class _BookingCard extends StatelessWidget {
 }
 
 class _CenteredFieldBlock extends StatelessWidget {
-  const _CenteredFieldBlock({
-    required this.label,
-    required this.value,
-  });
+  const _CenteredFieldBlock({required this.label, required this.value});
 
   final String label;
   final String value;

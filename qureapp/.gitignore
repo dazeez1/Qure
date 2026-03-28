@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local venv for tools/generate_launcher_foreground.py
+.venv-tools/
+
 # Symbolication related
 app.*.symbols
 

@@ -193,9 +193,7 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
       }
       ref.invalidate(patientDashboardProvider);
       ref.invalidate(_bookingProfileProvider);
-      ref.invalidate(patientAppointmentsProvider(null));
-      ref.invalidate(patientAppointmentsProvider('COMPLETED'));
-      ref.invalidate(patientAppointmentsProvider('CANCELLED'));
+      ref.invalidate(patientAppointmentsProvider('BOOKED'));
       context.pop();
     } on ApiException catch (e) {
       if (!mounted) {

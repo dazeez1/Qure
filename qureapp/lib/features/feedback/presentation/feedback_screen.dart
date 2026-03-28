@@ -72,7 +72,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
 
     setState(() => _submitting = true);
     try {
-      await ref.read(patientFeedbackApiProvider).submitFeedback(
+      await ref
+          .read(patientFeedbackApiProvider)
+          .submitFeedback(
             appointmentId: _appointmentId!,
             rating: _rating,
             comment: _commentController.text.trim().isEmpty
@@ -107,14 +109,18 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     }
   }
 
-  List<PatientAppointment> _eligibleFeedbackAppointments(AppointmentListPage page) {
+  List<PatientAppointment> _eligibleFeedbackAppointments(
+    AppointmentListPage page,
+  ) {
     final raw = page.appointments.where((a) => !a.hasFeedback).toList();
     final unique = uniqueAppointmentsById(raw);
     unique.sort((a, b) => b.appointmentDate.compareTo(a.appointmentDate));
     return unique;
   }
 
-  void _clearInvalidAppointmentSelectionIfNeeded(List<PatientAppointment> open) {
+  void _clearInvalidAppointmentSelectionIfNeeded(
+    List<PatientAppointment> open,
+  ) {
     if (_appointmentId == null) {
       return;
     }
@@ -149,7 +155,10 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
           decoration: InputDecoration(
             border: border,
             enabledBorder: border,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 4,
+            ),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
@@ -185,7 +194,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     );
   }
 
-  Widget _buildPublicReviewsCarousel(AsyncValue<List<PublicFeedbackItem>> reviews) {
+  Widget _buildPublicReviewsCarousel(
+    AsyncValue<List<PublicFeedbackItem>> reviews,
+  ) {
     return reviews.when(
       data: (list) {
         if (list.isEmpty) {
@@ -301,14 +312,17 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                               minWidth: 40,
                               minHeight: 40,
                             ),
-                            onPressed:
-                                _submitting ? null : () => setState(() => _rating = n),
+                            onPressed: _submitting
+                                ? null
+                                : () => setState(() => _rating = n),
                             icon: Icon(
                               filled
                                   ? Icons.star_rounded
                                   : Icons.star_outline_rounded,
                               size: 32,
-                              color: filled ? Colors.amber.shade700 : FeedbackUi.muted,
+                              color: filled
+                                  ? Colors.amber.shade700
+                                  : FeedbackUi.muted,
                             ),
                           );
                         }),
@@ -327,7 +341,9 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
                         controller: _commentController,
                         maxLines: 4,
                         enabled: !_submitting,
-                        decoration: _fieldDecoration(hint: 'Share your experience…'),
+                        decoration: _fieldDecoration(
+                          hint: 'Share your experience…',
+                        ),
                       ),
                       const SizedBox(height: 16),
                       const Text(
