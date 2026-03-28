@@ -3,7 +3,7 @@ import { getCache, setCache } from '../utils/cache.js';
 import {
   getPositionByIndexForDepartment,
   getActiveDoctorsCount,
-  getConsultationTimeForDepartment,
+  getConsultationTimeMapForDepartments,
   calculateQueueWaitTime,
 } from './waitTime.service.js';
 
@@ -303,14 +303,20 @@ export async function getDashboardOverview({ hospitalId, departmentId, search })
       entriesByDept.get(key).push(e);
     });
 
+    const departmentIds = [...entriesByDept.values()]
+      .map((entries) => entries[0]?.departmentId)
+      .filter(Boolean);
+    const consultationByDept = await getConsultationTimeMapForDepartments(departmentIds);
+
     const waitTimes = [];
     for (const [, entries] of entriesByDept) {
       const first = entries[0];
-      const [positionMap, activeDoctorsCount, consultationTime] = await Promise.all([
+      const [positionMap, activeDoctorsCount] = await Promise.all([
         getPositionByIndexForDepartment(first.hospitalId, first.departmentId),
         getActiveDoctorsCount(first.hospitalId, first.departmentId),
-        getConsultationTimeForDepartment(first.departmentId),
       ]);
+      const consultationTime =
+        consultationByDept.get(first.departmentId) ?? 15;
 
       const effectiveDoctors = Math.max(1, activeDoctorsCount);
       for (const entry of entries) {

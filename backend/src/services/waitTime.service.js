@@ -156,15 +156,44 @@ export async function getActiveDoctorsCount(hospitalId, departmentId, tx = prism
  * @param {import('@prisma/client').PrismaClient} [tx=prisma]
  * @returns {Promise<{ waitMins: number|null, position: number, waitTimeDisplay: string }>}
  */
-export async function getWaitTimeForEntry(entry, tx = prisma) {
-  const { hospitalId, departmentId, sequenceNumber, status } = entry;
-  const currentServingSequence = await getCurrentServingSequence(hospitalId, departmentId, tx);
+/**
+ * Parallel fetch of all inputs needed for wait-time calculation for one department.
+ * Prefer this over sequential getWaitTimeForEntry calls when handling multiple entries
+ * in the same department (avoids redundant queries).
+ */
+export async function getWaitTimeBundleForDepartment(hospitalId, departmentId, tx = prisma) {
+  const client = tx || prisma;
+  const [currentServingSequence, activeDoctorsCount, consultationTime] = await Promise.all([
+    getCurrentServingSequence(hospitalId, departmentId, client),
+    getActiveDoctorsCount(hospitalId, departmentId, client),
+    getConsultationTimeForDepartment(departmentId, client),
+  ]);
+  return { currentServingSequence, activeDoctorsCount, consultationTime };
+}
+
+/**
+ * Pure wait-time result from a pre-fetched department bundle (same math as getWaitTimeForEntry).
+ */
+export function computeWaitForEntryFromBundle(entry, bundle) {
+  const { sequenceNumber, status } = entry;
+  const { currentServingSequence, activeDoctorsCount, consultationTime } = bundle;
   const position = Math.max(0, sequenceNumber - currentServingSequence);
-  const activeDoctors = await getActiveDoctorsCount(hospitalId, departmentId, tx);
-  const consultationTime = await getConsultationTimeForDepartment(departmentId);
-  const waitMins = calculateQueueWaitTime({ position, activeDoctors, consultationTime });
+  const waitMins = calculateQueueWaitTime({
+    position,
+    activeDoctors: activeDoctorsCount,
+    consultationTime,
+  });
   const waitTimeDisplay = formatWaitTimeDisplay(waitMins, status);
   return { waitMins: waitMins ?? null, position, waitTimeDisplay };
+}
+
+export async function getWaitTimeForEntry(entry, tx = prisma) {
+  const bundle = await getWaitTimeBundleForDepartment(
+    entry.hospitalId,
+    entry.departmentId,
+    tx
+  );
+  return computeWaitForEntryFromBundle(entry, bundle);
 }
 
 /**
@@ -262,9 +291,10 @@ export async function updateDepartmentAvgConsultationTime(departmentId) {
  * @param {string} departmentId - Department ID
  * @returns {Promise<number>} Consultation time in minutes
  */
-export async function getConsultationTimeForDepartment(departmentId) {
+export async function getConsultationTimeForDepartment(departmentId, tx = prisma) {
+  const client = tx || prisma;
   try {
-    const department = await prisma.department.findUnique({
+    const department = await client.department.findUnique({
       where: { id: departmentId },
       select: {
         avgConsultationTimeMinutes: true,
@@ -284,6 +314,48 @@ export async function getConsultationTimeForDepartment(departmentId) {
     console.error('Error getting consultation time for department:', error);
     return DEFAULT_CONSULTATION_TIME;
   }
+}
+
+/**
+ * Batch-load consultation minutes for many departments (one query).
+ * Missing IDs default to DEFAULT_CONSULTATION_TIME.
+ * @param {string[]} departmentIds
+ * @param {import('@prisma/client').PrismaClient} [tx]
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function getConsultationTimeMapForDepartments(departmentIds, tx = prisma) {
+  const map = new Map();
+  const unique = [...new Set((departmentIds || []).filter(Boolean))];
+  if (unique.length === 0) {
+    return map;
+  }
+  const client = tx || prisma;
+  try {
+    const rows = await client.department.findMany({
+      where: { id: { in: unique } },
+      select: {
+        id: true,
+        avgConsultationTimeMinutes: true,
+        defaultConsultationTimeMinutes: true,
+      },
+    });
+    for (const d of rows) {
+      map.set(
+        d.id,
+        d.avgConsultationTimeMinutes ??
+          d.defaultConsultationTimeMinutes ??
+          DEFAULT_CONSULTATION_TIME
+      );
+    }
+  } catch (error) {
+    console.error('Error batch-loading consultation times:', error);
+  }
+  for (const id of unique) {
+    if (!map.has(id)) {
+      map.set(id, DEFAULT_CONSULTATION_TIME);
+    }
+  }
+  return map;
 }
 
 /**

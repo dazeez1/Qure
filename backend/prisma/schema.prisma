@@ -156,6 +156,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([hospitalId, departmentId, role])
+  @@index([hospitalId, role, isActive])
   @@map("users")
 }
 
@@ -274,6 +276,8 @@ model Appointment {
   feedbacks            Feedback[]
   patientNotifications PatientNotification[]
 
+  @@index([patientId, status])
+  @@index([patientId, appointmentDate])
   @@index([hospitalId, status])
   @@index([hospitalId, appointmentDate])
   @@index([departmentId, status])
@@ -305,6 +309,8 @@ model QueueEntry {
   updatedAt        DateTime      @updatedAt
 
   @@unique([hospitalId, departmentId, ticketNumber])
+  @@index([patientId, status])
+  @@index([patientId, checkInTime])
   @@index([hospitalId, status])
   @@index([hospitalId, departmentId, status])
   @@index([assignedDoctorId, status])
@@ -346,6 +352,7 @@ model Announcement {
 
   patientNotifications PatientNotification[]
 
+  @@index([hospitalId, isActive, audience])
   @@map("announcements")
 }
 

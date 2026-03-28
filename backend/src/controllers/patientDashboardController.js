@@ -1,4 +1,8 @@
 import prisma from '../config/database.js';
+import {
+  getWaitTimeBundleForDepartment,
+  computeWaitForEntryFromBundle,
+} from '../services/waitTime.service.js';
 
 /**
  * Get patient dashboard data
@@ -53,8 +57,6 @@ export const getPatientDashboard = async (req, res, next) => {
  */
 async function getCurrentQueue(patientId) {
   try {
-    const { getWaitTimeForEntry } = await import('../services/waitTime.service.js');
-
     const queueEntries = await prisma.queueEntry.findMany({
       where: {
         patientId,
@@ -77,18 +79,31 @@ async function getCurrentQueue(patientId) {
       return null;
     }
 
-    // Compute wait time for each entry and pick the one closest to finishing
-    const entriesWithWait = await Promise.all(
-      queueEntries.map(async (entry) => {
-        const { waitMins, position, waitTimeDisplay } = await getWaitTimeForEntry({
-          hospitalId: entry.hospitalId,
-          departmentId: entry.departmentId,
-          sequenceNumber: entry.sequenceNumber,
-          status: entry.status,
-        });
-        return { entry, waitMins, position, waitTimeDisplay };
+    // One bundle per distinct (hospital, department) — avoids N× redundant wait-time queries
+    const deptKeys = [
+      ...new Set(queueEntries.map((e) => `${e.hospitalId}::${e.departmentId}`)),
+    ];
+    const bundleByKey = new Map();
+    await Promise.all(
+      deptKeys.map(async (key) => {
+        const [hospitalId, departmentId] = key.split('::');
+        const bundle = await getWaitTimeBundleForDepartment(hospitalId, departmentId);
+        bundleByKey.set(key, bundle);
       })
     );
+
+    const entriesWithWait = queueEntries.map((entry) => {
+      const key = `${entry.hospitalId}::${entry.departmentId}`;
+      const bundle = bundleByKey.get(key);
+      const { waitMins, position, waitTimeDisplay } = computeWaitForEntryFromBundle(
+        {
+          sequenceNumber: entry.sequenceNumber,
+          status: entry.status,
+        },
+        bundle
+      );
+      return { entry, waitMins, position, waitTimeDisplay };
+    });
 
     // Sort by estimated wait ascending (closest to finishing first)
     entriesWithWait.sort((a, b) => {
@@ -123,6 +138,9 @@ async function getUpcomingAppointments(patientId) {
       where: {
         patientId,
         status: 'BOOKED', // Only BOOKED appointments
+        appointmentDate: {
+          gte: new Date(),
+        },
       },
       include: {
         hospital: {
