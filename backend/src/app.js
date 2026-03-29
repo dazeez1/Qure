@@ -32,24 +32,43 @@ const PORT = process.env.PORT || 5000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * Origins allowed for CORS + Socket.IO. Apex and www are distinct browser origins.
+ * FRONTEND_URL may be a single origin or comma-separated list.
+ */
+function buildAllowedOrigins() {
+  const fromFrontendUrl = (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const fromExtra = (process.env.CORS_EXTRA_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const list = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'https://qure-frontend.vercel.app',
+    'https://qurequeue.com',
+    'https://www.qurequeue.com',
+    ...fromFrontendUrl,
+    ...fromExtra,
+  ];
+  return [...new Set(list.filter(Boolean))];
+}
+
+const allowedBrowserOrigins = buildAllowedOrigins();
+const allowedOriginSet = new Set(allowedBrowserOrigins);
+
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    // List of allowed origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:5173',
-      'https://qure-frontend.vercel.app',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean); // Remove undefined values
-    
-    // Allow if origin is in allowed list or if in development
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+
+    if (allowedOriginSet.has(origin) || process.env.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -101,7 +120,9 @@ app.use(errorHandler);
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || '*',
+    origin: allowedBrowserOrigins.length > 0 ? allowedBrowserOrigins : true,
+    credentials: true,
+    methods: ['GET', 'POST'],
   },
 });
 
