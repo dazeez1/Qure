@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/storage/offline_cache_store.dart';
+import '../../../core/utils/json_numbers.dart';
 import '../domain/patient_dashboard_models.dart';
 
 final patientDashboardApiProvider = Provider<PatientDashboardApi>((ref) {
@@ -80,10 +81,9 @@ class PatientDashboardApi {
     return CurrentQueueSummary(
       ticketNumber: (map['ticketNumber'] as String?) ?? '',
       status: (map['status'] as String?) ?? '',
-      positionInQueue: map['positionInQueue'] is int ? map['positionInQueue'] as int : null,
+      positionInQueue: parseJsonInt(map['positionInQueue']),
       waitTimeDisplay: map['waitTimeDisplay'] as String?,
-      estimatedWaitMinutes:
-          map['estimatedWaitMinutes'] is int ? map['estimatedWaitMinutes'] as int : null,
+      estimatedWaitMinutes: parseJsonInt(map['estimatedWaitMinutes']),
       departmentName: department?['name'] as String?,
       hospitalId: (map['hospitalId'] as String?) ?? '',
     );

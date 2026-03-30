@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/json_numbers.dart';
 import '../domain/patient_queue_models.dart';
 
 final patientQueueApiProvider = Provider<PatientQueueApi>((ref) {
@@ -33,10 +34,10 @@ class PatientQueueApi {
       final queueEntry = queueEntryMap == null ? null : _parseQueueEntry(queueEntryMap);
       return PatientQueueStatus(
         queueEntry: queueEntry,
-        positionInQueue: map['positionInQueue'] as int?,
-        estimatedWaitMinutes: map['estimatedWaitMinutes'] as int?,
-        minWaitMinutes: map['minWaitMinutes'] as int?,
-        maxWaitMinutes: map['maxWaitMinutes'] as int?,
+        positionInQueue: parseJsonInt(map['positionInQueue']),
+        estimatedWaitMinutes: parseJsonInt(map['estimatedWaitMinutes']),
+        minWaitMinutes: parseJsonInt(map['minWaitMinutes']),
+        maxWaitMinutes: parseJsonInt(map['maxWaitMinutes']),
       );
     } on DioException catch (e) {
       throw mapDioError(e);
@@ -64,7 +65,7 @@ class PatientQueueApi {
       id: map['id'] as String,
       hospitalId: map['hospitalId'] as String?,
       ticketNumber: (map['ticketNumber'] as String?) ?? '',
-      sequenceNumber: map['sequenceNumber'] as int?,
+      sequenceNumber: parseJsonInt(map['sequenceNumber']),
       status: (map['status'] as String?) ?? '',
       priority: map['priority'] as String?,
       checkInTime: map['checkInTime'] == null ? null : DateTime.parse(map['checkInTime'] as String),

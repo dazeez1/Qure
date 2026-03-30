@@ -1,3 +1,5 @@
+import '../../../core/utils/json_numbers.dart';
+
 class QueuePreviewEntry {
   const QueuePreviewEntry({
     required this.ticketNumber,
@@ -24,7 +26,7 @@ class QueuePreviewEntry {
       patientId: json['patientId'] as String? ?? '',
       departmentName: json['departmentName'] as String? ?? '',
       status: json['status'] as String? ?? '',
-      estimatedWait: json['estimatedWait'] is int ? json['estimatedWait'] as int : null,
+      estimatedWait: parseJsonInt(json['estimatedWait']),
       waitTimeDisplay: json['waitTimeDisplay'] as String?,
     );
   }

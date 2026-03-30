@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/storage/offline_cache_store.dart';
+import '../../../core/utils/json_numbers.dart';
 import '../domain/patient_appointment_models.dart';
 
 final patientAppointmentsApiProvider = Provider<PatientAppointmentsApi>((ref) {
@@ -89,10 +90,10 @@ class PatientAppointmentsApi {
 
     return AppointmentListPage(
       appointments: appointments,
-      currentPage: (pagination['currentPage'] as int?) ?? fallbackPage,
-      totalPages: (pagination['totalPages'] as int?) ?? 1,
-      total: (pagination['total'] as int?) ?? appointments.length,
-      limit: (pagination['limit'] as int?) ?? fallbackLimit,
+      currentPage: parseJsonIntWithDefault(pagination['currentPage'], fallbackPage),
+      totalPages: parseJsonIntWithDefault(pagination['totalPages'], 1),
+      total: parseJsonIntWithDefault(pagination['total'], appointments.length),
+      limit: parseJsonIntWithDefault(pagination['limit'], fallbackLimit),
       hasNextPage: (pagination['hasNextPage'] as bool?) ?? false,
     );
   }
