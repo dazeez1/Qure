@@ -124,7 +124,7 @@ passwordInput.addEventListener('input', () => {
 });
 
 // Login handler
-async function handleLogin(role) {
+async function handleLogin(role, clickedButton) {
   // Validate form
   const emailError = validateEmailOrPhone(emailInput.value);
   const passwordError = validatePassword(passwordInput.value);
@@ -147,13 +147,16 @@ async function handleLogin(role) {
     return;
   }
 
-  // Disable buttons while submitting
-  patientBtn.disabled = true;
-  staffBtn.disabled = true;
-  const patientText = patientBtn.textContent;
-  const staffText = staffBtn.textContent;
-  patientBtn.textContent = 'Logging in...';
-  staffBtn.textContent = 'Logging in...';
+  // Disable buttons while submitting (only show loading on the clicked one)
+  const patientText = patientBtn?.textContent;
+  const staffText = staffBtn?.textContent;
+
+  if (patientBtn) patientBtn.disabled = true;
+  if (staffBtn) staffBtn.disabled = true;
+
+  if (clickedButton) {
+    clickedButton.textContent = 'Logging in...';
+  }
 
   // Prepare data for backend API
   const loginData = {
@@ -246,10 +249,14 @@ async function handleLogin(role) {
     emailInput.focus();
   } finally {
     // Re-enable buttons
-    patientBtn.disabled = false;
-    staffBtn.disabled = false;
-    patientBtn.textContent = patientText;
-    staffBtn.textContent = staffText;
+    if (patientBtn) {
+      patientBtn.disabled = false;
+      if (typeof patientText === 'string') patientBtn.textContent = patientText;
+    }
+    if (staffBtn) {
+      staffBtn.disabled = false;
+      if (typeof staffText === 'string') staffBtn.textContent = staffText;
+    }
   }
 }
 
@@ -265,14 +272,14 @@ if (loginForm) {
 if (patientBtn) {
   patientBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    handleLogin('PATIENT');
+    handleLogin('PATIENT', patientBtn);
   });
 }
 
 if (staffBtn) {
   staffBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    handleLogin('STAFF');
+    handleLogin('STAFF', staffBtn);
   });
 }
 
