@@ -362,7 +362,7 @@ This section documents **environments**, **tools**, and a **step-by-step deploym
 
 ### Post-deploy wiring
 
-1. In **Render**, set `FRONTEND_URL` to the **Vercel origin** for this project: **`https://qure-frontend.vercel.app`** (same host as [the live site](https://qure-frontend.vercel.app/); no path — CORS matches the origin only).
+1. In **Render**, set `FRONTEND_URL` to the **frontend origin** for this project: **`https://www.qurequeue.com`** (no path — CORS matches the origin only).
 2. **Redeploy** the backend so CORS picks up the new origin.
 3. Confirm the frontend’s `VITE_API_URL` is **`https://qure-vbfm.onrender.com/api`** (or your current Render URL + `/api`).
 
@@ -370,12 +370,12 @@ This section documents **environments**, **tools**, and a **step-by-step deploym
 
 Use these checks to confirm the system works **after** deployment:
 
-| Check  | How                                                                                                     |
-| ------ | ------------------------------------------------------------------------------------------------------- |
-| API up | `GET https://qure-vbfm.onrender.com/health` returns success                                             |
-| CORS   | Open [the live frontend](https://qure-frontend.vercel.app/); login/register should not show CORS errors |
-| Auth   | Register/login as patient or staff completes without network errors                                     |
-| Data   | Hospital-scoped flows (queue, appointments) behave as in local testing                                  |
+| Check  | How                                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------ |
+| API up | `GET https://qure-vbfm.onrender.com/health` returns success                                      |
+| CORS   | Open [the live frontend](https://www.qurequeue.com/); login/register should not show CORS errors |
+| Auth   | Register/login as patient or staff completes without network errors                              |
+| Data   | Hospital-scoped flows (queue, appointments) behave as in local testing                           |
 
 ### Configuration files
 
@@ -405,7 +405,7 @@ The demo covers:
 
 | Service                  | Production URL                                                                     |
 | ------------------------ | ---------------------------------------------------------------------------------- |
-| **Frontend (Vercel)**    | **[https://qure-frontend.vercel.app/](https://qure-frontend.vercel.app/)**         |
+| **Frontend (Vercel)**    | **[https://www.qurequeue.com/](https://www.qurequeue.com/)**                       |
 | **Backend API (Render)** | **[https://qure-vbfm.onrender.com](https://qure-vbfm.onrender.com)**               |
 | **API health check**     | **[https://qure-vbfm.onrender.com/health](https://qure-vbfm.onrender.com/health)** |
 
