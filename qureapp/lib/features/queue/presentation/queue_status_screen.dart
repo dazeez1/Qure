@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../dashboard/data/patient_dashboard_api.dart';
 import '../../patient/application/patient_hospital_context_provider.dart';
@@ -182,7 +183,7 @@ class _QueueStatusScreenState extends ConsumerState<QueueStatusScreen> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Text(
-                              e.toString(),
+                              userFacingErrorMessage(e),
                               style: TextStyle(color: Theme.of(context).colorScheme.error),
                             ),
                           ),
@@ -200,7 +201,10 @@ class _QueueStatusScreenState extends ConsumerState<QueueStatusScreen> {
                     error: (e, _) => SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Text(e.toString()),
+                        child: Text(
+                          userFacingErrorMessage(e),
+                          style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        ),
                       ),
                     ),
                   );

@@ -50,7 +50,7 @@ Future<void> confirmAndCancelPatientAppointment(
     }
     await AppToast.showError(
       context,
-      message: e is ApiException ? e.message : e.toString(),
+      message: userFacingErrorMessage(e),
     );
   }
 }
@@ -116,7 +116,7 @@ Future<void> reschedulePatientAppointment(
     }
     await AppToast.showError(
       context,
-      message: e is ApiException ? e.message : e.toString(),
+      message: userFacingErrorMessage(e),
     );
   }
 }

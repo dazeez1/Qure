@@ -37,7 +37,7 @@ class PatientDashboardApi {
       return _parseDashboardFromBody(body);
     } on DioException catch (e) {
       final mapped = mapDioError(e);
-      if (mapped.kind != ApiErrorKind.network) rethrow;
+      if (mapped.kind != ApiErrorKind.network) throw mapped;
 
       final cached = await _cache.read(_cacheKey);
       if (cached == null) throw mapped;

@@ -163,7 +163,7 @@ class _QueueSection extends StatelessWidget {
     return async.when(
       data: (status) => _QueueCard(status: status, ref: ref),
       loading: () => const _QueueCardPlaceholder(),
-      error: (e, _) => _QueueCardError(message: e.toString()),
+      error: (e, _) => _QueueCardError(message: userFacingErrorMessage(e)),
     );
   }
 }
@@ -385,7 +385,7 @@ Future<void> _confirmCancelQueue(
     }
     await AppToast.showError(
       context,
-      message: e is ApiException ? e.message : e.toString(),
+      message: userFacingErrorMessage(e),
     );
   }
 }
@@ -540,7 +540,7 @@ class _UpcomingAppointmentsBlock extends StatelessWidget {
         ),
       ),
       error: (e, _) => Text(
-        e.toString(),
+        userFacingErrorMessage(e),
         style: TextStyle(color: Theme.of(context).colorScheme.error),
       ),
     );
@@ -701,7 +701,7 @@ Future<void> _confirmCancelAppointment(
     }
     await AppToast.showError(
       context,
-      message: e is ApiException ? e.message : e.toString(),
+      message: userFacingErrorMessage(e),
     );
   }
 }
@@ -766,7 +766,7 @@ Future<void> _rescheduleAppointment(
     }
     await AppToast.showError(
       context,
-      message: e is ApiException ? e.message : e.toString(),
+      message: userFacingErrorMessage(e),
     );
   }
 }
@@ -784,7 +784,7 @@ class _NotificationsCard extends StatelessWidget {
           _NotificationsCardContent(notifications: data.notifications),
       loading: () => const _ElevatedPlaceholder(height: 100),
       error: (e, _) => Text(
-        e.toString(),
+        userFacingErrorMessage(e),
         style: TextStyle(
           color: Theme.of(context).colorScheme.error,
           fontSize: 12,
@@ -867,7 +867,10 @@ class _NotificationsCardContentState
       }
     } catch (e) {
       if (mounted) {
-        await AppToast.showError(context, message: e.toString());
+        await AppToast.showError(
+          context,
+          message: userFacingErrorMessage(e),
+        );
       }
     } finally {
       if (mounted) {
@@ -906,7 +909,10 @@ class _NotificationsCardContentState
       }
     } catch (e) {
       if (mounted) {
-        await AppToast.showError(context, message: e.toString());
+        await AppToast.showError(
+          context,
+          message: userFacingErrorMessage(e),
+        );
       }
     } finally {
       if (mounted) {
@@ -1331,7 +1337,7 @@ class _NotificationSettingsCardState
             ),
             loading: () => const LinearProgressIndicator(minHeight: 2),
             error: (e, _) => Text(
-              e.toString(),
+              userFacingErrorMessage(e),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
                 fontSize: 12,
@@ -1366,7 +1372,7 @@ class _NotificationSettingsCardState
       if (context.mounted) {
         await AppToast.showError(
           context,
-          message: e is ApiException ? e.message : e.toString(),
+          message: userFacingErrorMessage(e),
         );
       }
     } finally {

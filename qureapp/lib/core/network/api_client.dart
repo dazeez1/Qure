@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 
 import '../env/app_config.dart';
+import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/data/auth_session_repository.dart';
 import 'api_exception.dart';
+import 'patient_auth_paths.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   final sessionRepository = ref.watch(authSessionRepositoryProvider);
@@ -31,7 +33,13 @@ final dioProvider = Provider<Dio>((ref) {
         }
         handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
+        final response = error.response;
+        final path = error.requestOptions.path;
+        if (response?.statusCode == 401 && !isPatientAuthCredentialPath(path)) {
+          // Expired/invalid token: clear session and sync auth state so GoRouter sends user to login.
+          await ref.read(authControllerProvider.notifier).logout();
+        }
         handler.next(error);
       },
     ),

@@ -204,7 +204,10 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
       if (!mounted) {
         return;
       }
-      await AppToast.showError(context, message: e.toString());
+      await AppToast.showError(
+        context,
+        message: userFacingErrorMessage(e),
+      );
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -269,7 +272,7 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
                       ),
                       loading: () => const LinearProgressIndicator(minHeight: 2),
                       error: (e, _) => Text(
-                        e.toString(),
+                        userFacingErrorMessage(e),
                         style: TextStyle(color: Theme.of(context).colorScheme.error),
                       ),
                     ),
@@ -298,7 +301,7 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
                               _submitting ? null : (v) => setState(() => _departmentId = v),
                         ),
                         loading: () => const LinearProgressIndicator(minHeight: 2),
-                        error: (e, _) => Text(e.toString()),
+                        error: (e, _) => Text(userFacingErrorMessage(e)),
                       ),
                     const SizedBox(height: 18),
                     Row(

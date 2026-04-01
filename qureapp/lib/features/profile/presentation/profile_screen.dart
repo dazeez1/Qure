@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/ui/app_toast.dart';
 import '../../../core/ui/patient_legal_footer.dart';
 import '../../auth/application/auth_controller.dart';
@@ -57,7 +58,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (!mounted) {
         return;
       }
-      await AppToast.showError(context, message: e.toString());
+      await AppToast.showError(
+        context,
+        message: userFacingErrorMessage(e),
+      );
     } finally {
       if (mounted) {
         setState(() => _isUploadingAvatar = false);
@@ -121,7 +125,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               error: (e, _) => Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  e.toString(),
+                  userFacingErrorMessage(e),
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
@@ -155,7 +159,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (!mounted) {
         return;
       }
-      await AppToast.showError(context, message: e.toString());
+      await AppToast.showError(
+        context,
+        message: userFacingErrorMessage(e),
+      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);

@@ -92,16 +92,14 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       });
       ref.invalidate(patientFeedbackAppointmentCandidatesProvider);
       ref.invalidate(hospitalPublicFeedbackProvider);
-    } on ApiException catch (e) {
-      if (!mounted) {
-        return;
-      }
-      await AppToast.showError(context, message: e.message);
     } catch (e) {
       if (!mounted) {
         return;
       }
-      await AppToast.showError(context, message: e.toString());
+      await AppToast.showError(
+        context,
+        message: userFacingErrorMessage(e),
+      );
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -188,7 +186,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       },
       loading: () => const LinearProgressIndicator(minHeight: 2),
       error: (e, _) => Text(
-        e.toString(),
+        userFacingErrorMessage(e),
         style: TextStyle(color: Theme.of(context).colorScheme.error),
       ),
     );
@@ -246,7 +244,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
       error: (e, _) => Text(
-        e.toString(),
+        userFacingErrorMessage(e),
         style: TextStyle(color: Theme.of(context).colorScheme.error),
       ),
     );

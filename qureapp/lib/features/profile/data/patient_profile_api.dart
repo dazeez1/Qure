@@ -32,7 +32,7 @@ class PatientProfileApi {
       return _parseProfileFromBody(body);
     } on DioException catch (e) {
       final mapped = mapDioError(e);
-      if (mapped.kind != ApiErrorKind.network) rethrow;
+      if (mapped.kind != ApiErrorKind.network) throw mapped;
 
       final cached = await _cache.read(_meCacheKey);
       if (cached == null) throw mapped;
@@ -99,7 +99,7 @@ class PatientProfileApi {
       return _parseNotificationPreferencesFromBody(body);
     } on DioException catch (e) {
       final mapped = mapDioError(e);
-      if (mapped.kind != ApiErrorKind.network) rethrow;
+      if (mapped.kind != ApiErrorKind.network) throw mapped;
 
       final cached = await _cache.read(_notificationPrefsCacheKey);
       if (cached == null) throw mapped;

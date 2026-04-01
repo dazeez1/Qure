@@ -60,7 +60,7 @@ class PatientAppointmentsApi {
       return _parseAppointmentPageFromBody(body, fallbackPage: page, fallbackLimit: limit);
     } on DioException catch (e) {
       final mapped = mapDioError(e);
-      if (mapped.kind != ApiErrorKind.network) rethrow;
+      if (mapped.kind != ApiErrorKind.network) throw mapped;
 
       final cached = await _cache.read(cacheKey);
       if (cached == null) throw mapped;

@@ -107,7 +107,7 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              e is ApiException ? e.message : e.toString(),
+              userFacingErrorMessage(e),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
@@ -245,7 +245,10 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
       if (!context.mounted) {
         return;
       }
-      await AppToast.showError(context, message: e.toString());
+      await AppToast.showError(
+        context,
+        message: userFacingErrorMessage(e),
+      );
     }
   }
 }
