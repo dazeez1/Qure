@@ -1,432 +1,511 @@
-# Qure - Healthcare Queue Management System
+# Qure — Healthcare Queue Management System
 
-A comprehensive multi-hospital SaaS healthcare queue management system that streamlines patient appointments, queue management, and hospital operations.
+A multi-hospital SaaS healthcare queue management system for patient appointments, live queues, staff operations, and notifications. This repository contains the **web application** (Vite + Express), the **backend API** (Node.js + Prisma + MongoDB), and the **patient mobile app** (Flutter).
 
-## Table of Contents
+**For reviewers and moderators:** use [Quick start for reviewers](#quick-start-for-reviewers) first, then the detailed sections if anything fails.
 
+## Table of contents
+
+- [Quick start for reviewers](#quick-start-for-reviewers)
 - [Overview](#overview)
 - [Features](#features)
-- [Technology Stack](#technology-stack)
-- [Project Structure](#project-structure)
-- [Installation & Setup](#installation--setup)
-- [Running the Application](#running-the-application)
+- [Technology stack](#technology-stack)
+- [Repository layout](#repository-layout)
+- [Prerequisites](#prerequisites)
+- [Clone the repository](#clone-the-repository)
+- [Install dependencies](#install-dependencies)
+- [Environment variables](#environment-variables)
+- [Database setup (Prisma + MongoDB)](#database-setup-prisma--mongodb)
+- [Run the project locally](#run-the-project-locally)
+- [Patient mobile app (Flutter)](#patient-mobile-app-flutter)
+- [Verify the installation](#verify-the-installation)
+- [Troubleshooting](#troubleshooting)
+- [Tests and linting](#tests-and-linting)
 - [Deployment](#deployment)
-- [Demo Video](#demo-video)
-- [Design Prototype (Figma)](#design-prototype-figma)
-- [Live Deployment](#live-deployment)
-- [Related Files](#related-files)
+- [Demo video](#demo-video)
+- [Design prototype (Figma)](#design-prototype-figma)
+- [Live deployment](#live-deployment)
 - [Analysis](#analysis)
 - [Contributing](#contributing)
 - [License](#license)
 
+---
+
+## Quick start for reviewers
+
+Complete these steps in order. All commands assume a Unix-like shell (macOS, Linux, or WSL). On Windows, use PowerShell equivalents or Git Bash.
+
+| Step | Action                                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | Install [Node.js 18+](https://nodejs.org/), [npm 9+](https://docs.npmjs.com/), and obtain a [MongoDB](https://www.mongodb.com/) connection string (Atlas or local).                                                                        |
+| 2    | Clone the repo and run `npm install` at the **repository root** (installs frontend + backend workspaces).                                                                                                                                  |
+| 3    | Create `backend/.env` (see [Backend](#backend)). Minimum: `DATABASE_URL`, `JWT_SECRET`. Optional but recommended for full features: Cloudinary, Brevo.                                                                                     |
+| 4    | From `backend/`: `npx prisma generate` and `npx prisma db push`.                                                                                                                                                                           |
+| 5    | Start the API: `cd backend && npm run dev` → default **http://localhost:5000**.                                                                                                                                                            |
+| 6    | Create `frontend/.env` with `VITE_API_URL=http://localhost:5000/api` (must match your backend port and include `/api`).                                                                                                                    |
+| 7    | Start the web UI: `cd frontend && npm run dev` → **http://localhost:3000**.                                                                                                                                                                |
+| 8    | (Optional) Patient app: install [Flutter](https://flutter.dev/docs/get-started/install), then `cd qureapp && flutter pub get && flutter run` with API URL aligned to your backend (see [Patient mobile app](#patient-mobile-app-flutter)). |
+
+**Health check:** open `http://localhost:5000/health` — you should get a successful response from the API.
+
+---
+
 ## Overview
 
-Qure is a modern healthcare queue management system designed to improve patient experience and optimize hospital operations. The system supports multiple hospitals, real-time queue management, appointment scheduling, automated check-ins, and comprehensive notification systems.
+Qure improves patient experience and hospital operations with multi-tenant (hospital-scoped) data, real-time queue awareness, appointment booking, notifications, and role-based interfaces for patients, staff, and administrators.
 
-### Key Capabilities
+### Key capabilities
 
-- **Multi-Hospital Support**: Complete isolation and scoping for multiple healthcare facilities
-- **Real-Time Queue Management**: Live queue status updates with estimated wait times
-- **Appointment Scheduling**: Patient self-service appointment booking and management
-- **Automated Workflows**: Auto-check-in, appointment reminders, and status notifications
-- **Role-Based Access**: Separate interfaces for patients, staff, doctors, and administrators
-- **Analytics & Reporting**: Comprehensive dashboards and export capabilities
+- **Multi-hospital support:** Data isolated per hospital.
+- **Queue management:** Live queue status and workflows (backend-controlled lifecycle).
+- **Appointments:** Booking, reminders, and check-in automation (where enabled).
+- **Authentication:** JWT-based sessions for web and mobile patient flows.
+- **Integrations:** Cloudinary (images), Brevo (email), optional Firebase for push on mobile.
+
+---
 
 ## Features
 
-### Patient Features
+### Patient (web + mobile where applicable)
 
 - Book and manage appointments
-- View real-time queue status
-- In-app and email notifications
-- View appointment history with pagination
-- Submit feedback after consultations
-- Profile management with avatar uploads
+- Queue status and feedback
+- Notifications (in-app / email depending on configuration)
+- Profile and avatar uploads (when Cloudinary is configured)
 
-### Staff Features
+### Staff
 
-- Multi-department queue management
-- Doctor assignment and load balancing
-- Room and waiting area management
-- Real-time analytics and dashboards
-- Export functionality for reports
-- Hospital settings and configuration
+- Department queues, doctor assignment, room / waiting areas
+- Dashboards, exports, hospital settings
 
-### System Features
+### System
 
-- Automated appointment check-in (15 minutes before appointment time)
-- Automated appointment reminders (24h and 2h before)
-- Email notifications via Brevo
-- Cloudinary integration for image uploads
-- JWT-based authentication
-- Hospital-scoped data isolation
+- Automated check-in and reminders (feature flags + cron-style jobs in backend)
+- Email via Brevo
+- File uploads via Cloudinary
 
-## Technology Stack
+---
 
-### Frontend
+## Technology stack
 
-- **Framework**: Vanilla JavaScript (ES6+)
-- **Build Tool**: Vite 7.3.1
-- **Styling**: CSS3 with CSS Variables
-- **Deployment**: Vercel
+| Area             | Technologies                                                           |
+| ---------------- | ---------------------------------------------------------------------- |
+| **Web frontend** | Vanilla JavaScript (ES6+), Vite 7.x, CSS variables                     |
+| **Backend**      | Node.js 18+, Express 4.x, Prisma 5.x, MongoDB                          |
+| **Mobile**       | Flutter (Dart SDK per `qureapp/pubspec.yaml`), Riverpod, GoRouter, Dio |
+| **Auth**         | JWT (`jsonwebtoken`)                                                   |
+| **Realtime**     | Socket.io (backend + frontend client)                                  |
+| **Tooling**      | npm workspaces, ESLint                                                 |
 
-### Backend
+---
 
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js 4.21.1
-- **Database**: MongoDB with Prisma ORM 5.19.0
-- **Authentication**: JWT (jsonwebtoken)
-- **File Upload**: Cloudinary, Multer
-- **Email Service**: Brevo
-- **Deployment**: Render
-
-### Development Tools
-
-- **Package Manager**: npm
-- **Code Quality**: ESLint
-- **Version Control**: Git
-
-## Project Structure
+## Repository layout
 
 ```
 Qure/
-├── backend/                 # Backend API server
+├── backend/                 # REST API + Prisma
 │   ├── src/
-│   │   ├── config/         # Database and service configurations
-│   │   ├── controllers/    # Request handlers
-│   │   ├── middleware/     # Authentication, error handling
-│   │   ├── routes/         # API route definitions
-│   │   ├── services/       # Business logic services
-│   │   └── utils/          # Utility functions
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   ├── middleware/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   └── utils/
 │   ├── prisma/
-│   │   └── schema.prisma   # Database schema
-│   ├── uploads/            # Local file uploads (dev)
+│   │   └── schema.prisma
 │   ├── package.json
-│   └── render.yaml         # Render deployment config
+│   └── render.yaml          # Render deployment blueprint
 │
-├── frontend/               # Frontend application
+├── frontend/                # Vite multi-page SPA-style app
 │   ├── src/
-│   │   ├── pages/          # Page-specific JavaScript
-│   │   ├── utils/          # Utility functions
-│   │   ├── styles/         # CSS stylesheets
-│   │   └── js/             # Shared JavaScript modules
-│   ├── patient/            # Patient-facing pages
-│   ├── staff/              # Staff-facing pages
-│   ├── public/             # Static assets
+│   ├── patient/
+│   ├── staff/
+│   ├── public/
 │   ├── package.json
-│   ├── vite.config.js      # Vite configuration
-│   └── vercel.json         # Vercel deployment config
+│   ├── vite.config.js
+│   └── vercel.json
 │
-├── Docs/                   # Project documentation
-├── VERCEL_TROUBLESHOOTING.md
-└── README.md               # This file
+├── qureapp/                 # Flutter patient application
+│   ├── lib/
+│   ├── pubspec.yaml
+│   └── test/
+│
+├── Docs/                    # Additional documentation
+├── package.json             # Root workspaces + convenience scripts
+├── Analysis.md
+└── README.md                # This file
 ```
 
-## Installation & Setup
+---
 
-### Prerequisites
+## Prerequisites
 
-- **Node.js**: Version 18.0.0 or higher
-- **npm**: Version 9.0.0 or higher
-- **MongoDB**: MongoDB Atlas account or local MongoDB instance
-- **Cloudinary Account**: For image uploads
-- **Brevo Account**: For email notifications
+| Requirement               | Notes                                                                                          |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Node.js**               | ≥ 18.x ([nodejs.org](https://nodejs.org/))                                                     |
+| **npm**                   | ≥ 9.x (bundled with Node)                                                                      |
+| **MongoDB**               | Atlas URI or local instance; required for `DATABASE_URL`                                       |
+| **Git**                   | To clone the repository                                                                        |
+| **Cloudinary** (optional) | Avatar / uploads — omit only if you skip upload features                                       |
+| **Brevo** (optional)      | Transactional email — omit if you do not need email in dev                                     |
+| **Flutter** (optional)    | Only for `qureapp/` — see [Flutter install docs](https://docs.flutter.dev/get-started/install) |
 
-### Step 1: Clone the Repository
+---
+
+## Clone the repository
 
 ```bash
-git clone  https://github.com/dazeez1/Qure.git
+git clone https://github.com/dazeez1/Qure.git
 cd Qure
 ```
 
-### Step 2: Backend Setup
+If you use SSH:
 
 ```bash
-# Navigate to backend directory
-cd backend
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-# Create a .env file in the backend directory with the following:
+git clone git@github.com:dazeez1/Qure.git
+cd Qure
 ```
 
-**Backend Environment Variables** (`.env` file):
+---
+
+## Install dependencies
+
+### Root
+
+The root `package.json` defines **npm workspaces** for `frontend` and `backend`. One install at the root links both:
+
+```bash
+cd Qure
+npm install
+```
+
+This runs `postinstall` in the backend (including `prisma generate`) when the backend package is installed.
+
+### Flutter app (`qureapp`)
+
+```bash
+cd Qure/qureapp
+flutter pub get
+```
+
+---
+
+## Environment variables
+
+### Backend
+
+Create **`backend/.env`** (never commit real secrets). The server reads `PORT` or defaults to **5000** (`backend/src/app.js`).
 
 ```env
-# Server Configuration
+# Server
 NODE_ENV=development
-PORT=5001
+PORT=5000
 
-# Database
-DATABASE_URL=your_mongodb_connection_string
+# Database (required)
+DATABASE_URL=mongodb+srv://USER:PASSWORD@cluster.example.mongodb.net/DATABASE?retryWrites=true&w=majority
 
-# JWT Configuration
-JWT_SECRET=your_jwt_secret_key_here
+# JWT (required for auth)
+JWT_SECRET=use_a_long_random_string_in_production
 JWT_EXPIRES_IN=7d
 
-# Cloudinary Configuration
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+# Cloudinary (optional — image uploads)
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
 
-# Brevo (Email Service) Configuration
-BREVO_API_KEY=your_brevo_api_key
+# Brevo (optional — email)
+BREVO_API_KEY=
 
-# Frontend URL (for CORS)
+# CORS: origin of the web app (no trailing path)
 FRONTEND_URL=http://localhost:3000
 
-# Feature Flags
+# Feature flags
 ENABLE_AUTO_CHECKIN=true
 ENABLE_APPOINTMENT_REMINDERS=true
 ```
 
-```bash
-# Generate Prisma Client
-npx prisma generate
+**Important:** If you change `PORT`, you must use the same host and port in `VITE_API_URL` (frontend) and in `API_BASE_URL` (Flutter), and keep `FRONTEND_URL` aligned with where the browser loads the web app (usually `http://localhost:3000`).
 
-# Push database schema (for development)
-npx prisma db push
+### Frontend
 
-# (Optional) Open Prisma Studio to view database
-npx prisma studio
-```
-
-### Step 3: Frontend Setup
-
-```bash
-# Navigate to frontend directory (from project root)
-cd frontend
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-# Create a .env file in the frontend directory:
-```
-
-**Frontend Environment Variables** (`.env` file):
+Create **`frontend/.env`**:
 
 ```env
-# API Configuration
-VITE_API_URL=http://localhost:5001/api
+VITE_API_URL=http://localhost:5000/api
 ```
 
-### Step 4: Verify Installation
+`VITE_API_URL` must end with **`/api`** and match your running backend base URL.
+
+### Flutter (`qureapp`)
+
+The API base URL is compiled in via `--dart-define` (see [Patient mobile app](#patient-mobile-app-flutter)). The default in code is `http://localhost:5000/api` if you do not pass a define — **change it if your backend uses another port.**
+
+---
+
+## Database setup (Prisma + MongoDB)
+
+From **`backend/`**:
 
 ```bash
-# From project root, verify both packages are installed
-npm install
+cd backend
+npx prisma generate
+npx prisma db push
 ```
 
-## ▶ Running the Application
+- **`db push`** applies the schema to MongoDB (suitable for development).
+- Optional: **`npx prisma studio`** opens a GUI to inspect data.
 
-### Development Mode
+If `DATABASE_URL` is wrong or the cluster blocks your IP (Atlas), Prisma commands will fail — fix the URI and network access first.
 
-#### Option 1: Run Separately
+---
 
-**Terminal 1 - Backend:**
+## Run the project locally
+
+Start **MongoDB** (or confirm Atlas is reachable), then run **backend** and **frontend** in separate terminals.
+
+### Terminal 1 — Backend
 
 ```bash
 cd backend
 npm run dev
 ```
 
-Backend will run on `http://localhost:5001`
+Expected: server listening on `http://localhost:5000` (or your `PORT`).
 
-**Terminal 2 - Frontend:**
+### Terminal 2 — Frontend
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Frontend will run on `http://localhost:3000`
+Expected: Vite dev server at **http://localhost:3000** (see `frontend/vite.config.js`).
 
-#### Option 2: Run from Root (if configured)
+### Convenience scripts (from repository root)
 
 ```bash
-# From project root
-npm run dev:backend  # In one terminal
-npm run dev:frontend # In another terminal
+npm run dev:backend   # backend only
+npm run dev:frontend  # frontend only
 ```
 
-### Production Build
+The root script `npm run dev` runs frontend and backend together (`&`); on some shells you may prefer two terminals for clearer logs.
 
-**Backend:**
+### Production-style local run
+
+```bash
+# Backend
+cd backend && npm start
+
+# Frontend build + preview
+cd frontend && npm run build && npm run preview
+```
+
+### Default accounts
+
+There are no fixed demo credentials in the README. After `db push`, use the app’s registration flows to create a hospital admin, staff, or patient as designed in the UI.
+
+---
+
+## Patient mobile app (Flutter)
+
+Location: **`qureapp/`**.
+
+### Prerequisites
+
+- Flutter SDK compatible with `qureapp/pubspec.yaml` (`environment.sdk`, e.g. Dart 3.11+).
+- Xcode (macOS) for iOS; Android Studio / SDK for Android.
+- A running **backend** reachable from the device or emulator.
+
+### Install packages
+
+```bash
+cd qureapp
+flutter pub get
+```
+
+### Point the app at your API
+
+`qureapp/lib/core/env/app_config.dart` uses:
+
+- **`API_BASE_URL`** via `--dart-define`, defaulting to `http://localhost:5000/api`.
+
+**Examples:**
+
+```bash
+# Emulator / same machine (Android emulator uses 10.0.2.2 for host loopback — the app rewrites localhost on Android)
+flutter run --dart-define=API_BASE_URL=http://localhost:5000/api
+
+# Physical device on same LAN (use your computer's LAN IP)
+flutter run --dart-define=API_BASE_URL=http://192.168.1.10:5000/api
+```
+
+**Android emulator note:** The app normalizes `localhost` / `127.0.0.1` to `10.0.2.2` for HTTP on Android so the emulator can reach the host machine.
+
+### Run and build
+
+```bash
+cd qureapp
+flutter run
+flutter build apk    # Android
+flutter build ios    # iOS (macOS only)
+```
+
+### CORS
+
+CORS applies to **browser** clients. Native Flutter uses the HTTP client directly; ensure the device can reach the API URL and that firewalls allow the port.
+
+---
+
+## Verify the installation
+
+| Check              | Expected                                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Backend health     | `GET http://localhost:5000/health` returns success                                                                    |
+| Frontend loads     | Browser opens `http://localhost:3000` without build errors                                                            |
+| API from browser   | Login / register network calls go to `VITE_API_URL` without CORS errors if `FRONTEND_URL` matches the frontend origin |
+| Prisma             | `npx prisma db push` completed without connection errors                                                              |
+| Flutter (optional) | `flutter doctor` clean; `flutter run` reaches API with correct `API_BASE_URL`                                         |
+
+---
+
+## Troubleshooting
+
+| Problem                                          | Things to check                                                                                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **CORS errors in browser**                       | `FRONTEND_URL` in `backend/.env` must be the **exact origin** of the Vite app (scheme + host + port), e.g. `http://localhost:3000`. Redeploy or restart backend after changes. |
+| **401 / cannot log in**                          | `JWT_SECRET` set; database reachable; same API URL as configured in `.env` / dart-define.                                                                                      |
+| **Connection refused**                           | Backend running; correct `PORT`; `VITE_API_URL` / `API_BASE_URL` host and port match.                                                                                          |
+| **Prisma / MongoDB errors**                      | Valid `DATABASE_URL`; Atlas IP allowlist; user/password and database name correct.                                                                                             |
+| **Flutter cannot reach API on Android emulator** | Use `10.0.2.2` instead of `localhost` if not using the app’s automatic rewrite, or pass a LAN IP for physical devices.                                                         |
+| **Workspaces install oddities**                  | Run `npm install` from **repository root**; delete `node_modules` in root, `frontend`, and `backend` and reinstall if needed.                                                  |
+
+---
+
+## Tests and linting
+
+### Flutter (`qureapp`)
+
+```bash
+cd qureapp
+flutter test
+flutter analyze
+```
+
+### Backend
 
 ```bash
 cd backend
-npm start
+npm run lint
+npm run test:wait-time
+npm run test:appointments
 ```
 
-**Frontend:**
+### Frontend
 
 ```bash
 cd frontend
-npm run build
-npm run preview  # Preview production build locally
+npm run lint
 ```
 
-### Access the Application
+### Root
 
-- **Frontend**: Open `http://localhost:3000` in your browser
-- **Backend API**: Available at `http://localhost:5001/api`
-- **Health Check**: `http://localhost:5001/health`
+```bash
+npm run lint
+```
 
-### Default Accounts
-
-After initial setup, you'll need to:
-
-1. Register a new hospital admin account through the registration page
-2. Create staff accounts through the admin dashboard
-3. Patients can self-register
+---
 
 ## Deployment
 
-This section documents **environments**, **tools**, and a **step-by-step deployment plan** used to run Qure in production. The system is split into a static **frontend** (Vite) and a **Node/Express API** with **MongoDB** (Prisma).
+The system is typically deployed as:
+
+- **Frontend:** Vercel (static build from `frontend/`, `VITE_API_URL` points to production API).
+- **Backend:** Render or similar (`backend/render.yaml`).
+- **Database:** MongoDB Atlas.
+- **Assets / email:** Cloudinary, Brevo.
 
 ### Deployment architecture
 
-| Layer        | Environment (production)          | Role                                                          |
-| ------------ | --------------------------------- | ------------------------------------------------------------- |
-| **Client**   | End-user browser                  | Loads the SPA from the CDN; calls the API over HTTPS          |
-| **Frontend** | **Vercel**                        | Hosts the built Vite app (`frontend/dist`), env-based API URL |
-| **Backend**  | **Render** (Web Service)          | Runs `node src/app.js`, REST API + Socket.io                  |
-| **Database** | **MongoDB Atlas** (or compatible) | Data store via Prisma (`DATABASE_URL`)                        |
-| **Files**    | **Cloudinary**                    | Avatars / uploads                                             |
-| **Email**    | **Brevo**                         | Transactional email                                           |
+| Layer                 | Production role                         |
+| --------------------- | --------------------------------------- |
+| **Client**            | Browser loads SPA; calls API over HTTPS |
+| **Frontend (Vercel)** | Hosts Vite `dist/`; env-based API URL   |
+| **Backend (Render)**  | Node process, REST + Socket.io          |
+| **Database**          | MongoDB via Prisma                      |
+| **Files / email**     | Cloudinary, Brevo                       |
 
-**Request flow:** Browser → Vercel (HTML/JS/CSS) → HTTPS → Render API (`/api/...`) → MongoDB / external services.
+**Request flow:** Browser → CDN (frontend) → HTTPS → API (`/api/...`) → MongoDB and external services.
 
-### Tools used
+### Backend (Render) — summary
 
-| Tool              | Purpose                                                      |
-| ----------------- | ------------------------------------------------------------ |
-| **Git / GitHub**  | Source control and CI triggers for Vercel & Render           |
-| **Vercel**        | Frontend build & hosting (`npm run build`, output `dist/`)   |
-| **Render**        | Backend hosting; `backend/render.yaml` documents build/start |
-| **MongoDB Atlas** | Managed MongoDB for Prisma                                   |
-| **Cloudinary**    | Image hosting                                                |
-| **Brevo**         | Email delivery                                               |
+1. Create a Web Service; **root directory** `backend`.
+2. Build: e.g. `npm install && npm run prisma:generate` (see `backend/render.yaml`).
+3. Start: `npm start`.
+4. Set env vars: `NODE_ENV`, `PORT` (if provided by host), `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLOUDINARY_*`, `BREVO_API_KEY`, `FRONTEND_URL` (production web **origin** only), feature flags.
+5. Verify `https://<your-api-host>/health`.
 
-### Prerequisites (production)
+### Frontend (Vercel) — summary
 
-- GitHub repository connected to Vercel and Render
-- MongoDB connection string (`DATABASE_URL`)
-- JWT secret, Cloudinary keys, Brevo API key
-- Domain or default URLs for frontend (Vercel) and backend (Render)
+1. Root directory **`frontend`**.
+2. Build: `npm run build`.
+3. Set `VITE_API_URL` to your production API base including **`/api`**.
 
-### Backend deployment (Render)
+### Post-deploy
 
-1. **Create a Web Service** on [Render](https://render.com) and connect this repository.
-2. Set **Root Directory** to `backend`.
-3. **Build command:** `npm install && npm run prisma:generate` (matches `backend/render.yaml`).
-4. **Start command:** `npm start` (runs `node src/app.js`).
-5. **Configure environment variables** in the Render dashboard (minimum):
-
-   | Variable                                               | Notes                                                                       |
-   | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-   | `NODE_ENV`                                             | `production`                                                                |
-   | `PORT`                                                 | Render often injects `PORT` (e.g. `10000`); ensure the app uses it          |
-   | `DATABASE_URL`                                         | MongoDB connection string                                                   |
-   | `JWT_SECRET`                                           | Strong secret for signing tokens                                            |
-   | `JWT_EXPIRES_IN`                                       | e.g. `7d`                                                                   |
-   | `CLOUDINARY_*`                                         | Cloud name, API key, API secret                                             |
-   | `BREVO_API_KEY`                                        | For email                                                                   |
-   | `FRONTEND_URL`                                         | **Full Vercel URL** (origin only, no trailing path) — required for **CORS** |
-   | `ENABLE_AUTO_CHECKIN` / `ENABLE_APPOINTMENT_REMINDERS` | `true`/`false` as needed                                                    |
-
-6. **Deploy** and wait for the build to finish. Note the public URL (production example: **`https://qure-vbfm.onrender.com`**).
-
-7. **Verify:** open **`https://qure-vbfm.onrender.com/health`** — expect a successful JSON/OK response.
-
-> **Note:** On Render’s free tier, services may **spin down** after idle time; the first request can be slow (cold start).
-
-### Frontend deployment (Vercel)
-
-1. **Import the project** in [Vercel](https://vercel.com) from the same GitHub repo.
-2. Set **Root Directory** to `frontend`.
-3. **Install:** `npm install` (default).
-4. **Build:** `npm run build` (Vite writes to `frontend/dist` — see `frontend/vercel.json`).
-5. Add **environment variable** for production builds:
-
-   | Variable       | Example (production)                 |
-   | -------------- | ------------------------------------ |
-   | `VITE_API_URL` | `https://qure-vbfm.onrender.com/api` |
-
-   Use your **actual** Render API base URL including `/api` (shown above for this project).
-
-6. **Deploy** and copy the Vercel production URL.
-
-### Post-deploy wiring
-
-1. In **Render**, set `FRONTEND_URL` to the **frontend origin** for this project: **`https://www.qurequeue.com`** (no path — CORS matches the origin only).
-2. **Redeploy** the backend so CORS picks up the new origin.
-3. Confirm the frontend’s `VITE_API_URL` is **`https://qure-vbfm.onrender.com/api`** (or your current Render URL + `/api`).
-
-### Verification in the target environment
-
-Use these checks to confirm the system works **after** deployment:
-
-| Check  | How                                                                                              |
-| ------ | ------------------------------------------------------------------------------------------------ |
-| API up | `GET https://qure-vbfm.onrender.com/health` returns success                                      |
-| CORS   | Open [the live frontend](https://www.qurequeue.com/); login/register should not show CORS errors |
-| Auth   | Register/login as patient or staff completes without network errors                              |
-| Data   | Hospital-scoped flows (queue, appointments) behave as in local testing                           |
+- Set backend `FRONTEND_URL` to the live frontend origin (CORS).
+- Redeploy backend after changing CORS-related env.
 
 ### Configuration files
 
-- `backend/render.yaml` — Blueprint for Render (build/start and env keys).
-- `frontend/vercel.json` — Vercel build output (`dist`), rewrites, security headers.
+- `backend/render.yaml` — Render blueprint.
+- `frontend/vercel.json` — Vercel output and headers.
 
-## Demo Video
+### Example production URLs (this project)
 
-Watch the comprehensive 5-minute demo showcasing the core functionalities of Qure:
+| Service  | URL                                                                            |
+| -------- | ------------------------------------------------------------------------------ |
+| Frontend | [https://www.qurequeue.com/](https://www.qurequeue.com/)                       |
+| Backend  | [https://qure-vbfm.onrender.com](https://qure-vbfm.onrender.com)               |
+| Health   | [https://qure-vbfm.onrender.com/health](https://qure-vbfm.onrender.com/health) |
 
-**[ Demo Video - Google Drive](https://drive.google.com/drive/folders/1nQ650BPcvyr-nnSnXwHxgzmxtOee-j4F?usp=sharing)**
+---
 
-## Design Prototype (Figma)
+## Demo video
 
-**[Qure Design - ALU Figma Prototype](https://www.figma.com/proto/ZgIejwv9TrGqiXm86h9CRd/Qure-Design---ALU?node-id=125-7990&t=Z1Uag9G7wToWwk8G-1)**
+**[Demo video — Google Drive](https://drive.google.com/drive/folders/1nQ650BPcvyr-nnSnXwHxgzmxtOee-j4F?usp=sharing)**
 
-The demo covers:
+---
 
-- Patient appointment booking and management
-- Real-time queue management and status updates
-- Staff security
-- Staff dashboard and queue operations
-- Doctor assignment and consultation workflow
-- Notification system (in-app and email)
+## Design prototype (Figma)
 
-## Live Deployment
+**[Qure Design — ALU Figma prototype](https://www.figma.com/proto/ZgIejwv9TrGqiXm86h9CRd/Qure-Design---ALU?node-id=125-7990&t=Z1Uag9G7wToWwk8G-1)**
 
-| Service                  | Production URL                                                                     |
-| ------------------------ | ---------------------------------------------------------------------------------- |
-| **Frontend (Vercel)**    | **[https://www.qurequeue.com/](https://www.qurequeue.com/)**                       |
-| **Backend API (Render)** | **[https://qure-vbfm.onrender.com](https://qure-vbfm.onrender.com)**               |
-| **API health check**     | **[https://qure-vbfm.onrender.com/health](https://qure-vbfm.onrender.com/health)** |
+---
+
+## Live deployment
+
+| Service                  | Production URL                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| **Frontend (Vercel)**    | [https://www.qurequeue.com/](https://www.qurequeue.com/)                       |
+| **Backend API (Render)** | [https://qure-vbfm.onrender.com](https://qure-vbfm.onrender.com)               |
+| **API health**           | [https://qure-vbfm.onrender.com/health](https://qure-vbfm.onrender.com/health) |
+
+---
 
 ## Analysis
 
-For a detailed analysis of the project results, objectives achievement, and implementation details, see:
+For objectives, results, and technical discussion:
 
-**[ Analysis.md](./Analysis.md)**
+**[Analysis.md](./Analysis.md)**
 
-The analysis covers:
-
-- Project objectives vs. achieved results
-- Implementation approach and decisions
-- Technical challenges and solutions
-- System architecture and design patterns
-- Future improvements and recommendations
+---
 
 ## Contributing
 
-This is a project submission. For questions or issues, please contact d.azeez@alustudent.com
+This is a project submission. For questions or issues: **d.azeez@alustudent.com**
+
+---
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the **MIT License**.
